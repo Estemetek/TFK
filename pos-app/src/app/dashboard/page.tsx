@@ -1,31 +1,317 @@
 //dashboard
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
+import { MdDashboard, MdRestaurantMenu, MdPeople, MdInventory2, MdAssessment, MdShoppingCart, MdLogout } from 'react-icons/md';
+
+type Metric = {
+  label: string;
+  value: string;
+  note: string;
+  icon: string;
+  accent?: string;
+};
+
+type Dish = {
+  id: string;
+  name: string;
+  subtitle: string;
+  status: 'In Stock' | 'Out of stock';
+  price: string;
+};
+
+const SparkBars = ({ values, color }: { values: number[]; color: string }) => (
+  <div className="flex h-12 items-end gap-1">
+    {values.map((v, idx) => (
+      <div
+        key={`${v}-${idx}`}
+        className="w-2 rounded-sm"
+        style={{ height: `${v}%`, backgroundColor: color }}
+      />
+    ))}
+  </div>
+);
+
+const StatusPill = ({ status }: { status: Dish['status'] }) => (
+  <span
+    className={`text-sm font-semibold ${status === 'In Stock' ? 'text-accent-green' : 'text-accent-red'}`}
+  >
+    {status}
+  </span>
+);
+
+const DishRow = ({ dish }: { dish: Dish }) => (
+  <div className="flex items-center gap-3 rounded-lg bg-white px-3 py-3 shadow-sm ring-1 ring-card-border">
+    <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-lg bg-card ring-1 ring-card-border">
+      <div className="h-12 w-12 rounded-lg bg-linear-to-br from-primary/70 via-primary-dark/50 to-surface-dark" />
+    </div>
+    <div className="flex-1">
+      <p className="text-sm font-semibold text-foreground">{dish.name}</p>
+      <p className="text-xs text-text-muted">{dish.subtitle}</p>
+    </div>
+    <div className="flex flex-col items-end">
+      <StatusPill status={dish.status} />
+      <span className="text-sm font-semibold text-text-muted">{dish.price}</span>
+    </div>
+  </div>
+);
+
+const iconMap: Record<string, React.ReactNode> = {
+  Dashboard: <MdDashboard className="h-5 w-5" />,
+  Menu: <MdRestaurantMenu className="h-5 w-5" />,
+  Staff: <MdPeople className="h-5 w-5" />,
+  Inventory: <MdInventory2 className="h-5 w-5" />,
+  Reports: <MdAssessment className="h-5 w-5" />,
+  Order: <MdShoppingCart className="h-5 w-5" />,
+};
 
 export default function DashboardPage() {
-  const [userCount, setUserCount] = useState<number | null>(null);
+  // Sidebar collapse/expand state
+  const [collapsed, setCollapsed] = useState<boolean>(false);
+  const router = useRouter();
 
-  useEffect(() => {
-    const fetchUserCount = async () => {
-      const { count, error } = await supabase
-        .from('UserAccount')
-        .select('*', { count: 'exact', head: true });
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      // ignore errors in demo
+    } finally {
+      router.push('/');
+    }
+  };
 
-      if (!error && count !== null) {
-        setUserCount(count);
-      } else {
-        console.error('Error fetching user count:', error);
-      }
-    };
+  const metrics: Metric[] = [
+    {
+      label: 'Daily Sales',
+      value: '$2k',
+      note: '9 February 2024',
+      icon: '$',
+      accent: 'var(--primary)',
+    },
+    {
+      label: 'Monthly Revenue',
+      value: '$55k',
+      note: '1 Jan - 1 Feb',
+      icon: '⎔',
+      accent: 'var(--surface-dark)',
+    },
+    {
+      label: 'Table Occupancy',
+      value: '25 Tables',
+      note: 'Active floor',
+      icon: '▣',
+      accent: 'var(--accent-green)',
+    },
+    {
+      label: 'Registered Users',
+      value: '128',
+      note: 'Static demo',
+      icon: '👤',
+      accent: 'var(--accent-gold)',
+    },
+  ];
 
-    fetchUserCount();
-  }, []);
+  const dishesLeft: Dish[] = [
+    { id: 'left-1', name: 'Chicken Parmesan', subtitle: 'Serving: 01 person', status: 'In Stock', price: '$55.00' },
+    { id: 'left-2', name: 'Chicken Parmesan', subtitle: 'Serving: 01 person', status: 'In Stock', price: '$55.00' },
+    { id: 'left-3', name: 'Chicken Parmesan', subtitle: 'Serving: 01 person', status: 'Out of stock', price: '$55.00' },
+    { id: 'left-4', name: 'Chicken Parmesan', subtitle: 'Serving: 01 person', status: 'In Stock', price: '$55.00' },
+  ];
+
+  const dishesRight: Dish[] = [
+    { id: 'right-1', name: 'Chicken Parmesan', subtitle: 'Order: #55.00', status: 'In Stock', price: '$55.00' },
+    { id: 'right-2', name: 'Chicken Parmesan', subtitle: 'Order: #55.00', status: 'In Stock', price: '$110.00' },
+    { id: 'right-3', name: 'Chicken Parmesan', subtitle: 'Order: #55.00', status: 'Out of stock', price: '$55.00' },
+    { id: 'right-4', name: 'Chicken Parmesan', subtitle: 'Order: #55.00', status: 'In Stock', price: '$56.00' },
+  ];
 
   return (
-    <div className="p-6">
-      <h1 className="text-3xl font-bold mb-4">Dashboard</h1>
+    <div className="min-h-screen bg-background text-foreground">
+      <div
+        className={`grid min-h-screen transition-[grid-template-columns] duration-200 ${
+          collapsed ? 'grid-cols-[82px_1fr]' : 'grid-cols-[220px_1fr]'
+        }`}
+      >
+        <aside className="flex flex-col items-stretch gap-4 rounded-r-2xl bg-surface px-3 py-5 shadow-md">
+          <div className="mb-2 flex items-center gap-3 px-2">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-lg font-bold text-primary shadow">
+              TFK
+            </div>
+            {!collapsed && (
+              <span className="text-sm font-semibold text-foreground">Taiwan Fried Kitchen</span>
+            )}
+          </div>
+          <nav className={`flex w-full flex-col gap-2 ${collapsed ? 'items-center' : ''}`}>
+            {['Dashboard', 'Menu', 'Staff', 'Inventory', 'Reports', 'Order'].map((item, idx) => (
+              <button
+                key={item}
+                className={`flex items-center rounded-xl ring-1 ring-card-border transition hover:-translate-y-0.5 hover:shadow ${
+                  collapsed ? 'h-14 w-14 self-center bg-card justify-center gap-0' : 'h-12 w-full bg-card px-2 gap-3'
+                }`}
+              >
+                <span
+                  className={`grid h-10 w-10 place-items-center rounded-full ${
+                    idx === 0 ? 'bg-primary text-white' : 'bg-white text-text-muted'
+                  } shadow-inner`}
+                >
+                  {iconMap[item]}
+                </span>
+                {!collapsed && (
+                  <span
+                    className={`text-xs font-semibold ${
+                      idx === 0 ? 'text-foreground' : 'text-text-muted'
+                    }`}
+                  >
+                    {item}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
+          <div className={`mt-auto ${collapsed ? '' : 'px-2'}`}>
+            <button
+              onClick={handleLogout}
+              className={`ring-1 ring-card-border transition hover:shadow ${
+                collapsed
+                  ? 'mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-surface-dark text-white'
+                  : 'flex w-full items-center gap-3 rounded-xl bg-card px-2 py-2'
+              }`}
+              aria-label="Logout"
+              title="Logout"
+            >
+              <span
+                className={`grid h-10 w-10 place-items-center rounded-full ${
+                  collapsed ? 'bg-surface-dark text-white' : 'bg-white text-text-muted'
+                } shadow-inner`}
+              >
+                <MdLogout className="h-5 w-5" />
+              </span>
+              {!collapsed && (
+                <span className="text-xs font-semibold text-text-muted">Logout</span>
+              )}
+            </button>
+          </div>
+        </aside>
+
+        <main className="space-y-5 p-5 md:p-7">
+          <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white/70 px-4 py-3 shadow-sm ring-1 ring-card-border">
+            <div className="flex items-center gap-3">
+              {/* Toggle button beside Dashboard */}
+              <button
+                aria-label="Toggle sidebar"
+                onClick={() => setCollapsed((c) => !c)}
+                className="grid h-8 w-8 place-items-center rounded-full bg-white text-foreground ring-1 ring-card-border transition hover:bg-card"
+                title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              >
+                {collapsed ? '›' : '‹'}
+              </button>
+              <div className="h-12 w-12 rounded-full bg-white shadow ring-1 ring-card-border" />
+              <div>
+                <p className="text-xs uppercase tracking-wide text-text-muted">Dashboard</p>
+                <p className="text-lg font-semibold text-foreground">POS Dashboard</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 text-text-muted">
+              <span className="text-sm">🔔</span>
+              <span className="text-sm">⚙️</span>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-sm font-semibold text-primary shadow ring-1 ring-card-border">
+                AC
+              </div>
+            </div>
+          </header>
+
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {metrics.map((metric) => (
+              <div
+                key={metric.label}
+                className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-card-border"
+              >
+                <div className="mb-3 flex items-center justify-between text-sm text-text-muted">
+                  <span>{metric.label}</span>
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-primary ring-1 ring-card-border">
+                    {metric.icon}
+                  </span>
+                </div>
+                <p className="text-2xl font-bold text-foreground">{metric.value}</p>
+                <p className="text-xs text-text-muted">{metric.note}</p>
+                <div className="mt-4">
+                  <SparkBars values={[20, 35, 25, 45, 30, 50, 40]} color={metric.accent || 'var(--primary)'} />
+                </div>
+              </div>
+            ))}
+          </section>
+
+          <section className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-card-border">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-foreground">Popular Dishes</h2>
+                <button className="text-sm font-semibold text-primary hover:underline">See All</button>
+              </div>
+              <div className="flex flex-col gap-3">
+                {dishesLeft.map((dish) => (
+                  <DishRow key={dish.id} dish={dish} />
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-card-border">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-foreground">Popular Dishes</h2>
+                <button className="text-sm font-semibold text-primary hover:underline">See All</button>
+              </div>
+              <div className="flex flex-col gap-3">
+                {dishesRight.map((dish) => (
+                  <DishRow key={dish.id} dish={dish} />
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-card-border">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-lg font-semibold text-foreground">Overview</p>
+                <p className="text-sm text-text-muted">Sales & Revenue</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {['Monthly', 'Daily', 'Weekly'].map((tab, idx) => (
+                  <button
+                    key={tab}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold ring-1 ring-card-border ${
+                      idx === 0
+                        ? 'bg-primary text-white shadow'
+                        : 'bg-white text-text-muted'
+                    }`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+                <button className="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-primary ring-1 ring-card-border">
+                  Export
+                  <span>⤓</span>
+                </button>
+              </div>
+            </div>
+            <div className="relative overflow-hidden rounded-xl bg-linear-to-b from-white to-background px-4 py-6 ring-1 ring-card-border">
+              <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'linear-gradient(#dcdcdc 1px, transparent 1px), linear-gradient(90deg, #dcdcdc 1px, transparent 1px)', backgroundSize: '100% 25%, 8% 100%' }} />
+              <div className="relative flex items-end gap-3">
+                {[60, 80, 50, 70, 65, 78, 55, 62, 58, 65, 52, 85].map((value, idx) => (
+                  <div key={idx} className="flex flex-1 items-end justify-center">
+                    <div className="w-3 rounded-full bg-primary/90 shadow" style={{ height: `${value}%` }} />
+                  </div>
+                ))}
+              </div>
+              <div className="relative mt-4 flex justify-between text-xs text-text-muted">
+                {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m) => (
+                  <span key={m}>{m}</span>
+                ))}
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
     </div>
   );
 }

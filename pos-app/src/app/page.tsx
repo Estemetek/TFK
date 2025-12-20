@@ -55,7 +55,7 @@ export default function LoginPage() {
 
       <form
         onSubmit={handleLogin}
-        className="bg-[#A8A8A8] p-10 rounded-[40px] shadow-lg w-full max-w-[500px] flex flex-col items-center"
+        className="bg-[#A8A8A8] p-10 rounded-[40px] shadow-lg w-full max-w-md flex flex-col items-center"
       >
         <h1 className="text-4xl font-semibold text-white mb-2">Login</h1>
         <p className="text-white text-sm mb-8 opacity-90">
