@@ -22,6 +22,11 @@ type Dish = {
   price: string;
 };
 
+type NavItem = {
+  name: string;
+  path?: string;
+};
+
 const SparkBars = ({ values, color }: { values: number[]; color: string }) => (
   <div className="flex h-12 items-end gap-1">
     {values.map((v, idx) => (
@@ -67,10 +72,20 @@ const iconMap: Record<string, React.ReactNode> = {
   Order: <MdShoppingCart className="h-5 w-5" />,
 };
 
+const navItems: NavItem[] = [
+  { name: 'Dashboard', path: '/dashboard' },
+  { name: 'Menu' },
+  { name: 'Staff' },
+  { name: 'Inventory', path: '/inventory' },
+  { name: 'Reports' },
+  { name: 'Order' },
+];
+
 export default function DashboardPage() {
   // Sidebar collapse/expand state
   const [collapsed, setCollapsed] = useState<boolean>(false);
   const router = useRouter();
+  const activeNav = 'Dashboard';
 
   const handleLogout = async () => {
     try {
@@ -144,31 +159,35 @@ export default function DashboardPage() {
             )}
           </div>
           <nav className={`flex w-full flex-col gap-2 ${collapsed ? 'items-center' : ''}`}>
-            {['Dashboard', 'Menu', 'Staff', 'Inventory', 'Reports', 'Order'].map((item, idx) => (
-              <button
-                key={item}
-                className={`flex items-center rounded-xl ring-1 ring-card-border transition hover:-translate-y-0.5 hover:shadow ${
-                  collapsed ? 'h-14 w-14 self-center bg-card justify-center gap-0' : 'h-12 w-full bg-card px-2 gap-3'
-                }`}
-              >
-                <span
-                  className={`grid h-10 w-10 place-items-center rounded-full ${
-                    idx === 0 ? 'bg-primary text-white' : 'bg-white text-text-muted'
-                  } shadow-inner`}
+            {navItems.map((item) => {
+              const isActive = item.name === activeNav;
+              return (
+                <button
+                  key={item.name}
+                  onClick={() => item.path && router.push(item.path)}
+                  className={`flex items-center rounded-xl ring-1 ring-card-border transition hover:-translate-y-0.5 hover:shadow ${
+                    collapsed ? 'h-14 w-14 self-center bg-card justify-center gap-0' : 'h-12 w-full bg-card px-2 gap-3'
+                  }`}
                 >
-                  {iconMap[item]}
-                </span>
-                {!collapsed && (
                   <span
-                    className={`text-xs font-semibold ${
-                      idx === 0 ? 'text-foreground' : 'text-text-muted'
-                    }`}
+                    className={`grid h-10 w-10 place-items-center rounded-full ${
+                      isActive ? 'bg-primary text-white' : 'bg-white text-text-muted'
+                    } shadow-inner`}
                   >
-                    {item}
+                    {iconMap[item.name]}
                   </span>
-                )}
-              </button>
-            ))}
+                  {!collapsed && (
+                    <span
+                      className={`text-xs font-semibold ${
+                        isActive ? 'text-foreground' : 'text-text-muted'
+                      }`}
+                    >
+                      {item.name}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </nav>
           <div className={`mt-auto ${collapsed ? '' : 'px-2'}`}>
             <button
@@ -216,9 +235,13 @@ export default function DashboardPage() {
             <div className="flex items-center gap-3 text-text-muted">
               <span className="text-sm">🔔</span>
               <span className="text-sm">⚙️</span>
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-sm font-semibold text-primary shadow ring-1 ring-card-border">
+              <button
+                onClick={() => router.push('/profile')}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-sm font-semibold text-primary shadow ring-1 ring-card-border"
+                aria-label="Open profile"
+              >
                 AC
-              </div>
+              </button>
             </div>
           </header>
 
