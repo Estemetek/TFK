@@ -1,52 +1,26 @@
 // src/app/api/auth/register/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcrypt';
-import { supabase } from '../../../lib/supabaseClient'; // adjust path if needed
+import { createClient } from '@supabase/supabase-js';
+import { NextResponse } from 'next/server';
 
-export async function POST(req: NextRequest) {
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY! // Necessary to bypass email confirmation if desired
+);
+
+export async function POST(req: Request) {
   try {
-    const { username, password, firstName, lastName, roleID } = await req.json();
+    const { email, password, username, firstName, lastName } = await req.json();
 
-    // Check if user already exists
-    const { data: existingUser } = await supabase
-      .from('UserAccount')
-      .select('userID')
-      .eq('username', username)
-      .single();
-
-    if (existingUser) {
-      return NextResponse.json({ error: 'Username already exists' }, { status: 400 });
-    }
-
-    // Hash the password
-    const passwordHashed = await bcrypt.hash(password, 10);
-
-    // Insert user into database
-    const { data, error } = await supabase
-        .from('UserAccount')
-        .insert({
-            username,
-            passwordHashed,
-            firstName,
-            lastName,
-            roleID,
-            isActive: true
-        })
-        .select()
-        .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({
-      userID: data.userID,
-      username: data.username,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      roleID: data.roleID,
+    const { data, error } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      user_metadata: { username, firstName, lastName },
+      email_confirm: true // This creates the user as "already verified"
     });
 
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+    return NextResponse.json({ message: 'User registered successfully' });
   } catch (err) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }

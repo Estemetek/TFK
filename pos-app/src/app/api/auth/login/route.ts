@@ -1,38 +1,23 @@
 // src/app/api/auth/login/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcrypt';
-import { supabase } from '../../../lib/supabaseClient'; // adjust path relative to route.ts
+import { createClient } from '@supabase/supabase-js';
+import { NextResponse } from 'next/server';
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
-    const { username, password } = await req.json();
+    const { email, password } = await req.json();
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!, 
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
 
-    // Fetch user from Supabase
-    const { data, error } = await supabase
-      .from('UserAccount')
-      .select('*')
-      .eq('username', username)
-      .single();
-
-    if (error || !data) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
-    }
-
-    // Compare the hashed password
-    const valid = await bcrypt.compare(password, data.passwordHashed);
-
-    if (!valid) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
-    }
-
-    // Return user info (excluding password)
-    return NextResponse.json({
-      userID: data.userID,
-      roleID: data.roleID,
-      firstName: data.firstName,
-      lastName: data.lastName,
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     });
 
+    if (error) return NextResponse.json({ error: error.message }, { status: 401 });
+
+    return NextResponse.json({ user: data.user, session: data.session });
   } catch (err) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
