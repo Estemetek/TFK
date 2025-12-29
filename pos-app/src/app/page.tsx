@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { supabase } from './lib/supabaseClient';
 
 export default function LoginPage() {
   const [email, setEmail] = useState(''); // Changed from username to email
@@ -14,22 +15,21 @@ export default function LoginPage() {
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
+  e.preventDefault();
+  setError(null);
 
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }), // Sending email
-      });
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
 
-      const data = await res.json();
-      if (!res.ok) { setError(data.error); return; }
+  if (error) {
+    setError(error.message);
+    return;
+  }
 
-      router.push('/dashboard');
-    } catch (err) { setError('Server error'); }
-  };
+  router.push('/dashboard');
+};
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[#F3F3F3] font-sans">
