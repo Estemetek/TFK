@@ -43,11 +43,11 @@ const iconMap: Record<string, React.ReactNode> = {
 
 const navItems: NavItem[] = [
   { name: 'Dashboard', path: '/dashboard' },
-  { name: 'Menu' },
-  { name: 'Staff' },
+  { name: 'Menu', path: '/menu' },
+  { name: 'Staff', path: '/staff' },
   { name: 'Inventory', path: '/inventory' },
-  { name: 'Reports' },
-  { name: 'Order' },
+  { name: 'Reports', path: '/reports' },
+  { name: 'Order', path: '/order' },
 ];
 
 export default function InventoryPage() {

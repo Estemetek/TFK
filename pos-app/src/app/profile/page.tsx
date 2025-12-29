@@ -73,13 +73,11 @@ export default function ProfilePage() {
         {/* Main Sidebar */}
         <aside className="flex flex-col items-stretch gap-4 rounded-r-2xl bg-surface px-3 py-5 shadow-md">
           <div className="mb-2 flex items-center gap-3 px-2">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-lg font-bold text-primary shadow">
-              TFK
-            </div>
+            <img src="/TFK.png" alt="TFK Logo" className="h-12 w-12 rounded-full shadow" />
             {!collapsed && (
               <span className="text-sm font-semibold text-foreground">Taiwan Fried Kitchen</span>
             )}
-          </div>
+            </div>
           <nav className={`flex w-full flex-col gap-2 ${collapsed ? 'items-center' : ''}`}>
             {navItems.map((item) => {
               const isActive = item.name === activeNav;
