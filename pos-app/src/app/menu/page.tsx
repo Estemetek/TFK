@@ -63,14 +63,28 @@ const Availability = ({ value }: { value: boolean }) => (
 );
 
 function RightDrawer({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: React.ReactNode }) {
+  React.useEffect(() => {
+    if (!open) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [open, onClose]);
+
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[60]">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+    <div className="fixed inset-0 z-60">
+      <div className="absolute inset-0 bg-black/60 transition-opacity duration-200" onClick={onClose} />
       <div className="absolute inset-y-0 right-0 flex w-full justify-end">
-        <div className="h-full w-full max-w-[520px] rounded-l-[28px] bg-white shadow-2xl">
+        <div 
+          className="h-full w-full max-w-2xl rounded-l-[28px] bg-white shadow-2xl transition-transform duration-300 ease-out"
+          style={{
+            transform: open ? 'translateX(0)' : 'translateX(100%)',
+          }}
+        >
           <div className="flex items-center justify-between px-6 pt-6">
-            <p className="text-[14px] font-extrabold text-[#1E1E1E]">{title}</p>
+            <p className="text-sm font-extrabold text-[#1E1E1E]">{title}</p>
             <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full bg-[#E7E7E7] text-[#1E1E1E] shadow">
               <MdClose className="h-5 w-5" />
             </button>
@@ -225,7 +239,7 @@ export default function MenuPage() {
             <div className="flex gap-3 overflow-x-auto pb-2">
                <div 
                 onClick={() => setSelectedCatID('all')}
-                className={`cursor-pointer min-w-[140px] rounded-2xl p-3 shadow transition ${selectedCatID === 'all' ? 'bg-[#B80F24] text-white' : 'bg-[#E7E7E7]'}`}
+                className={`cursor-pointer min-w-35 rounded-2xl p-3 shadow transition ${selectedCatID === 'all' ? 'bg-[#B80F24] text-white' : 'bg-[#E7E7E7]'}`}
               >
                 <div className="flex items-center gap-3">
                   <span className="h-10 w-10 rounded-xl bg-white flex items-center justify-center text-[#B80F24]"><MdGridView /></span>
@@ -239,7 +253,7 @@ export default function MenuPage() {
                 <div 
                   key={c.categoryID}
                   onClick={() => setSelectedCatID(c.categoryID)}
-                  className={`cursor-pointer min-w-[140px] rounded-2xl p-3 shadow transition ${selectedCatID === c.categoryID ? 'bg-[#B80F24] text-white' : 'bg-[#E7E7E7]'}`}
+                  className={`cursor-pointer min-w-35 rounded-2xl p-3 shadow transition ${selectedCatID === c.categoryID ? 'bg-[#B80F24] text-white' : 'bg-[#E7E7E7]'}`}
                 >
                   <div className="flex items-center gap-3">
                     <span className="h-10 w-10 rounded-xl bg-white flex items-center justify-center text-[#B80F24]">{getCategoryIcon(c.categoryName)}</span>

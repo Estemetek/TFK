@@ -121,7 +121,7 @@ function MiniCategoryCard({
   return (
     <button
       onClick={onClick}
-      className={`group flex h-[84px] w-[112px] flex-col justify-between rounded-2xl px-3 py-3 text-left shadow transition ${
+      className={`group flex h-21 w-28 flex-col justify-between rounded-2xl px-3 py-3 text-left shadow transition ${
         active ? 'bg-[#E7E7E7]' : 'bg-[#E7E7E7] hover:-translate-y-0.5'
       }`}
       title={label}
@@ -228,7 +228,7 @@ function ReceiptPanel({
       <div className="mt-6 text-center">
         <div className="text-[11px] font-extrabold text-[#6D6D6D]">Payment Method</div>
 
-        <div className="mx-auto mt-2 grid w-[110px] place-items-center rounded-2xl bg-white p-3 shadow-inner">
+        <div className="mx-auto mt-2 grid w-28 place-items-center rounded-2xl bg-white p-3 shadow-inner">
           <MdQrCode2 className="h-10 w-10 text-[#1E1E1E]" />
           <div className="mt-2 text-[10px] font-extrabold text-[#6D6D6D]">Scan QR Code</div>
         </div>
@@ -271,6 +271,15 @@ function PaymentModal({
   onClose: () => void;
   onComplete: () => void;
 }) {
+  React.useEffect(() => {
+    if (!open) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   const subtotal = calcSubtotal(order.items);
@@ -415,7 +424,7 @@ function PaymentModal({
                 <div className="mt-3 text-[26px] font-extrabold text-[#1E1E1E]">{money(Number(tip || '0'))}</div>
               </div>
 
-              <div className="mx-auto mt-5 grid max-w-[360px] grid-cols-3 gap-3">
+              <div className="mx-auto mt-5 grid max-w-sm grid-cols-3 gap-3">
                 {keypad.slice(0, 9).map((k) => (
                   <button
                     key={k}
@@ -450,7 +459,7 @@ function PaymentModal({
                 </button>
               </div>
 
-              <div className="mx-auto mt-5 flex max-w-[360px] items-center justify-between gap-3">
+              <div className="mx-auto mt-5 flex max-w-sm items-center justify-between gap-3">
                 <label className="flex items-center gap-2 text-[11px] font-extrabold text-[#6D6D6D]">
                   <input type="checkbox" className="h-4 w-4 accent-[#B80F24]" />
                   Print Receipts
@@ -481,11 +490,26 @@ function VoidRequestModal({
   open: boolean;
   onClose: () => void;
 }) {
+  React.useEffect(() => {
+    if (!open) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4">
-      <div className="w-full max-w-3xl rounded-3xl bg-white p-5 shadow-2xl">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4 transition-opacity duration-200">
+      <div 
+        className="w-full max-w-3xl rounded-3xl bg-white p-5 shadow-2xl transition-transform duration-300 ease-out"
+        style={{
+          transform: open ? 'scale(1)' : 'scale(0.95)',
+          opacity: open ? 1 : 0,
+        }}
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="text-[13px] font-extrabold text-[#1E1E1E]">Void Request Details</div>
@@ -813,7 +837,7 @@ export default function OrderPage() {
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     placeholder="Search a name, order or etc."
-                    className="w-[240px] bg-transparent text-[11px] font-extrabold text-[#6D6D6D] outline-none"
+                    className="w-60 bg-transparent text-[11px] font-extrabold text-[#6D6D6D] outline-none"
                   />
                 </div>
               </div>

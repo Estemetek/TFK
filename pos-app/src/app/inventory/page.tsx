@@ -14,6 +14,7 @@ import {
   MdLogout,
   MdEdit,
   MdDelete,
+  MdClose,
 } from 'react-icons/md';
 
 import React from 'react';
@@ -62,14 +63,18 @@ export default function InventoryPage() {
     { label: 'Draft', count: 10 },
   ];
 
-  const inventoryItems: InventoryItem[] = [
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([
     { id: 'inv-1', name: 'Chicken Parmesan', stocked: '10 In Stock', status: 'Active', category: 'Chicken', price: '$55.00' },
     { id: 'inv-2', name: 'Chicken Parmesan', stocked: '10 In Stock', status: 'Active', category: 'Chicken', price: '$55.00' },
     { id: 'inv-3', name: 'Chicken Parmesan', stocked: '10 In Stock', status: 'Active', category: 'Chicken', price: '$55.00' },
     { id: 'inv-4', name: 'Chicken Parmesan', stocked: '10 In Stock', status: 'Active', category: 'Chicken', price: '$55.00' },
     { id: 'inv-5', name: 'Chicken Parmesan', stocked: '10 In Stock', status: 'Active', category: 'Chicken', price: '$55.00' },
     { id: 'inv-6', name: 'Chicken Parmesan', stocked: '10 In Stock', status: 'Active', category: 'Chicken', price: '$55.00' },
-  ];
+  ]);
+
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editItem, setEditItem] = useState<InventoryItem | null>(null);
 
   const handleLogout = async () => {
     try {
@@ -187,7 +192,10 @@ export default function InventoryPage() {
                 <span className="text-xl font-semibold">150</span>
                 <span className="text-sm text-text-muted">total products</span>
               </div>
-              <button className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow hover:bg-primary-dark">
+              <button
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow hover:bg-primary-dark"
+                onClick={() => setShowAddModal(true)}
+              >
                 Add New Inventory
               </button>
             </div>
@@ -305,7 +313,13 @@ export default function InventoryPage() {
                         <span className="text-foreground font-semibold">{item.price}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button className="grid h-8 w-8 place-items-center rounded-full border border-card-border text-text-muted hover:bg-card">
+                        <button
+                          className="grid h-8 w-8 place-items-center rounded-full border border-card-border text-text-muted hover:bg-card"
+                          onClick={() => {
+                            setEditItem(item);
+                            setShowEditModal(true);
+                          }}
+                        >
                           <MdEdit className="h-4 w-4" />
                         </button>
                         <button className="grid h-8 w-8 place-items-center rounded-full border border-card-border text-primary hover:bg-card">
@@ -319,6 +333,291 @@ export default function InventoryPage() {
             </div>
           </section>
         </main>
+      </div>
+
+      <AddInventoryModal
+        open={showAddModal}
+        title="Add New Inventory"
+        onClose={() => setShowAddModal(false)}
+        onSave={(data) => {
+          const newItem: InventoryItem = {
+            id: `inv-${Date.now()}`,
+            name: data.name,
+            stocked: `${data.quantity} In Stock`,
+            status: data.status,
+            category: data.category,
+            price: `$${Number(data.price || 0).toFixed(2)}`,
+          };
+          setInventoryItems((prev) => [newItem, ...prev]);
+          setShowAddModal(false);
+        }}
+      />
+
+      <AddInventoryModal
+        open={showEditModal}
+        title="Edit Inventory"
+        initialData={
+          editItem
+            ? {
+                name: editItem.name,
+                category: editItem.category,
+                quantity: Number.parseInt(editItem.stocked) || 0,
+                stock: editItem.stocked.toLowerCase().includes('in stock') ? 'InStock' : 'OutOfStock',
+                status: editItem.status,
+                price: editItem.price.replace('$', ''),
+                featured: true,
+              }
+            : undefined
+        }
+        onClose={() => {
+          setShowEditModal(false);
+          setEditItem(null);
+        }}
+        onSave={(data) => {
+          if (!editItem) return;
+          setInventoryItems((prev) =>
+            prev.map((it) =>
+              it.id === editItem.id
+                ? {
+                    ...it,
+                    name: data.name,
+                    stocked: `${data.quantity} In Stock`,
+                    status: data.status,
+                    category: data.category,
+                    price: `$${Number(data.price || 0).toFixed(2)}`,
+                  }
+                : it
+            )
+          );
+          setShowEditModal(false);
+          setEditItem(null);
+        }}
+      />
+    </div>
+  );
+}
+
+function AddInventoryModal({
+  open,
+  onClose,
+  onSave,
+  title = 'Add New Inventory',
+  initialData,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSave: (data: {
+    name: string;
+    category: string;
+    quantity: number;
+    stock: 'InStock' | 'OutOfStock';
+    status: 'Active' | 'Inactive' | 'Draft';
+    price: string;
+    featured: boolean;
+    imageFile?: File | null;
+  }) => void;
+  title?: string;
+  initialData?: Partial<{
+    name: string;
+    category: string;
+    quantity: number;
+    stock: 'InStock' | 'OutOfStock';
+    status: 'Active' | 'Inactive' | 'Draft';
+    price: string;
+    featured: boolean;
+  }>;
+}) {
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('All');
+  const [quantity, setQuantity] = useState<number>(10);
+  const [stock, setStock] = useState<'InStock' | 'OutOfStock'>('InStock');
+  const [status, setStatus] = useState<'Active' | 'Inactive' | 'Draft'>('Active');
+  const [price, setPrice] = useState<string>('55.00');
+  const [featured, setFeatured] = useState<boolean>(true);
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (open && initialData) {
+      setName(initialData.name ?? '');
+      setCategory(initialData.category ?? 'All');
+      setQuantity(initialData.quantity ?? 0);
+      setStock(initialData.stock ?? 'InStock');
+      setStatus(initialData.status ?? 'Active');
+      setPrice(initialData.price ?? '');
+      setFeatured(initialData.featured ?? true);
+    }
+  }, [open, initialData]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] || null;
+    setFile(f);
+    if (f) setPreview(URL.createObjectURL(f));
+    else setPreview(null);
+  };
+
+  const save = () => {
+    onSave({ name, category, quantity, stock, status, price, featured, imageFile: file });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/40 transition-opacity duration-200"
+      onClick={onClose}
+    >
+      {/* Right-side drawer */}
+      <div
+        className="absolute right-0 top-0 h-full w-full max-w-lg overflow-y-auto rounded-l-2xl bg-white shadow-xl ring-1 ring-card-border transition-transform duration-300 ease-out"
+        style={{
+          transform: open ? 'translateX(0)' : 'translateX(100%)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-card-border px-5 py-4">
+          <h3 className="text-base font-semibold text-foreground">{title}</h3>
+          <button
+            aria-label="Close"
+            className="grid h-8 w-8 place-items-center rounded-full bg-card text-text-muted ring-1 ring-card-border hover:bg-white"
+            onClick={onClose}
+          >
+            <MdClose className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="mb-4 mt-4 grid place-items-center px-5">
+          <label className="relative grid h-28 w-28 cursor-pointer place-items-center rounded-xl border-2 border-dashed border-card-border bg-white text-text-muted hover:border-primary">
+            {preview ? (
+              <img src={preview} alt="Preview" className="h-28 w-28 rounded-xl object-cover" />
+            ) : (
+              <span className="text-xs">Upload</span>
+            )}
+            <input type="file" accept="image/*" className="absolute inset-0 opacity-0" onChange={handleFile} />
+          </label>
+          <button
+            className="mt-2 text-xs font-semibold text-primary hover:text-primary-dark"
+            onClick={() => document.querySelector<HTMLInputElement>('input[type=file]')?.click()}
+          >
+            Change Profile Picture
+          </button>
+        </div>
+
+        <div className="grid gap-3 px-5">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-sm font-semibold text-foreground">Name</label>
+              <input
+                className="w-full rounded-lg border border-card-border bg-white px-3 py-2 text-sm"
+                placeholder="Enter inventory name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-semibold text-foreground">Category</label>
+              <select
+                className="w-full rounded-lg border border-card-border bg-white px-3 py-2 text-sm"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
+                <option>All</option>
+                <option>Chicken</option>
+                <option>Beef</option>
+                <option>Seafood</option>
+                <option>Drinks</option>
+                <option>Other</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-sm font-semibold text-foreground">Quantity</label>
+              <input
+                type="number"
+                min={0}
+                className="w-full rounded-lg border border-card-border bg-white px-3 py-2 text-sm"
+                placeholder="10"
+                value={quantity}
+                onChange={(e) => setQuantity(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-semibold text-foreground">Stock</label>
+              <select
+                className="w-full rounded-lg border border-card-border bg-white px-3 py-2 text-sm"
+                value={stock}
+                onChange={(e) => setStock(e.target.value as 'InStock' | 'OutOfStock')}
+              >
+                <option value="InStock">InStock</option>
+                <option value="OutOfStock">OutOfStock</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-semibold text-foreground">Status</label>
+            <select
+              className="w-full rounded-lg border border-card-border bg-white px-3 py-2 text-sm"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as 'Active' | 'Inactive' | 'Draft')}
+            >
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+              <option value="Draft">Draft</option>
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-semibold text-foreground">Price</label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              className="w-full rounded-lg border border-card-border bg-white px-3 py-2 text-sm"
+              placeholder="55.00"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+            />
+          </div>
+
+          <div className="flex items-center gap-6">
+            <span className="text-sm font-semibold text-foreground">Featured</span>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="radio" name="featured" checked={featured} onChange={() => setFeatured(true)} />
+              Yes
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="radio" name="featured" checked={!featured} onChange={() => setFeatured(false)} />
+              No
+            </label>
+          </div>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2 border-t border-card-border px-5 py-4">
+          <button
+            className="rounded-lg bg-card px-4 py-2 text-sm font-semibold text-text-muted ring-1 ring-card-border hover:bg-white"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white shadow hover:bg-primary-dark"
+            onClick={save}
+          >
+            Save
+          </button>
+        </div>
       </div>
     </div>
   );

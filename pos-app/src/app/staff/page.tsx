@@ -101,13 +101,27 @@ const ModalRight = ({
   onClose: () => void;
   children: React.ReactNode;
 }) => {
+  React.useEffect(() => {
+    if (!open) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [open, onClose]);
+
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="absolute right-0 top-0 h-full w-full max-w-[520px] rounded-l-3xl bg-white shadow-2xl">
+      <div className="absolute inset-0 bg-black/60 transition-opacity duration-200" onClick={onClose} />
+      <div 
+        className="absolute right-0 top-0 h-full w-full max-w-2xl rounded-l-3xl bg-white shadow-2xl transition-transform duration-300 ease-out"
+        style={{
+          transform: open ? 'translateX(0)' : 'translateX(100%)',
+        }}
+      >
         <div className="flex items-center justify-between px-6 py-5">
-          <p className="text-[14px] font-extrabold text-[#1E1E1E]">{title}</p>
+          <p className="text-sm font-extrabold text-[#1E1E1E]">{title}</p>
           <button
             onClick={onClose}
             className="grid h-9 w-9 place-items-center rounded-full bg-[#F2F2F2] text-[#6D6D6D] shadow"
@@ -438,9 +452,9 @@ export default function StaffPage() {
               {/* Left profile card */}
               <div className="space-y-4">
                 <div className="rounded-2xl bg-white p-4 shadow-[0_10px_20px_rgba(0,0,0,0.06)]">
-                  <p className="mb-3 text-[12px] font-extrabold text-[#1E1E1E]">Profile Image</p>
+                  <p className="mb-3 text-xs font-extrabold text-[#1E1E1E]">Profile Image</p>
                   <div className="overflow-hidden rounded-2xl bg-[#E7E7E7]">
-                    <div className="h-[220px] w-full bg-gradient-to-br from-[#DCDCDC] via-[#F3F3F3] to-[#CFCFCF]" />
+                    <div className="h-56 w-full bg-linear-to-br from-[#DCDCDC] via-[#F3F3F3] to-[#CFCFCF]" />
                   </div>
 
                   <button className="mt-2 text-[11px] font-extrabold text-[#B80F24] hover:underline">
@@ -708,8 +722,8 @@ export default function StaffPage() {
       >
         <div className="space-y-5">
           <div className="rounded-2xl bg-[#F7F7F7] p-4">
-            <div className="mx-auto h-[150px] w-[180px] overflow-hidden rounded-xl bg-[#D0D0D0]">
-              <div className="h-full w-full bg-gradient-to-br from-[#CFCFCF] via-[#EDEDED] to-[#BDBDBD]" />
+            <div className="mx-auto h-40 w-48 overflow-hidden rounded-xl bg-[#D0D0D0]">
+              <div className="h-full w-full bg-linear-to-br from-[#CFCFCF] via-[#EDEDED] to-[#BDBDBD]" />
             </div>
             <button className="mt-2 w-full text-center text-[11px] font-extrabold text-[#B80F24] hover:underline">
               Change Profile Picture
@@ -764,8 +778,8 @@ export default function StaffPage() {
       >
         <div className="space-y-5">
           <div className="rounded-2xl bg-[#F7F7F7] p-4">
-            <div className="mx-auto h-[150px] w-[180px] overflow-hidden rounded-xl bg-[#D0D0D0]">
-              <div className="h-full w-full bg-gradient-to-br from-[#D0D0D0] via-[#F3F3F3] to-[#BDBDBD]" />
+            <div className="mx-auto h-40 w-48 overflow-hidden rounded-xl bg-[#D0D0D0]">
+              <div className="h-full w-full bg-linear-to-br from-[#D0D0D0] via-[#F3F3F3] to-[#BDBDBD]" />
             </div>
             <button className="mt-2 w-full text-center text-[11px] font-extrabold text-[#B80F24] hover:underline">
               Change Profile Picture
