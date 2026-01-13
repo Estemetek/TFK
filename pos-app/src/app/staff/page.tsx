@@ -1,7 +1,7 @@
 // app/staff/page.tsx
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import {
@@ -16,10 +16,7 @@ import {
   MdDelete,
   MdVisibility,
   MdKeyboardArrowLeft,
-  MdMoreVert,
   MdClose,
-  MdCheck,
-  MdModeEditOutline,
 } from 'react-icons/md';
 
 type NavItem = { name: string; path?: string };
@@ -31,26 +28,9 @@ type Staff = {
   role: string;
   email: string;
   phone: string;
-  age: string;
-  salary: string;
-  timings: string;
   address: string;
   dob: string;
-  shiftStart: string;
-  shiftEnd: string;
   avatarInitials: string;
-};
-
-type AttendanceStatus = 'Present' | 'Absent' | 'Half Shift' | 'Leave';
-
-type AttendanceRow = {
-  id: string;
-  staffId: string;
-  name: string;
-  role: string;
-  date: string;
-  timings: string;
-  status?: AttendanceStatus;
 };
 
 const iconMap: Record<string, React.ReactNode> = {
@@ -193,96 +173,70 @@ const SelectField = ({
   </div>
 );
 
-const StatusButton = ({
-  label,
-  active,
-  onClick,
-}: {
-  label: AttendanceStatus;
-  active?: boolean;
-  onClick: () => void;
-}) => {
-  const base =
-    label === 'Present'
-      ? 'bg-[#F7B8D0] text-[#1E1E1E]'
-      : label === 'Absent'
-      ? 'bg-[#F6D44E] text-[#1E1E1E]'
-      : label === 'Half Shift'
-      ? 'bg-[#54C7F2] text-[#1E1E1E]'
-      : 'bg-[#FF6B6B] text-[#1E1E1E]';
-
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-md px-4 py-2 text-[11px] font-extrabold shadow transition ${
-        active ? 'ring-2 ring-black/15' : ''
-      } ${base}`}
-    >
-      {label}
-    </button>
-  );
-};
-
 export default function StaffPage() {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const activeNav = 'Staff';
 
-  const [view, setView] = useState<'staff' | 'attendance' | 'details'>('staff');
+  const [view, setView] = useState<'staff' | 'details'>('staff');
   const [sort, setSort] = useState('Sort by');
 
-  const staffList: Staff[] = useMemo(
-    () =>
-      Array.from({ length: 11 }).map((_, i) => ({
-        id: `st-${i + 1}`,
-        code: '#101',
-        name: 'Watson Joyce',
-        role: 'Manager',
-        email: 'watsonjoyce112@gmail.com',
-        phone: '+1 (123) 123 4654',
-        age: '45 yr',
-        salary: '$2200.00',
-        timings: '9am to 6pm',
-        address: 'House # 114 Street 123 USA, Chicago',
-        dob: '01-Jan-1983',
-        shiftStart: '9am',
-        shiftEnd: '6pm',
-        avatarInitials: 'WJ',
-      })),
-    []
-  );
+  const [staffList, setStaffList] = useState<Staff[]>([]);
+  const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [selectedStaff, setSelectedStaff] = useState<Staff>(staffList[0]);
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      const { data, error } = await supabase
+        .from('UsersAccount')
+        .select('userID, roleID, email, firstName, lastName, phone, dob, address')
+        .order('firstName', { ascending: true });
 
-  const attendanceRowsInit: AttendanceRow[] = useMemo(
-    () =>
-      Array.from({ length: 10 }).map((_, i) => ({
-        id: `att-${i + 1}`,
-        staffId: staffList[0].id,
-        name: 'Watson Joyce',
-        role: 'Manager',
-        date: '16-Apr-2024',
-        timings: '9am to 6pm',
-        status: i % 3 === 0 ? 'Present' : i % 4 === 0 ? 'Absent' : i % 5 === 0 ? 'Leave' : undefined,
-      })),
-    [staffList]
-  );
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+        return;
+      }
 
-  const [attendanceRows, setAttendanceRows] = useState<AttendanceRow[]>(attendanceRowsInit);
+      const mapped =
+        data?.map((r) => {
+          const first = r.firstName ?? '';
+          const last = r.lastName ?? '';
+          const initials = `${first[0] ?? ''}${last[0] ?? ''}`.toUpperCase();
+          return {
+            id: r.userID,
+            code: r.userID?.slice(0, 6) ?? '',
+            name: `${first} ${last}`.trim(),
+            role: r.roleID?.toString() ?? '',
+            email: r.email ?? '',
+            phone: r.phone ?? '',
+            dob: r.dob ?? '',
+            address: r.address ?? '',
+            avatarInitials: initials || 'NA',
+          } as Staff;
+        }) ?? [];
+
+      setStaffList(mapped);
+      setSelectedStaff(mapped[0] ?? null);
+      setLoading(false);
+    };
+
+    load();
+  }, []);
 
   const [openAdd, setOpenAdd] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
 
   const [form, setForm] = useState({
-    fullName: 'Watson Joyce',
-    email: 'watsonjoyce112@gmail.com',
+    fullName: '',
+    email: '',
     role: 'Manager',
-    phone: '+1 (123) 123 4654',
-    salary: '$2200.00',
-    dob: '01-Jan-1983',
-    shiftStart: '9am',
-    shiftEnd: '6pm',
-    address: 'House # 114 Street 123 USA, Chicago',
+    phone: '',
+    dob: '',
+    address: '',
     details: '',
   });
 
@@ -292,10 +246,7 @@ export default function StaffPage() {
       email: '',
       role: 'Manager',
       phone: '',
-      salary: '',
       dob: '',
-      shiftStart: '',
-      shiftEnd: '',
       address: '',
       details: '',
     });
@@ -321,10 +272,7 @@ export default function StaffPage() {
       email: s.email,
       role: s.role,
       phone: s.phone,
-      salary: s.salary,
       dob: s.dob,
-      shiftStart: s.shiftStart,
-      shiftEnd: s.shiftEnd,
       address: s.address,
       details: '',
     });
@@ -417,7 +365,7 @@ export default function StaffPage() {
                 {collapsed ? '›' : '‹'}
               </button>
 
-              {view === 'details' ? (
+              {view === 'details' && selectedStaff ? (
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setView('staff')}
@@ -446,8 +394,8 @@ export default function StaffPage() {
             </div>
           </header>
 
-          {/* DETAILS VIEW (matches last screenshot) */}
-          {view === 'details' ? (
+          {/* DETAILS VIEW */}
+          {view === 'details' && selectedStaff ? (
             <section className="grid gap-6 lg:grid-cols-[360px_1fr]">
               {/* Left profile card */}
               <div className="space-y-4">
@@ -505,60 +453,28 @@ export default function StaffPage() {
                     </div>
                   </div>
                 </div>
-
-                <div className="rounded-2xl bg-white p-4 shadow-[0_10px_20px_rgba(0,0,0,0.06)]">
-                  <p className="mb-3 text-[12px] font-extrabold text-[#1E1E1E]">Employee Job Details</p>
-
-                  <div className="rounded-2xl bg-[#D0D0D0] p-4">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <p className="text-[10px] font-extrabold text-[#B80F24]">Role</p>
-                        <p className="text-[12px] font-extrabold text-[#1E1E1E]">{selectedStaff.role}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-extrabold text-[#B80F24]">Salary</p>
-                        <p className="text-[12px] font-extrabold text-[#1E1E1E]">{selectedStaff.salary}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-extrabold text-[#B80F24]">Shift start timing</p>
-                        <p className="text-[12px] font-extrabold text-[#1E1E1E]">{selectedStaff.shiftStart}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-extrabold text-[#B80F24]">Shift end timing</p>
-                        <p className="text-[12px] font-extrabold text-[#1E1E1E]">{selectedStaff.shiftEnd}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </div>
             </section>
           ) : (
             <>
-              {/* Top row: Staff (22) + actions */}
-              <section className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-[14px] font-extrabold text-[#1E1E1E]">Staff (22)</p>
-                </div>
+              {/* Top row: actions */}
+              <section className="flex flex-wrap items-center justify-end gap-3">
+                <button
+                  onClick={openAddModal}
+                  className="rounded-md bg-[#B80F24] px-4 py-2 text-[11px] font-extrabold text-white shadow"
+                >
+                  Add Staff
+                </button>
 
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={openAddModal}
-                    className="rounded-md bg-[#B80F24] px-4 py-2 text-[11px] font-extrabold text-white shadow"
-                  >
-                    Add Staff
-                  </button>
-
-                  <select
-                    value={sort}
-                    onChange={(e) => setSort(e.target.value)}
-                    className="rounded-md bg-[#E7E7E7] px-4 py-2 text-[11px] font-extrabold text-[#6D6D6D] shadow outline-none"
-                  >
-                    <option>Sort by</option>
-                    <option>Name</option>
-                    <option>Role</option>
-                    <option>Salary</option>
-                  </select>
-                </div>
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value)}
+                  className="rounded-md bg-[#E7E7E7] px-4 py-2 text-[11px] font-extrabold text-[#6D6D6D] shadow outline-none"
+                >
+                  <option>Sort by</option>
+                  <option>Name</option>
+                  <option>Role</option>
+                </select>
               </section>
 
               {/* Tabs */}
@@ -569,38 +485,43 @@ export default function StaffPage() {
                 >
                   Staff Management
                 </Pill>
-                <Pill
-                  active={view === 'attendance'}
-                  onClick={() => setView('attendance')}
-                >
-                  Attendance
-                </Pill>
               </section>
 
               {/* STAFF MANAGEMENT TABLE */}
-              {view === 'staff' ? (
-                <section className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_20px_rgba(0,0,0,0.06)]">
-                  {/* Header row */}
-                  <div className="grid grid-cols-[34px_70px_1.2fr_1.3fr_140px_90px_110px_120px_120px] items-center bg-[#F7F7F7] px-3 py-3 text-[10px] font-extrabold text-[#6D6D6D]">
-                    <div className="flex items-center justify-center">
-                      <input type="checkbox" className="h-3 w-3 accent-[#B80F24]" />
-                    </div>
-                    <div>ID</div>
-                    <div>Name</div>
-                    <div>Email</div>
-                    <div>Phone</div>
-                    <div>Age</div>
-                    <div>Salary</div>
-                    <div>Timings</div>
-                    <div className="text-right"> </div>
+              <section className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_20px_rgba(0,0,0,0.06)]">
+                {/* Header row */}
+                <div className="grid grid-cols-[34px_70px_1.2fr_1.3fr_140px_120px_1fr_120px] items-center bg-[#F7F7F7] px-3 py-3 text-[10px] font-extrabold text-[#6D6D6D]">
+                  <div className="flex items-center justify-center">
+                    <input type="checkbox" className="h-3 w-3 accent-[#B80F24]" />
                   </div>
+                  <div>ID</div>
+                  <div>Name</div>
+                  <div>Email</div>
+                  <div>Phone</div>
+                  <div>Date of Birth</div>
+                  <div>Address</div>
+                  <div className="text-right"> </div>
+                </div>
 
-                  {/* Rows */}
+                {/* Rows / states */}
+                {loading ? (
+                  <div className="px-3 py-6 text-center text-[12px] font-semibold text-[#6D6D6D]">
+                    Loading staff...
+                  </div>
+                ) : error ? (
+                  <div className="px-3 py-6 text-center text-[12px] font-semibold text-[#B80F24]">
+                    Error: {error}
+                  </div>
+                ) : staffList.length === 0 ? (
+                  <div className="px-3 py-6 text-center text-[12px] font-semibold text-[#6D6D6D]">
+                    No staff found.
+                  </div>
+                ) : (
                   <div className="divide-y divide-black/5">
                     {staffList.map((s, idx) => (
                       <div
                         key={s.id}
-                        className={`grid grid-cols-[34px_70px_1.2fr_1.3fr_140px_90px_110px_120px_120px] items-center px-3 py-3 text-[11px] ${
+                        className={`grid grid-cols-[34px_70px_1.2fr_1.3fr_140px_120px_1fr_120px] items-center px-3 py-3 text-[11px] ${
                           idx % 2 === 1 ? 'bg-[#D0D0D0]' : 'bg-[#EFEFEF]'
                         }`}
                       >
@@ -622,13 +543,15 @@ export default function StaffPage() {
 
                         <div className="truncate font-semibold text-[#1E1E1E]">{s.email}</div>
                         <div className="font-semibold text-[#1E1E1E]">{s.phone}</div>
-                        <div className="font-semibold text-[#1E1E1E]">{s.age}</div>
-                        <div className="font-semibold text-[#1E1E1E]">{s.salary}</div>
-                        <div className="font-semibold text-[#1E1E1E]">{s.timings}</div>
+                        <div className="font-semibold text-[#1E1E1E]">{s.dob}</div>
+                        <div className="truncate font-semibold text-[#1E1E1E]">{s.address}</div>
 
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => goDetails(s)}
+                            onClick={() => {
+                              setSelectedStaff(s);
+                              setView('details');
+                            }}
                             className="grid h-8 w-8 place-items-center rounded-full bg-[#F3C0D3] text-[#1E1E1E] shadow"
                             title="View details"
                             aria-label="View details"
@@ -654,61 +577,8 @@ export default function StaffPage() {
                       </div>
                     ))}
                   </div>
-                </section>
-              ) : (
-                /* ATTENDANCE VIEW */
-                <section className="space-y-3">
-                  <div className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_20px_rgba(0,0,0,0.06)]">
-                    <div className="divide-y divide-black/5">
-                      {attendanceRows.map((r, idx) => (
-                        <div
-                          key={r.id}
-                          className={`grid grid-cols-[70px_1.2fr_140px_140px_1fr_200px] items-center gap-3 px-4 py-3 text-[11px] ${
-                            idx % 2 === 0 ? 'bg-[#D0D0D0]' : 'bg-[#BDBDBD]'
-                          }`}
-                        >
-                          <div className="font-extrabold text-[#6D6D6D]">#101</div>
-
-                          <div className="flex items-center gap-3">
-                            <div className="grid h-8 w-8 place-items-center rounded-full bg-white text-[11px] font-extrabold text-[#B80F24] shadow">
-                              WJ
-                            </div>
-                            <div className="leading-tight">
-                              <p className="text-[11px] font-extrabold text-[#1E1E1E]">{r.name}</p>
-                              <p className="text-[10px] font-extrabold text-[#B80F24]">{r.role}</p>
-                            </div>
-                          </div>
-
-                          <div className="text-[10px] font-extrabold text-[#6D6D6D]">{r.date}</div>
-                          <div className="text-[10px] font-extrabold text-[#6D6D6D]">{r.timings}</div>
-
-                          <div className="flex flex-wrap items-center gap-2">
-                            {(['Present', 'Absent', 'Half Shift', 'Leave'] as AttendanceStatus[]).map((s) => (
-                              <StatusButton
-                                key={s}
-                                label={s}
-                                active={r.status === s}
-                                onClick={() =>
-                                  setAttendanceRows((prev) =>
-                                    prev.map((x) => (x.id === r.id ? { ...x, status: s } : x))
-                                  )
-                                }
-                              />
-                            ))}
-                          </div>
-
-                          <div className="flex items-center justify-end gap-2">
-                            <div className="flex items-center gap-2 rounded-md bg-[#8A8A8A] px-3 py-2 text-[10px] font-extrabold text-white shadow">
-                              <span>{r.status ?? 'Present'}</span>
-                              <MdModeEditOutline className="h-4 w-4" />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </section>
-              )}
+                )}
+              </section>
             </>
           )}
         </main>
@@ -735,23 +605,10 @@ export default function StaffPage() {
             <Field label="Email" placeholder="Enter email address" value={form.email} onChange={(v) => setForm((p) => ({ ...p, email: v }))} />
             <SelectField label="Role" value={form.role} onChange={(v) => setForm((p) => ({ ...p, role: v }))} options={['Manager', 'Cashier', 'Cook', 'Waiter']} />
             <Field label="Phone number" placeholder="Enter phone number" value={form.phone} onChange={(v) => setForm((p) => ({ ...p, phone: v }))} />
-            <Field label="Salary" placeholder="Enter salary" value={form.salary} onChange={(v) => setForm((p) => ({ ...p, salary: v }))} />
             <Field label="Date of birth" placeholder="Enter date of birth" value={form.dob} onChange={(v) => setForm((p) => ({ ...p, dob: v }))} />
-            <Field label="Shift start timing" placeholder="Enter start timing" value={form.shiftStart} onChange={(v) => setForm((p) => ({ ...p, shiftStart: v }))} rightIcon={<MdMoreVert />} />
-            <Field label="Shift end timing" placeholder="Enter end timing" value={form.shiftEnd} onChange={(v) => setForm((p) => ({ ...p, shiftEnd: v }))} rightIcon={<MdMoreVert />} />
           </div>
 
           <Field label="Address" placeholder="Enter address" value={form.address} onChange={(v) => setForm((p) => ({ ...p, address: v }))} />
-
-          <div className="space-y-2">
-            <p className="text-[11px] font-extrabold text-[#6D6D6D]">Additional details</p>
-            <textarea
-              value={form.details}
-              onChange={(e) => setForm((p) => ({ ...p, details: e.target.value }))}
-              placeholder="Enter additional details"
-              className="h-28 w-full resize-none rounded-lg border border-black/10 bg-[#F7F7F7] px-3 py-3 text-[12px] font-semibold text-[#1E1E1E] placeholder:text-[#B8B8B8] outline-none focus:bg-white focus:ring-2 focus:ring-[#B80F24]/25"
-            />
-          </div>
 
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
@@ -791,23 +648,10 @@ export default function StaffPage() {
             <Field label="Email" value={form.email} onChange={(v) => setForm((p) => ({ ...p, email: v }))} />
             <SelectField label="Role" value={form.role} onChange={(v) => setForm((p) => ({ ...p, role: v }))} options={['Manager', 'Cashier', 'Cook', 'Waiter']} />
             <Field label="Phone number" value={form.phone} onChange={(v) => setForm((p) => ({ ...p, phone: v }))} />
-            <Field label="Salary" value={form.salary} onChange={(v) => setForm((p) => ({ ...p, salary: v }))} />
             <Field label="Date of birth" value={form.dob} onChange={(v) => setForm((p) => ({ ...p, dob: v }))} />
-            <Field label="Shift start timing" value={form.shiftStart} onChange={(v) => setForm((p) => ({ ...p, shiftStart: v }))} rightIcon={<MdMoreVert />} />
-            <Field label="Shift end timing" value={form.shiftEnd} onChange={(v) => setForm((p) => ({ ...p, shiftEnd: v }))} rightIcon={<MdMoreVert />} />
           </div>
 
           <Field label="Address" value={form.address} onChange={(v) => setForm((p) => ({ ...p, address: v }))} />
-
-          <div className="space-y-2">
-            <p className="text-[11px] font-extrabold text-[#6D6D6D]">Additional details</p>
-            <textarea
-              value={form.details}
-              onChange={(e) => setForm((p) => ({ ...p, details: e.target.value }))}
-              placeholder="Enter additional details"
-              className="h-28 w-full resize-none rounded-lg border border-black/10 bg-[#F7F7F7] px-3 py-3 text-[12px] font-semibold text-[#1E1E1E] placeholder:text-[#B8B8B8] outline-none focus:bg-white focus:ring-2 focus:ring-[#B80F24]/25"
-            />
-          </div>
 
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
