@@ -1,7 +1,7 @@
 //dashboard
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import { MdDashboard, MdRestaurantMenu, MdPeople, MdInventory2, MdAssessment, MdShoppingCart, MdLogout } from 'react-icons/md';
@@ -26,6 +26,8 @@ type NavItem = {
   name: string;
   path?: string;
 };
+
+type UserRole = 'Manager' | 'Staff';
 
 const SparkBars = ({ values, color }: { values: number[]; color: string }) => (
   <div className="flex h-12 items-end gap-1">
@@ -72,7 +74,7 @@ const iconMap: Record<string, React.ReactNode> = {
   Order: <MdShoppingCart className="h-5 w-5" />,
 };
 
-const navItems: NavItem[] = [
+const allNavItems: NavItem[] = [
   { name: 'Dashboard', path: '/dashboard' },
   { name: 'Menu', path: '/menu' },
   { name: 'Staff', path: '/staff' },
@@ -81,19 +83,122 @@ const navItems: NavItem[] = [
   { name: 'Order', path: '/order' },
 ];
 
+// Define role-based access
+const roleBasedNav: Record<UserRole, string[]> = {
+  Manager: ['Dashboard', 'Menu', 'Staff', 'Inventory', 'Reports', 'Order'],
+  Staff: ['Dashboard', 'Menu', 'Inventory', 'Order'],
+};
+
+// Function to filter nav items based on role
+const getNavItemsByRole = (role: UserRole): NavItem[] => {
+  const allowedNames = roleBasedNav[role] || [];
+  return allNavItems.filter(item => allowedNames.includes(item.name));
+};
+
 export default function DashboardPage() {
   // Sidebar collapse/expand state
   const [collapsed, setCollapsed] = useState<boolean>(false);
+  const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [navItems, setNavItems] = useState<NavItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
   const activeNav = 'Dashboard';
+
+  // Fetch user role on component mount
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      try {
+        // Get current authenticated user
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        
+        if (authError || !user) {
+          router.push('/login');
+          return;
+        }
+
+        // Fetch user's role from UsersAccount table with proper join
+        const { data, error } = await supabase
+          .from('UsersAccount')
+          .select('roleID, Role!inner(roleName)')
+          .eq('userID', user.id)
+          .single();
+
+        if (error || !data) {
+          console.error('Failed to fetch user role:', error);
+          router.push('/login');
+          return;
+        }
+
+        // Extract role name with proper typing
+        let roleName: UserRole = 'Staff'; // default
+        
+        if (data.Role) {
+          // Cast to any to avoid TypeScript strict checking on Supabase join types
+          const roleData = data.Role as any;
+          if (Array.isArray(roleData)) {
+            roleName = (roleData[0]?.roleName || 'Staff') as UserRole;
+          } else if (roleData.roleName) {
+            roleName = roleData.roleName as UserRole;
+          }
+        }
+
+        console.log('User role fetched:', roleName, 'roleID:', data.roleID);
+        setUserRole(roleName);
+        setNavItems(getNavItemsByRole(roleName));
+      } catch (err) {
+        console.error('Error fetching user role:', err);
+        router.push('/login');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserRole();
+  }, [router]);
+
+  // Protect routes from unauthorized access (only after role is fully loaded)
+  useEffect(() => {
+    if (loading || !userRole || navItems.length === 0) return; // Wait until role and nav are ready
+
+    const currentPath = window.location.pathname || '/dashboard';
+    const allowedPaths = navItems.map(item => item.path).filter(Boolean) as string[];
+
+    // Allow navigation if current path is in the allowed list
+    if (allowedPaths.includes(currentPath)) return;
+
+    // Otherwise, block and redirect
+    if (currentPath !== '/dashboard') {
+      console.warn(`❌ Unauthorized access attempt to ${currentPath} by ${userRole}`);
+      alert(`⛔ Access Denied!\n\nYou (${userRole}) cannot access this page.`);
+      router.replace('/dashboard');
+    }
+  }, [userRole, loading, router, navItems]);
+
+  const handleNavClick = (path?: string) => {
+    if (!path || !userRole) return;
+
+    // Check if user has access to this page via allowed nav items
+    const allowedPaths = navItems.map(item => item.path);
+    const hasAccess = allowedPaths.includes(path);
+
+    if (!hasAccess) {
+      alert(`⛔ Access Denied!\n\nYou (${userRole}) cannot access this page.`);
+      return; // Don't navigate
+    }
+
+    // Page is allowed, navigate without warning
+    console.log(`✅ ${userRole} accessing ${path}`);
+    router.push(path);
+  };
 
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
     } catch (e) {
-      // ignore errors in demo
+      console.error('Logout error:', e);
     } finally {
-      router.push('/');
+      // Use window.location.href for hard redirect to clear all cached state
+      window.location.href = '/login';
     }
   };
 
@@ -142,6 +247,14 @@ export default function DashboardPage() {
     { id: 'right-4', name: 'Chicken Parmesan', subtitle: 'Order: #55.00', status: 'In Stock', price: '$56.00' },
   ];
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <p className="text-foreground">Loading...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div
@@ -162,7 +275,7 @@ export default function DashboardPage() {
               return (
                 <button
                   key={item.name}
-                  onClick={() => item.path && router.push(item.path)}
+                  onClick={() => handleNavClick(item.path)}
                   className={`flex items-center rounded-xl ring-1 ring-card-border transition hover:-translate-y-0.5 hover:shadow ${
                     collapsed ? 'h-14 w-14 self-center bg-card justify-center gap-0' : 'h-12 w-full bg-card px-2 gap-3'
                   }`}

@@ -190,19 +190,35 @@ export default function StaffPage() {
     const load = async () => {
       setLoading(true);
       setError(null);
-      const { data, error } = await supabase
-        .from('UsersAccount')
-        .select('userID, roleID, email, firstName, lastName, phone, dob, address')
-        .order('firstName', { ascending: true });
 
-      if (error) {
-        setError(error.message);
+      // Fetch users and roles in parallel
+      const [usersRes, rolesRes] = await Promise.all([
+        supabase
+          .from('UsersAccount')
+          .select('userID, roleID, email, firstName, lastName, phone, dob, address')
+          .order('firstName', { ascending: true }),
+        supabase
+          .from('Role')
+          .select('roleID, roleName')
+      ]);
+
+      if (usersRes.error) {
+        console.error('Supabase error:', usersRes.error);
+        setError(usersRes.error.message);
         setLoading(false);
         return;
       }
 
+      // Create role lookup map
+      const roleMap: Record<number, string> = {};
+      rolesRes.data?.forEach(r => {
+        roleMap[r.roleID] = r.roleName;
+      });
+
+      console.log('Role map:', roleMap);
+
       const mapped =
-        data?.map((r) => {
+        usersRes.data?.map((r: any) => {
           const first = r.firstName ?? '';
           const last = r.lastName ?? '';
           const initials = `${first[0] ?? ''}${last[0] ?? ''}`.toUpperCase();
@@ -210,7 +226,7 @@ export default function StaffPage() {
             id: r.userID,
             code: r.userID?.slice(0, 6) ?? '',
             name: `${first} ${last}`.trim(),
-            role: r.roleID?.toString() ?? '',
+            role: roleMap[r.roleID] ?? 'Unknown',
             email: r.email ?? '',
             phone: r.phone ?? '',
             dob: r.dob ?? '',
@@ -282,6 +298,122 @@ export default function StaffPage() {
   const goDetails = (s: Staff) => {
     setSelectedStaff(s);
     setView('details');
+  };
+
+  const handleAddStaff = async () => {
+    if (!form.fullName || !form.email || !form.phone) {
+      alert('Please fill in required fields');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const [firstName, ...lastNameParts] = form.fullName.split(' ');
+      const lastName = lastNameParts.join(' ') || '';
+
+      // Step 1: Create auth user first
+      const tempPassword = crypto.randomUUID().slice(0, 16) + 'Aa1!';
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: form.email,
+        password: tempPassword,
+        options: {
+          data: {
+            first_name: firstName,
+            last_name: lastName,
+          }
+        }
+      });
+
+      if (authError) {
+        console.error('Auth error:', authError);
+        alert(`Failed to create auth user: ${authError.message}`);
+        setLoading(false);
+        return;
+      }
+
+      if (!authData.user) {
+        alert('Failed to create user');
+        setLoading(false);
+        return;
+      }
+
+      // Step 2: Find role ID from role name
+      const { data: roleData } = await supabase
+        .from('Role')
+        .select('roleID')
+        .eq('roleName', form.role)
+        .single();
+
+      const roleID = roleData?.roleID || 1;
+
+      // Step 3: Insert into UsersAccount with auth user's ID
+      const { error: insertError } = await supabase
+        .from('UsersAccount')
+        .insert([
+          {
+            userID: authData.user.id,
+            firstName,
+            lastName,
+            email: form.email,
+            phone: form.phone,
+            dob: form.dob,
+            address: form.address,
+            roleID,
+            username: form.email.split('@')[0],
+            isActive: true,
+          },
+        ]);
+
+      if (insertError) {
+        console.error('Insert error:', insertError);
+        alert(`Failed to add staff: ${insertError.message}`);
+        setLoading(false);
+        return;
+      }
+
+      alert(`Staff added successfully!\nTemporary password: ${tempPassword}\n(User should change this on first login)`);
+      setOpenAdd(false);
+      resetAddForm();
+      
+      // Reload staff list
+      setLoading(true);
+      setError(null);
+      const [usersRes, rolesRes] = await Promise.all([
+        supabase
+          .from('UsersAccount')
+          .select('userID, roleID, email, firstName, lastName, phone, dob, address')
+          .order('firstName', { ascending: true }),
+        supabase
+          .from('Role')
+          .select('roleID, roleName')
+      ]);
+
+      const roleMap: Record<number, string> = {};
+      rolesRes.data?.forEach(r => {
+        roleMap[r.roleID] = r.roleName;
+      });
+
+      const mapped =
+        usersRes.data?.map((r: any) => ({
+          id: r.userID,
+          code: r.userID?.slice(0, 6) ?? '',
+          name: `${r.firstName} ${r.lastName}`.trim(),
+          role: roleMap[r.roleID] ?? 'Unknown',
+          email: r.email ?? '',
+          phone: r.phone ?? '',
+          dob: r.dob ?? '',
+          address: r.address ?? '',
+          avatarInitials: `${(r.firstName?.[0] ?? '')}${(r.lastName?.[0] ?? '')}`.toUpperCase() || 'NA',
+        })) ?? [];
+
+      setStaffList(mapped);
+      setSelectedStaff(mapped[0] ?? null);
+      setLoading(false);
+    } catch (e: any) {
+      console.error('Add staff error:', e);
+      alert(`Error: ${e.message}`);
+      setLoading(false);
+    }
   };
 
   return (
@@ -603,7 +735,7 @@ export default function StaffPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Full Name" placeholder="Enter full name" value={form.fullName} onChange={(v) => setForm((p) => ({ ...p, fullName: v }))} />
             <Field label="Email" placeholder="Enter email address" value={form.email} onChange={(v) => setForm((p) => ({ ...p, email: v }))} />
-            <SelectField label="Role" value={form.role} onChange={(v) => setForm((p) => ({ ...p, role: v }))} options={['Manager', 'Cashier', 'Cook', 'Waiter']} />
+            <SelectField label="Role" value={form.role} onChange={(v) => setForm((p) => ({ ...p, role: v }))} options={['Manager', 'Staff']} />
             <Field label="Phone number" placeholder="Enter phone number" value={form.phone} onChange={(v) => setForm((p) => ({ ...p, phone: v }))} />
             <Field label="Date of birth" placeholder="Enter date of birth" value={form.dob} onChange={(v) => setForm((p) => ({ ...p, dob: v }))} />
           </div>
@@ -618,7 +750,7 @@ export default function StaffPage() {
               Cancel
             </button>
             <button
-              onClick={() => setOpenAdd(false)}
+              onClick={handleAddStaff}
               className="rounded-md bg-[#B80F24] px-5 py-2 text-[11px] font-extrabold text-white shadow"
             >
               Confirm
@@ -646,7 +778,7 @@ export default function StaffPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Full Name" value={form.fullName} onChange={(v) => setForm((p) => ({ ...p, fullName: v }))} />
             <Field label="Email" value={form.email} onChange={(v) => setForm((p) => ({ ...p, email: v }))} />
-            <SelectField label="Role" value={form.role} onChange={(v) => setForm((p) => ({ ...p, role: v }))} options={['Manager', 'Cashier', 'Cook', 'Waiter']} />
+            <SelectField label="Role" value={form.role} onChange={(v) => setForm((p) => ({ ...p, role: v }))} options={['Manager', 'Staff']} />
             <Field label="Phone number" value={form.phone} onChange={(v) => setForm((p) => ({ ...p, phone: v }))} />
             <Field label="Date of birth" value={form.dob} onChange={(v) => setForm((p) => ({ ...p, dob: v }))} />
           </div>

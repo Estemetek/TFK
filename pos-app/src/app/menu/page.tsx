@@ -3,9 +3,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
+import { Sidebar } from '../components/Sidebar';
 import {
-  MdDashboard, MdRestaurantMenu, MdPeople, MdInventory2, MdAssessment,
-  MdShoppingCart, MdLogout, MdGridView, MdLocalDining, MdFastfood,
+  MdGridView, MdLocalDining, MdFastfood,
   MdRiceBowl, MdLocalCafe, MdEdit, MdDelete, MdClose, MdImage,
 } from 'react-icons/md';
 
@@ -26,25 +26,6 @@ type MenuItem = {
   categoryID: number;
   Category?: { categoryName: string };
 };
-
-// --- CONSTANTS & HELPERS ---
-const iconMap: Record<string, React.ReactNode> = {
-  Dashboard: <MdDashboard className="h-5 w-5" />,
-  Menu: <MdRestaurantMenu className="h-5 w-5" />,
-  Staff: <MdPeople className="h-5 w-5" />,
-  Inventory: <MdInventory2 className="h-5 w-5" />,
-  Reports: <MdAssessment className="h-5 w-5" />,
-  Order: <MdShoppingCart className="h-5 w-5" />,
-};
-
-const navItems = [
-  { name: 'Dashboard', path: '/dashboard' },
-  { name: 'Menu', path: '/menu' },
-  { name: 'Staff', path: '/staff' },
-  { name: 'Inventory', path: '/inventory' },
-  { name: 'Reports', path: '/reports' },
-  { name: 'Order', path: '/order' },
-];
 
 const getCategoryIcon = (name: string) => {
   const n = name.toLowerCase();
@@ -189,37 +170,7 @@ export default function MenuPage() {
       <div className={`grid min-h-screen transition-[grid-template-columns] duration-200 ${collapsed ? 'grid-cols-[82px_1fr]' : 'grid-cols-[220px_1fr]'}`}>
         
         {/* Sidebar */}
-        <aside className="flex flex-col items-stretch gap-4 rounded-r-2xl bg-surface px-3 py-5 shadow-md">
-          <div className="mb-2 flex items-center gap-3 px-2">
-            <img src="/TFK.png" alt="TFK Logo" className="h-12 w-12 rounded-full shadow" />
-            {!collapsed && <span className="text-sm font-semibold text-foreground">Taiwan Fried Kitchen</span>}
-          </div>
-          <nav className={`flex w-full flex-col gap-2 ${collapsed ? 'items-center' : ''}`}>
-            {navItems.map((item) => {
-              const isActive = item.name === activeNav;
-              return (
-                <button
-                  key={item.name}
-                  onClick={() => router.push(item.path)}
-                  className={`flex items-center rounded-2xl transition hover:-translate-y-0.5 hover:shadow ${
-                    collapsed ? 'h-14 w-14 self-center justify-center bg-[#F2F2F2]' : 'h-12 w-full gap-3 bg-[#F2F2F2] px-2'
-                  }`}
-                >
-                  <span className={`grid h-10 w-10 place-items-center rounded-full shadow-inner ${isActive ? 'bg-[#B80F24] text-white' : 'bg-white text-[#6D6D6D]'}`}>
-                    {iconMap[item.name]}
-                  </span>
-                  {!collapsed && <span className={`text-[12px] font-semibold ${isActive ? 'text-[#1E1E1E]' : 'text-[#6D6D6D]'}`}>{item.name}</span>}
-                </button>
-              );
-            })}
-          </nav>
-          <div className={`mt-auto ${collapsed ? '' : 'px-2'}`}>
-            <button onClick={handleLogout} className={`transition hover:shadow ${collapsed ? 'mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#B80F24] text-white' : 'flex w-full items-center gap-3 rounded-2xl bg-[#F2F2F2] px-2 py-2'}`}>
-              <span className={`grid h-10 w-10 place-items-center rounded-full shadow-inner ${collapsed ? 'bg-[#B80F24] text-white' : 'bg-white text-[#6D6D6D]'}`}><MdLogout className="h-5 w-5" /></span>
-              {!collapsed && <span className="text-[12px] font-semibold text-[#6D6D6D]">Logout</span>}
-            </button>
-          </div>
-        </aside>
+        <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} activeNav={activeNav} />
 
         {/* Main Content */}
         <main className="space-y-4 p-4 md:p-6">
