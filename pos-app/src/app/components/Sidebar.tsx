@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
+import { logout } from '../lib/auth';
 import {
   MdDashboard,
   MdRestaurantMenu,
@@ -122,21 +123,8 @@ export function Sidebar({
   };
 
   const handleLogout = async () => {
-    try {
-      // Clear the session
-      await supabase.auth.signOut();
-      
-      // Clear any cached state
-      setUserRole(null);
-      setNavItems([]);
-      
-      // Force a hard redirect to login (clears all state)
-      window.location.href = '/login';
-    } catch (e) {
-      console.error('Logout error:', e);
-      // Even if error, still redirect to login
-      window.location.href = '/login';
-    }
+    // Use unified logout function to ensure clean session clearing
+    await logout();
   };
 
   if (loading) {

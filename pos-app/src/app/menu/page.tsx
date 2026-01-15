@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
+import { logout } from '../lib/auth';
 import { Sidebar } from '../components/Sidebar';
 import {
   MdGridView, MdLocalDining, MdFastfood,
@@ -131,8 +132,7 @@ export default function MenuPage() {
 
   // --- HANDLERS ---
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/');
+    await logout();
   };
 
   const handleAddItem = async () => {

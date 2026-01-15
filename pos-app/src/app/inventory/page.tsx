@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
+import { logout } from '../lib/auth';
 import { Sidebar } from '../components/Sidebar';
 import {
   MdEdit,
@@ -48,13 +49,7 @@ export default function InventoryPage() {
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
 
   const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (e) {
-      // ignore errors in demo
-    } finally {
-      router.push('/');
-    }
+    await logout();
   };
 
   return (

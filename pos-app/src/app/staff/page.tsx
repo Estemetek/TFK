@@ -4,6 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
+import { logout } from '../lib/auth';
 import {
   MdDashboard,
   MdRestaurantMenu,
@@ -268,13 +269,7 @@ export default function StaffPage() {
     });
 
   const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (e) {
-      // ignore
-    } finally {
-      router.push('/');
-    }
+    await logout();
   };
 
   const openAddModal = () => {

@@ -1,15 +1,37 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { supabase } from '../lib/supabaseClient';
+import { login } from '../lib/auth';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const router = useRouter();
+
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          // Already logged in, redirect to dashboard
+          router.replace('/dashboard');
+        } else {
+          setCheckingSession(false);
+        }
+      } catch (err) {
+        console.error('Session check error:', err);
+        setCheckingSession(false);
+      }
+    };
+    checkSession();
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,34 +39,28 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-      console.log('Login response:', data, 'Status:', response.status);
-
-      if (!response.ok) {
-        setError(data.error || 'Login failed');
-        setLoading(false);
-        return;
-      }
-
-      // Success - redirect with delay to ensure session is set
+      // Use centralized login utility for authentication
+      await login(email, password);
+      
       console.log('Login successful, redirecting to dashboard...');
       
-      setTimeout(() => {
-        window.location.replace('/dashboard');
-      }, 300);
+      // Successful login - hard redirect to clear all state
+      window.location.href = '/dashboard';
       
-    } catch (err) {
-      console.error('Login error:', err);
-      setError('An error occurred. Please try again.');
+    } catch (err: any) {
+      setError(err.message || 'An unexpected error occurred. Please try again.');
       setLoading(false);
     }
   };
+
+  // Show loading while checking session
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F3F3F3]">
+        <p className="text-gray-600">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#F3F3F3] font-sans p-4">

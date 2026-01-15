@@ -7,6 +7,7 @@
 import React, { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
+import { logout } from '../lib/auth';
 import { Sidebar } from '../components/Sidebar';
 import {
   MdRestaurantMenu,
@@ -682,13 +683,7 @@ export default function OrderPage() {
   const [voidOpen, setVoidOpen] = useState(false);
 
   const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (e) {
-      // ignore
-    } finally {
-      router.push('/');
-    }
+    await logout();
   };
 
   return (

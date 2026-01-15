@@ -7,6 +7,7 @@
 import React, { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
+import { logout } from '../lib/auth';
 import {
   MdDashboard,
   MdRestaurantMenu,
@@ -202,13 +203,7 @@ export default function ReportsPage() {
   const [to, setTo] = useState('2024-08-08');
 
   const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (e) {
-      // ignore
-    } finally {
-      router.push('/');
-    }
+    await logout();
   };
 
   const leftCard = useMemo(() => {

@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
+import { logout } from '../lib/auth';
 import { MdDashboard, MdRestaurantMenu, MdPeople, MdInventory2, MdAssessment, MdShoppingCart, MdLogout } from 'react-icons/md';
 
 type Metric = {
@@ -192,14 +193,8 @@ export default function DashboardPage() {
   };
 
   const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (e) {
-      console.error('Logout error:', e);
-    } finally {
-      // Use window.location.href for hard redirect to clear all cached state
-      window.location.href = '/login';
-    }
+    // Use unified logout function to ensure clean session clearing
+    await logout();
   };
 
   const metrics: Metric[] = [
