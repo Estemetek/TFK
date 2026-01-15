@@ -36,23 +36,14 @@ const iconMap: Record<string, React.ReactNode> = {
   Staff: <MdPeople className="h-5 w-5" />,
   Inventory: <MdInventory2 className="h-5 w-5" />,
   Reports: <MdAssessment className="h-5 w-5" />,
-  Order: <MdShoppingCart className="h-5 w-5" />,
 };
-
-const navItems: NavItem[] = [
-  { name: 'Dashboard', path: '/dashboard' },
-  { name: 'Menu', path: '/menu' },
-  { name: 'Staff', path: '/staff' },
-  { name: 'Inventory', path: '/inventory' },
-  { name: 'Reports', path: '/reports' },
-  { name: 'Order', path: '/order' },
-];
 
 export default function ProfilePage() {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [navItems, setNavItems] = useState<NavItem[]>([]);
 
   const activeNav = 'Profile';
 
@@ -75,6 +66,7 @@ export default function ProfilePage() {
           username,
           firstName,
           lastName,
+          roleID,
           Role (
             roleName
           )
@@ -95,6 +87,65 @@ export default function ProfilePage() {
         lastName: data.lastName,
         roleName: data.Role?.[0]?.roleName ?? null,
       });
+
+      // Fetch navigation items based on role
+      console.log('Fetching navigation for roleID:', data.roleID);
+
+      const { data: navData, error: navError } = await supabase
+        .from('rolenavigation')
+        .select('navigationid')
+        .eq('roleid', data.roleID);
+
+      if (navError) {
+        console.error('RoleNavigation fetch error (lowercase):', navError);
+        // Try with capitalized names as fallback
+        const { data: navDataAlt, error: navErrorAlt } = await supabase
+          .from('RoleNavigation')
+          .select('navigationID')
+          .eq('roleID', data.roleID);
+        
+        if (navErrorAlt) {
+          console.error('RoleNavigation fetch error (capitalized):', navErrorAlt);
+        } else if (navDataAlt && navDataAlt.length > 0) {
+          const navIds = navDataAlt.map((item: any) => item.navigationID);
+          
+          const { data: navigationItems, error: navItemsError } = await supabase
+            .from('Navigation')
+            .select('navigationID, navName, navPath')
+            .in('navigationID', navIds);
+
+          if (navItemsError) {
+            console.error('Navigation items fetch error:', navItemsError);
+          } else if (navigationItems) {
+            const items = navigationItems
+              .map((item: any) => ({
+                name: item.navName,
+                path: item.navPath,
+              }))
+              .filter((item: NavItem) => item.name && item.path);
+            setNavItems(items);
+          }
+        }
+      } else if (navData && navData.length > 0) {
+        const navIds = navData.map((item: any) => item.navigationid);
+        
+        const { data: navigationItems, error: navItemsError } = await supabase
+          .from('navigation')
+          .select('navigationid, navname, navpath')
+          .in('navigationid', navIds);
+
+        if (navItemsError) {
+          console.error('Navigation items fetch error:', navItemsError);
+        } else if (navigationItems) {
+          const items = navigationItems
+            .map((item: any) => ({
+              name: item.navname,
+              path: item.navpath,
+            }))
+            .filter((item: NavItem) => item.name && item.path);
+          setNavItems(items);
+        }
+      }
 
       setLoading(false);
     };
