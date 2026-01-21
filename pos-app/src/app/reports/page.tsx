@@ -24,7 +24,7 @@ type NavItem = { name: string; path?: string };
 const iconMap: Record<string, React.ReactNode> = {
   Dashboard: <MdDashboard className="h-5 w-5" />,
   Menu: <MdRestaurantMenu className="h-5 w-5" />,
-  Staff: <MdPeople className="h-5 w-5" />,
+  'User Management': <MdPeople className="h-5 w-5" />,
   Inventory: <MdInventory2 className="h-5 w-5" />,
   Reports: <MdAssessment className="h-5 w-5" />,
   Order: <MdShoppingCart className="h-5 w-5" />,
@@ -33,7 +33,7 @@ const iconMap: Record<string, React.ReactNode> = {
 const navItems: NavItem[] = [
   { name: 'Dashboard', path: '/dashboard' },
   { name: 'Menu', path: '/menu' },
-  { name: 'Staff', path: '/staff' },
+  { name: 'User Management', path: '/staff' },
   { name: 'Inventory', path: '/inventory' },
   { name: 'Reports', path: '/reports' },
   { name: 'Order', path: '/order' },
@@ -145,7 +145,7 @@ function LineAreaChart() {
   return (
     <div className="rounded-2xl bg-[#E7E7E7] p-3">
       <div className="rounded-2xl bg-white p-3">
-        <svg viewBox="0 0 760 220" className="h-[190px] w-full">
+        <svg viewBox="0 0 760 220" className="h-48 w-full">
           <defs>
             <linearGradient id="areaFillReports" x1="0" x2="0" y1="0" y2="1">
               <stop offset="0%" stopColor="rgba(184, 15, 36, 0.25)" />

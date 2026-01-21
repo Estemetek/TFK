@@ -20,7 +20,7 @@ type NavItem = { name: string; path?: string };
 const iconMap: Record<string, React.ReactNode> = {
   Dashboard: <MdDashboard className="h-5 w-5" />,
   Menu: <MdRestaurantMenu className="h-5 w-5" />,
-  Staff: <MdPeople className="h-5 w-5" />,
+  'User Management': <MdPeople className="h-5 w-5" />,
   Inventory: <MdInventory2 className="h-5 w-5" />,
   Reports: <MdAssessment className="h-5 w-5" />,
   Order: <MdShoppingCart className="h-5 w-5" />,
@@ -29,14 +29,14 @@ const iconMap: Record<string, React.ReactNode> = {
 const allNavItems: NavItem[] = [
   { name: 'Dashboard', path: '/dashboard' },
   { name: 'Menu', path: '/menu' },
-  { name: 'Staff', path: '/staff' },
+  { name: 'User Management', path: '/staff' },
   { name: 'Inventory', path: '/inventory' },
   { name: 'Reports', path: '/reports' },
   { name: 'Order', path: '/order' },
 ];
 
 const roleBasedNav: Record<UserRole, string[]> = {
-  Manager: ['Dashboard', 'Menu', 'Staff', 'Inventory', 'Reports', 'Order'],
+  Manager: ['Dashboard', 'Menu', 'User Management', 'Inventory', 'Reports', 'Order'],
   Staff: ['Dashboard', 'Menu', 'Inventory', 'Order'],
 };
 

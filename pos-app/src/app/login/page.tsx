@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [rememberMe, setRememberMe] = useState(false);
   const router = useRouter();
 
   // Check if user is already logged in
@@ -64,27 +65,26 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#F3F3F3] font-sans p-4">
-      <div className="w-full max-w-xs">
+      <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <img src="/TFK.png" alt="TFK Logo" className="h-24 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900">Taiwan Fried Kitchen</h1>
+          <img src="/TFK.png" alt="TFK Logo" className="h-16 mx-auto mb-4" />
         </div>
 
-        <div className="bg-[#A8A8A8] rounded-3xl shadow-lg p-10">
-          <h2 className="text-4xl font-semibold text-white mb-2 text-center">Login</h2>
-          <p className="text-white text-sm mb-6 text-center opacity-90">Sign in to your account</p>
+        <div className="bg-[#9B9B9B] rounded-3xl shadow-lg p-12">
+          <h2 className="text-3xl font-semibold text-white mb-3 text-center">Login!</h2>
+          <p className="text-white text-sm mb-8 text-center opacity-90">Please enter your credentials below to continue</p>
 
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-white mb-2">Email</label>
+              <label className="block text-sm font-medium text-white mb-2">Username</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
+                placeholder="Enter your username"
                 required
                 disabled={loading}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-red-600 focus:border-transparent disabled:bg-gray-200"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-red-600 focus:border-transparent disabled:bg-gray-200"
               />
             </div>
 
@@ -97,8 +97,24 @@ export default function LoginPage() {
                 placeholder="Enter your password"
                 required
                 disabled={loading}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-red-600 focus:border-transparent disabled:bg-gray-200"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-red-600 focus:border-transparent disabled:bg-gray-200"
               />
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  disabled={loading}
+                  className="w-4 h-4 accent-red-700"
+                />
+                <span className="text-sm font-medium text-white">Remember me</span>
+              </label>
+              <Link href="/forgot-password" className="text-sm font-medium text-red-700 hover:text-red-800">
+                Forgot Password?
+              </Link>
             </div>
 
             {error && (
@@ -110,9 +126,9 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-red-700 hover:bg-red-800 disabled:bg-gray-400 text-white font-bold py-3 rounded-lg transition"
+              className="w-full bg-red-700 hover:bg-red-800 disabled:bg-gray-400 text-white font-bold py-2 rounded-lg transition mt-6"
             >
-              {loading ? 'Signing In...' : 'Sign In'}
+              {loading ? 'Signing In...' : 'Login'}
             </button>
           </form>
 

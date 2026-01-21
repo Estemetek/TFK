@@ -20,21 +20,25 @@ type Category = {
 type MenuItem = {
   menuItemID: number;
   name: string;
+  description?: string;
   price: number;
   regularPrice: number;
   isAvailable: boolean;
   status: string;
   categoryID: number;
+  imageUrl?: string;
   Category?: { categoryName: string };
 };
 
+type MenuType = 'Normal Menu' | 'Special Deals' | 'New Year Special' | 'Desserts and Drinks';
+
 const getCategoryIcon = (name: string) => {
   const n = name.toLowerCase();
-  if (n.includes('chicken')) return <MdLocalDining className="h-5 w-5" />;
-  if (n.includes('fries') || n.includes('sides')) return <MdFastfood className="h-5 w-5" />;
-  if (n.includes('rice')) return <MdRiceBowl className="h-5 w-5" />;
-  if (n.includes('bev') || n.includes('drink')) return <MdLocalCafe className="h-5 w-5" />;
-  return <MdGridView className="h-5 w-5" />;
+  if (n.includes('chicken')) return <MdLocalDining className="h-6 w-6" />;
+  if (n.includes('fries') || n.includes('sides')) return <MdFastfood className="h-6 w-6" />;
+  if (n.includes('rice')) return <MdRiceBowl className="h-6 w-6" />;
+  if (n.includes('bev') || n.includes('drink')) return <MdLocalCafe className="h-6 w-6" />;
+  return <MdGridView className="h-6 w-6" />;
 };
 
 // --- SUB-COMPONENTS ---
@@ -95,6 +99,7 @@ export default function MenuPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [selectedCatID, setSelectedCatID] = useState<number | 'all'>('all');
+  const [selectedMenuType, setSelectedMenuType] = useState<MenuType>('Normal Menu');
   const [loading, setLoading] = useState(true);
 
   // Form & Drawer State
@@ -102,10 +107,12 @@ export default function MenuPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
     name: '',
+    description: '',
     price: '',
     regularPrice: '',
     categoryID: '',
-    isAvailable: true
+    isAvailable: true,
+    imageUrl: ''
   });
 
   const activeNav = 'Menu';
@@ -144,10 +151,12 @@ export default function MenuPage() {
     setIsSubmitting(true);
     const { error } = await supabase.from('MenuItem').insert([{
       name: form.name,
+      description: form.description,
       price: parseFloat(form.price),
       regularPrice: parseFloat(form.regularPrice || form.price),
       categoryID: parseInt(form.categoryID),
       isAvailable: form.isAvailable,
+      imageUrl: form.imageUrl,
       status: 'Active'
     }]);
 
@@ -155,7 +164,7 @@ export default function MenuPage() {
       alert(error.message);
     } else {
       setIsAddOpen(false);
-      setForm({ name: '', price: '', regularPrice: '', categoryID: '', isAvailable: true });
+      setForm({ name: '', description: '', price: '', regularPrice: '', categoryID: '', isAvailable: true, imageUrl: '' });
       fetchAllData();
     }
     setIsSubmitting(false);
@@ -165,6 +174,8 @@ export default function MenuPage() {
     selectedCatID === 'all' || item.categoryID === selectedCatID
   );
 
+  const menuTypes: MenuType[] = ['Normal Menu', 'Special Deals', 'New Year Special', 'Desserts and Drinks'];
+
   return (
     <div className="min-h-screen bg-[#F3F3F3] text-[#1E1E1E]">
       <div className={`grid min-h-screen transition-[grid-template-columns] duration-200 ${collapsed ? 'grid-cols-[82px_1fr]' : 'grid-cols-[220px_1fr]'}`}>
@@ -173,93 +184,166 @@ export default function MenuPage() {
         <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} activeNav={activeNav} />
 
         {/* Main Content */}
-        <main className="space-y-4 p-4 md:p-6">
+        <main className="space-y-5 p-6">
           <header className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <button onClick={() => setCollapsed(!collapsed)} className="h-8 w-8 bg-white rounded-full shadow">{collapsed ? '›' : '‹'}</button>
-              <p className="text-[13px] font-semibold">Menu Management</p>
+              <button onClick={() => setCollapsed(!collapsed)} className="h-9 w-9 bg-white rounded-full shadow flex items-center justify-center text-lg font-bold">{collapsed ? '›' : '‹'}</button>
+              <p className="text-xl font-bold">Menu</p>
             </div>
           </header>
 
           {/* Categories Section */}
-          <section className="rounded-2xl bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-[12px] font-extrabold">Categories</p>
-              <button className="rounded-md bg-[#B80F24] px-4 py-2 text-[12px] font-extrabold text-white shadow">Add Category</button>
+          <section className="rounded-2xl bg-white p-5 shadow">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm font-bold">Categories</p>
+              <button className="rounded-lg bg-[#8B1538] px-5 py-2.5 text-xs font-bold text-white shadow hover:bg-[#6d0f2a]">
+                Add New Category
+              </button>
             </div>
             <div className="flex gap-3 overflow-x-auto pb-2">
-               <div 
+              <div 
                 onClick={() => setSelectedCatID('all')}
-                className={`cursor-pointer min-w-35 rounded-2xl p-3 shadow transition ${selectedCatID === 'all' ? 'bg-[#B80F24] text-white' : 'bg-[#E7E7E7]'}`}
+                className={`cursor-pointer min-w-35 rounded-xl p-4 shadow transition ${selectedCatID === 'all' ? 'bg-[#8B1538] text-white' : 'bg-[#E5E5E5] text-[#1E1E1E]'}`}
               >
-                <div className="flex items-center gap-3">
-                  <span className="h-10 w-10 rounded-xl bg-white flex items-center justify-center text-[#B80F24]"><MdGridView /></span>
+                <div className="flex flex-col items-center text-center gap-2">
+                  <div className={`h-12 w-12 rounded-lg flex items-center justify-center ${selectedCatID === 'all' ? 'bg-white text-[#8B1538]' : 'bg-white text-[#8B1538]'}`}>
+                    <MdGridView className="h-6 w-6" />
+                  </div>
                   <div>
-                    <p className="text-[12px] font-extrabold">All Items</p>
-                    <p className="text-[10px] opacity-70">{menuItems.length} items</p>
+                    <p className="text-sm font-bold">All</p>
+                    <p className="text-xs opacity-80">{menuItems.length} Items</p>
                   </div>
                 </div>
               </div>
-              {categories.map((c) => (
-                <div 
-                  key={c.categoryID}
-                  onClick={() => setSelectedCatID(c.categoryID)}
-                  className={`cursor-pointer min-w-35 rounded-2xl p-3 shadow transition ${selectedCatID === c.categoryID ? 'bg-[#B80F24] text-white' : 'bg-[#E7E7E7]'}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="h-10 w-10 rounded-xl bg-white flex items-center justify-center text-[#B80F24]">{getCategoryIcon(c.categoryName)}</span>
-                    <div>
-                      <p className="text-[12px] font-extrabold">{c.categoryName}</p>
-                      <p className="text-[10px] opacity-70">Category</p>
+              {categories.map((c) => {
+                const count = menuItems.filter(item => item.categoryID === c.categoryID).length;
+                return (
+                  <div 
+                    key={c.categoryID}
+                    onClick={() => setSelectedCatID(c.categoryID)}
+                    className={`cursor-pointer min-w-35 rounded-xl p-4 shadow transition ${selectedCatID === c.categoryID ? 'bg-[#8B1538] text-white' : 'bg-[#E5E5E5] text-[#1E1E1E]'}`}
+                  >
+                    <div className="flex flex-col items-center text-center gap-2">
+                      <div className={`h-12 w-12 rounded-lg flex items-center justify-center ${selectedCatID === c.categoryID ? 'bg-white text-[#8B1538]' : 'bg-white text-[#8B1538]'}`}>
+                        {getCategoryIcon(c.categoryName)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold">{c.categoryName}</p>
+                        <p className="text-xs opacity-80">{count} Items</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
 
-          {/* Menu Items Table */}
-          <section className="rounded-2xl bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-[12px] font-extrabold">Products</p>
+          {/* Menu Items Section */}
+          <section className="rounded-2xl bg-white p-5 shadow">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm font-bold">Special menu all items</p>
               <button 
                 onClick={() => setIsAddOpen(true)}
-                className="rounded-md bg-[#B80F24] px-4 py-2 text-[12px] font-extrabold text-white shadow"
+                className="rounded-lg bg-[#8B1538] px-5 py-2.5 text-xs font-bold text-white shadow hover:bg-[#6d0f2a]"
               >
                 Add Menu Item
               </button>
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-black/5">
-              <div className="grid grid-cols-[1.5fr_100px_120px_100px_100px_120px_100px] gap-4 bg-[#F7F7F7] px-4 py-3 text-[10px] font-extrabold text-[#6D6D6D] uppercase">
-                <div>Product Name</div>
-                <div>Item ID</div>
-                <div>Category</div>
-                <div>Price</div>
-                <div>Reg. Price</div>
-                <div>Status</div>
-                <div className="text-right">Action</div>
-              </div>
+            {/* Menu Type Tabs */}
+            <div className="mb-4 flex gap-2 border-b border-gray-200">
+              {menuTypes.map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setSelectedMenuType(type)}
+                  className={`px-4 py-2 text-xs font-bold transition ${
+                    selectedMenuType === type
+                      ? 'border-b-2 border-[#8B1538] text-[#8B1538] bg-[#8B1538]/5'
+                      : 'text-gray-600 hover:text-[#8B1538]'
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
 
-              <div className="divide-y divide-black/5">
-                {filteredItems.map((item) => (
-                  <div key={item.menuItemID} className="grid grid-cols-[1.5fr_100px_120px_100px_100px_120px_100px] items-center px-4 py-4 text-[11px]">
-                    <div className="font-extrabold text-[#1E1E1E]">{item.name}</div>
-                    <div className="font-semibold text-[#6D6D6D]">#{item.menuItemID}</div>
-                    <div className="font-semibold text-[#6D6D6D]">{item.Category?.categoryName || 'Uncategorized'}</div>
-                    <div className="font-extrabold text-[#B80F24]">${item.price.toFixed(2)}</div>
-                    <div className="font-semibold text-[#8A8A8A] line-through">${item.regularPrice.toFixed(2)}</div>
-                    <div><Availability value={item.isAvailable} /></div>
-                    <div className="flex justify-end gap-2">
-                      <button className="h-7 w-7 rounded-full bg-[#F3F3F3] flex items-center justify-center shadow hover:bg-gray-200"><MdEdit className="h-3.5 w-3.5" /></button>
-                      <button className="h-7 w-7 rounded-full bg-[#B80F24] text-white flex items-center justify-center shadow hover:bg-red-700"><MdDelete className="h-3.5 w-3.5" /></button>
-                    </div>
-                  </div>
-                ))}
-                {filteredItems.length === 0 && (
-                  <div className="p-10 text-center text-[#8A8A8A] text-[12px]">No menu items found.</div>
-                )}
-              </div>
+            {/* Table */}
+            <div className="overflow-hidden rounded-lg border border-gray-200">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr className="text-left text-xs font-bold text-gray-600 uppercase">
+                    <th className="w-10 p-3">
+                      <input type="checkbox" className="h-4 w-4 accent-[#8B1538]" />
+                    </th>
+                    <th className="p-3">Product</th>
+                    <th className="p-3">Product Name</th>
+                    <th className="p-3">Item ID</th>
+                    <th className="p-3">Stock</th>
+                    <th className="p-3">Category</th>
+                    <th className="p-3">Price</th>
+                    <th className="p-3">Availability</th>
+                    <th className="p-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredItems.map((item) => (
+                    <tr key={item.menuItemID} className="hover:bg-gray-50">
+                      <td className="p-3">
+                        <input type="checkbox" className="h-4 w-4 accent-[#8B1538]" />
+                      </td>
+                      <td className="p-3">
+                        <div className="h-12 w-12 rounded-lg bg-gray-200 overflow-hidden">
+                          {item.imageUrl ? (
+                            <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="h-full w-full flex items-center justify-center text-gray-400">
+                              <MdImage className="h-6 w-6" />
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <div>
+                          <p className="text-sm font-bold text-[#1E1E1E]">{item.name}</p>
+                          <p className="text-xs text-gray-500">{item.description || 'Lorem ipsum dolor sit amet, consectetur adipiscing'}</p>
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <span className="text-sm font-semibold text-gray-700">#{item.menuItemID.toString().padStart(8, '0')}</span>
+                      </td>
+                      <td className="p-3">
+                        <span className="text-sm font-semibold text-gray-700">119 Items</span>
+                      </td>
+                      <td className="p-3">
+                        <span className="text-sm font-semibold text-gray-700">{item.Category?.categoryName || 'Uncategorized'}</span>
+                      </td>
+                      <td className="p-3">
+                        <span className="text-sm font-bold text-[#1E1E1E]">${item.price.toFixed(2)}</span>
+                      </td>
+                      <td className="p-3">
+                        <Availability value={item.isAvailable} />
+                      </td>
+                      <td className="p-3">
+                        <div className="flex justify-end gap-2">
+                          <button className="h-8 w-8 rounded-lg bg-gray-100 flex items-center justify-center hover:bg-gray-200">
+                            <MdEdit className="h-4 w-4 text-gray-700" />
+                          </button>
+                          <button className="h-8 w-8 rounded-lg bg-[#8B1538] text-white flex items-center justify-center hover:bg-[#6d0f2a]">
+                            <MdDelete className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredItems.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="p-10 text-center text-gray-500 text-sm">
+                        No menu items found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </section>
         </main>
@@ -268,12 +352,40 @@ export default function MenuPage() {
       {/* --- ADD MENU ITEM DRAWER --- */}
       <RightDrawer open={isAddOpen} title="Add New Menu Item" onClose={() => setIsAddOpen(false)}>
         <div className="space-y-5">
+          <Field label="Product Image">
+            <div className="flex items-center gap-4">
+              <div className="h-24 w-24 rounded-lg bg-gray-200 flex items-center justify-center text-gray-400">
+                <MdImage className="h-10 w-10" />
+              </div>
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={form.imageUrl}
+                  onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+                  placeholder="Enter image URL"
+                  className="w-full rounded-md bg-[#F3F3F3] px-3 py-2 text-xs outline-none"
+                />
+                <p className="mt-1 text-xs text-gray-500">Or paste an image URL</p>
+              </div>
+            </div>
+          </Field>
+
           <Field label="Item Name">
             <input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               placeholder="e.g. Taiwan Fried Chicken"
-              className="w-full rounded-md bg-[#F3F3F3] px-3 py-3 text-[12px] outline-none"
+              className="w-full rounded-md bg-[#F3F3F3] px-3 py-3 text-xs outline-none"
+            />
+          </Field>
+
+          <Field label="Description">
+            <textarea
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="Enter product description"
+              rows={3}
+              className="w-full rounded-md bg-[#F3F3F3] px-3 py-3 text-xs outline-none resize-none"
             />
           </Field>
 
@@ -284,7 +396,7 @@ export default function MenuPage() {
                 value={form.price}
                 onChange={(e) => setForm({ ...form, price: e.target.value })}
                 placeholder="0.00"
-                className="w-full rounded-md bg-[#F3F3F3] px-3 py-3 text-[12px] outline-none"
+                className="w-full rounded-md bg-[#F3F3F3] px-3 py-3 text-xs outline-none"
               />
             </Field>
             <Field label="Regular Price ($)">
@@ -293,7 +405,7 @@ export default function MenuPage() {
                 value={form.regularPrice}
                 onChange={(e) => setForm({ ...form, regularPrice: e.target.value })}
                 placeholder="0.00"
-                className="w-full rounded-md bg-[#F3F3F3] px-3 py-3 text-[12px] outline-none"
+                className="w-full rounded-md bg-[#F3F3F3] px-3 py-3 text-xs outline-none"
               />
             </Field>
           </div>
@@ -302,7 +414,7 @@ export default function MenuPage() {
             <select
               value={form.categoryID}
               onChange={(e) => setForm({ ...form, categoryID: e.target.value })}
-              className="w-full rounded-md bg-[#F3F3F3] px-3 py-3 text-[12px] outline-none appearance-none"
+              className="w-full rounded-md bg-[#F3F3F3] px-3 py-3 text-xs outline-none appearance-none"
             >
               <option value="">Select a category</option>
               {categories.map((c) => (
@@ -319,18 +431,18 @@ export default function MenuPage() {
                 type="checkbox"
                 checked={form.isAvailable}
                 onChange={(e) => setForm({ ...form, isAvailable: e.target.checked })}
-                className="h-4 w-4 accent-[#B80F24]"
+                className="h-4 w-4 accent-[#8B1538]"
               />
-              <span className="text-[12px] font-semibold text-[#6D6D6D]">Available for order</span>
+              <span className="text-xs font-semibold text-[#6D6D6D]">Available for order</span>
             </div>
           </Field>
 
           <div className="pt-5 flex justify-end gap-3 border-t">
-            <button onClick={() => setIsAddOpen(false)} className="px-6 py-2 text-[12px] font-bold text-[#6D6D6D]">Cancel</button>
+            <button onClick={() => setIsAddOpen(false)} className="px-6 py-2 text-xs font-bold text-[#6D6D6D]">Cancel</button>
             <button 
               disabled={isSubmitting}
               onClick={handleAddItem}
-              className="rounded-md bg-[#B80F24] px-8 py-2 text-[12px] font-extrabold text-white shadow hover:bg-[#a00d1f] disabled:opacity-50"
+              className="rounded-lg bg-[#8B1538] px-8 py-2 text-xs font-bold text-white shadow hover:bg-[#6d0f2a] disabled:opacity-50"
             >
               {isSubmitting ? 'Saving...' : 'Save Item'}
             </button>

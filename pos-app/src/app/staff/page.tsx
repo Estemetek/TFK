@@ -37,7 +37,7 @@ type Staff = {
 const iconMap: Record<string, React.ReactNode> = {
   Dashboard: <MdDashboard className="h-5 w-5" />,
   Menu: <MdRestaurantMenu className="h-5 w-5" />,
-  Staff: <MdPeople className="h-5 w-5" />,
+  'User Management': <MdPeople className="h-5 w-5" />,
   Inventory: <MdInventory2 className="h-5 w-5" />,
   Reports: <MdAssessment className="h-5 w-5" />,
   Order: <MdShoppingCart className="h-5 w-5" />,
@@ -46,7 +46,7 @@ const iconMap: Record<string, React.ReactNode> = {
 const navItems: NavItem[] = [
   { name: 'Dashboard', path: '/dashboard' },
   { name: 'Menu', path: '/menu' },
-  { name: 'Staff', path: '/staff' },
+  { name: 'User Management', path: '/staff' },
   { name: 'Inventory', path: '/inventory' },
   { name: 'Reports', path: '/reports' },
   { name: 'Order', path: '/order' },
@@ -177,7 +177,7 @@ const SelectField = ({
 export default function StaffPage() {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
-  const activeNav = 'Staff';
+  const activeNav = 'User Management';
 
   const [view, setView] = useState<'staff' | 'details'>('staff');
   const [sort, setSort] = useState('Sort by');
@@ -255,6 +255,7 @@ export default function StaffPage() {
     dob: '',
     address: '',
     details: '',
+    password: '',
   });
 
   const resetAddForm = () =>
@@ -266,6 +267,7 @@ export default function StaffPage() {
       dob: '',
       address: '',
       details: '',
+      password: '',
     });
 
   const handleLogout = async () => {
@@ -286,6 +288,7 @@ export default function StaffPage() {
       dob: s.dob,
       address: s.address,
       details: '',
+      password: '',
     });
     setOpenEdit(true);
   };
@@ -296,21 +299,38 @@ export default function StaffPage() {
   };
 
   const handleAddStaff = async () => {
-    if (!form.fullName || !form.email || !form.phone) {
-      alert('Please fill in required fields');
+    // Validate required fields
+    if (!form.fullName || !form.email || !form.phone || !form.password) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    // Validate password length
+    if (form.password.trim().length < 6) {
+      alert('Password must be at least 6 characters long');
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(form.email.trim())) {
+      alert('Please enter a valid email address');
       return;
     }
 
     try {
       setLoading(true);
-      const [firstName, ...lastNameParts] = form.fullName.split(' ');
+      const [firstName, ...lastNameParts] = form.fullName.trim().split(' ');
       const lastName = lastNameParts.join(' ') || '';
+      const email = form.email.trim().toLowerCase();
+      const password = form.password.trim();
 
-      // Step 1: Create auth user first
-      const tempPassword = crypto.randomUUID().slice(0, 16) + 'Aa1!';
+      console.log('Creating user with email:', email);
+
+      // Step 1: Create auth user with provided password
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: form.email,
-        password: tempPassword,
+        email: email,
+        password: password,
         options: {
           data: {
             first_name: firstName,
@@ -321,25 +341,46 @@ export default function StaffPage() {
 
       if (authError) {
         console.error('Auth error:', authError);
-        alert(`Failed to create auth user: ${authError.message}`);
+        
+        // Better error messages
+        if (authError.message.includes('already registered') || 
+            authError.message.includes('Database error') ||
+            authError.message.includes('User already registered')) {
+          alert('This email is already registered. Please:\n1. Use a different email address, OR\n2. Delete the existing user from Supabase Dashboard → Authentication → Users');
+        } else if (authError.message.includes('Password')) {
+          alert(`Password error: ${authError.message}`);
+        } else {
+          alert(`Failed to create auth user: ${authError.message}`);
+        }
+        
         setLoading(false);
         return;
       }
 
       if (!authData.user) {
-        alert('Failed to create user');
+        alert('Failed to create user - no user data returned');
         setLoading(false);
         return;
       }
 
+      console.log('✓ Auth user created:', authData.user.id);
+
       // Step 2: Find role ID from role name
-      const { data: roleData } = await supabase
+      const { data: roleData, error: roleError } = await supabase
         .from('Role')
         .select('roleID')
         .eq('roleName', form.role)
         .single();
 
+      if (roleError) {
+        console.error('Role error:', roleError);
+        alert(`Failed to find role: ${roleError.message}`);
+        setLoading(false);
+        return;
+      }
+
       const roleID = roleData?.roleID || 1;
+      console.log('✓ Using roleID:', roleID);
 
       // Step 3: Insert into UsersAccount with auth user's ID
       const { error: insertError } = await supabase
@@ -349,24 +390,26 @@ export default function StaffPage() {
             userID: authData.user.id,
             firstName,
             lastName,
-            email: form.email,
-            phone: form.phone,
+            email: email,
+            phone: form.phone.trim(),
             dob: form.dob,
-            address: form.address,
+            address: form.address.trim(),
             roleID,
-            username: form.email.split('@')[0],
+            username: email.split('@')[0],
             isActive: true,
           },
         ]);
 
       if (insertError) {
         console.error('Insert error:', insertError);
-        alert(`Failed to add staff: ${insertError.message}`);
+        alert(`Failed to add staff profile: ${insertError.message}\n\nNote: The auth user was created but the profile failed. You may need to manually delete the user from Supabase Auth.`);
         setLoading(false);
         return;
       }
 
-      alert(`Staff added successfully!\nTemporary password: ${tempPassword}\n(User should change this on first login)`);
+      console.log('✓ Staff profile created successfully');
+
+      alert('Staff added successfully!');
       setOpenAdd(false);
       resetAddForm();
       
@@ -505,7 +548,7 @@ export default function StaffPage() {
                   <p className="text-[13px] font-extrabold text-[#1E1E1E]">{selectedStaff.name}</p>
                 </div>
               ) : (
-                <p className="text-[13px] font-extrabold text-[#1E1E1E]">Staff Management</p>
+                <p className="text-[13px] font-extrabold text-[#1E1E1E]">User Management</p>
               )}
             </div>
 
@@ -602,16 +645,6 @@ export default function StaffPage() {
                   <option>Name</option>
                   <option>Role</option>
                 </select>
-              </section>
-
-              {/* Tabs */}
-              <section className="flex items-center gap-3">
-                <Pill
-                  active={view === 'staff'}
-                  onClick={() => setView('staff')}
-                >
-                  Staff Management
-                </Pill>
               </section>
 
               {/* STAFF MANAGEMENT TABLE */}
@@ -732,7 +765,8 @@ export default function StaffPage() {
             <Field label="Email" placeholder="Enter email address" value={form.email} onChange={(v) => setForm((p) => ({ ...p, email: v }))} />
             <SelectField label="Role" value={form.role} onChange={(v) => setForm((p) => ({ ...p, role: v }))} options={['Manager', 'Staff']} />
             <Field label="Phone number" placeholder="Enter phone number" value={form.phone} onChange={(v) => setForm((p) => ({ ...p, phone: v }))} />
-            <Field label="Date of birth" placeholder="Enter date of birth" value={form.dob} onChange={(v) => setForm((p) => ({ ...p, dob: v }))} />
+            <Field label="Date of birth" placeholder="Enter date of birth" value={form.dob} onChange={(v) => setForm((p) => ({ ...p, dob: v }))} type="date" />
+            <Field label="Password" placeholder="Enter password" value={form.password} onChange={(v) => setForm((p) => ({ ...p, password: v }))} type="password" />
           </div>
 
           <Field label="Address" placeholder="Enter address" value={form.address} onChange={(v) => setForm((p) => ({ ...p, address: v }))} />
@@ -775,7 +809,8 @@ export default function StaffPage() {
             <Field label="Email" value={form.email} onChange={(v) => setForm((p) => ({ ...p, email: v }))} />
             <SelectField label="Role" value={form.role} onChange={(v) => setForm((p) => ({ ...p, role: v }))} options={['Manager', 'Staff']} />
             <Field label="Phone number" value={form.phone} onChange={(v) => setForm((p) => ({ ...p, phone: v }))} />
-            <Field label="Date of birth" value={form.dob} onChange={(v) => setForm((p) => ({ ...p, dob: v }))} />
+            <Field label="Date of birth" value={form.dob} onChange={(v) => setForm((p) => ({ ...p, dob: v }))} type="date" />
+            <Field label="Password (leave empty to keep current)" placeholder="Enter new password" value={form.password} onChange={(v) => setForm((p) => ({ ...p, password: v }))} type="password" />
           </div>
 
           <Field label="Address" value={form.address} onChange={(v) => setForm((p) => ({ ...p, address: v }))} />
