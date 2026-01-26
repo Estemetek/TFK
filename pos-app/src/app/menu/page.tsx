@@ -28,6 +28,10 @@ type MenuItem = {
   categoryID: number;
   imageUrl?: string;
   Category?: { categoryName: string };
+  createdAt: string;
+  updatedAt: string;
+  updatedBy?: string;
+  UsersAccount?: { username: string }; // Joined data
 };
 
 type MenuType = 'Normal Menu' | 'Special Deals' | 'New Year Special' | 'Desserts and Drinks';
@@ -140,6 +144,9 @@ export default function MenuPage() {
   const handleUpdateItem = async () => {
     if (!editingItemID) return;
 
+    // Get current user ID from Supabase Auth
+    const { data: { user } } = await supabase.auth.getUser();
+
     setIsSubmitting(true);
     const { error } = await supabase
       .from('MenuItem')
@@ -151,6 +158,7 @@ export default function MenuPage() {
         categoryID: parseInt(editForm.categoryID),
         isAvailable: editForm.isAvailable,
         imageUrl: editForm.imageUrl,
+        updatedBy: user?.id, // Track who is making this update
       })
       .eq('menuItemID', editingItemID);
 
@@ -203,18 +211,20 @@ export default function MenuPage() {
 
   const activeNav = 'Menu';
 
-  // --- DATA FETCHING ---
+  /// --- Updated Data Fetching ---
   const fetchAllData = useCallback(async () => {
     setLoading(true);
-    // Fetch Categories
-    const { data: catData } = await supabase.from('Category').select('*').order('categoryName');
-    if (catData) setCategories(catData);
-
-    // Fetch Menu Items
-    const { data: menuData } = await supabase
+    
+    // Fetch Menu Items with Category AND the User who updated it
+    const [{ data: catData }, { data: menuData }] = await Promise.all([
+    supabase.from('Category').select('*').order('categoryName'),
+    supabase
       .from('MenuItem')
-      .select('*, Category ( categoryName )')
-      .order('name');
+      .select('*, Category(categoryName), UsersAccount:updatedBy(username)')
+      .order('name')
+  ]);
+    
+    if (catData) setCategories(catData);
     if (menuData) setMenuItems(menuData as any);
     setLoading(false);
   }, []);
@@ -371,6 +381,7 @@ export default function MenuPage() {
                     <th className="p-3">Category</th>
                     <th className="p-3">Price</th>
                     <th className="p-3">Availability</th>
+                    <th className="p-3">Actions done</th> {/* The audit trail */}
                     <th className="p-3 text-right">Action</th>
                   </tr>
                 </thead>
@@ -394,24 +405,39 @@ export default function MenuPage() {
                       <td className="p-3">
                         <div>
                           <p className="text-sm font-bold text-[#1E1E1E]">{item.name}</p>
-                          <p className="text-xs text-gray-500">{item.description || 'Lorem ipsum dolor sit amet, consectetur adipiscing'}</p>
+                          <p className="text-xs text-gray-500">{item.description || 'No description'}</p>
                         </div>
                       </td>
                       <td className="p-3">
+                        {/* Item ID COLUMN */}
                         <span className="text-sm font-semibold text-gray-700">#{item.menuItemID.toString().padStart(8, '0')}</span>
                       </td>
-                      {/* STATIC DATA FOR THE STOCK / INVENTORY OF MENU ITEM */}
                       <td className="p-3">
+                        {/* Stock COLUMN - STATIC DATA*/}
                         <span className="text-sm font-semibold text-gray-700">119 Items</span>
                       </td>
                       <td className="p-3">
+                        {/* Category COLUMN */}
                         <span className="text-sm font-semibold text-gray-700">{item.Category?.categoryName || 'Uncategorized'}</span>
                       </td>
                       <td className="p-3">
+                        {/* Price COLUMN */}
                         <span className="text-sm font-bold text-[#1E1E1E]">₱ {item.price.toFixed(2)}</span>
                       </td>
                       <td className="p-3">
+                        {/* Availability COLUMN */}
                         <Availability value={item.isAvailable} />
+                      </td>
+                      {/* Actions Done COLUMN */}
+                      <td className="p-3">
+                        <div className="flex flex-col">
+                          <span className="text-[11px] font-bold text-[#1E1E1E]">
+                            {item.UsersAccount?.username || 'Initial Setup'}
+                          </span>
+                          <span className="text-[10px] text-gray-500">
+                            {new Date(item.updatedAt).toLocaleDateString()} at {new Date(item.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
                       </td>
                       <td className="p-3">
                         <div className="flex justify-end gap-2">

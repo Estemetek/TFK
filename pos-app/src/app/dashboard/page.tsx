@@ -109,46 +109,48 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchUserRole = async () => {
       try {
-        // Get current authenticated user
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         
         if (authError || !user) {
-          router.push('/login');
+          router.replace('/login');
           return;
         }
 
-        // Fetch user's role from UsersAccount table with proper join
+        console.log("Checking database for UID:", user.id);
+
+        // Simplified query to check if the user exists first
         const { data, error } = await supabase
           .from('UsersAccount')
-          .select('roleID, Role!inner(roleName)')
+          .select(`
+            roleID,
+            Role (
+              roleName
+            )
+          `)
           .eq('userID', user.id)
-          .single();
+          .maybeSingle(); // maybeSingle() returns null instead of an error if not found
 
-        if (error || !data) {
-          console.error('Failed to fetch user role:', error);
-          router.push('/login');
+        if (error) {
+          console.error('Database error:', error);
+          return; 
+        }
+
+        if (!data) {
+          // THIS IS THE KEY: If the user exists in Auth but not in your table
+          console.error('User found in Auth but no profile exists in UsersAccount table.');
+          alert("Account error: Your user profile was not found in the database.");
+          // Do NOT redirect to login automatically here, or you'll loop.
           return;
         }
 
-        // Extract role name with proper typing
-        let roleName: UserRole = 'Staff'; // default
+        // Extract role name
+        const roleName = (data.Role as any)?.roleName as UserRole || 'Staff';
         
-        if (data.Role) {
-          // Cast to any to avoid TypeScript strict checking on Supabase join types
-          const roleData = data.Role as any;
-          if (Array.isArray(roleData)) {
-            roleName = (roleData[0]?.roleName || 'Staff') as UserRole;
-          } else if (roleData.roleName) {
-            roleName = roleData.roleName as UserRole;
-          }
-        }
-
-        console.log('User role fetched:', roleName, 'roleID:', data.roleID);
+        console.log('User role fetched:', roleName);
         setUserRole(roleName);
         setNavItems(getNavItemsByRole(roleName));
       } catch (err) {
-        console.error('Error fetching user role:', err);
-        router.push('/login');
+        console.error('Unexpected error:', err);
       } finally {
         setLoading(false);
       }
