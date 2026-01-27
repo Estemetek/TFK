@@ -1,527 +1,257 @@
-// inventory page
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import { logout } from '../lib/auth';
 import { Sidebar } from '../components/Sidebar';
-import {
-  MdEdit,
-  MdDelete,
-  MdClose,
-} from 'react-icons/md';
-
+import { MdEdit, MdDelete, MdClose, MdWarning } from 'react-icons/md';
 import React from 'react';
 
+// 1. Types strictly matching your SQL schema
 type InventoryItem = {
-  id: string;
+  ingredientID: number;
   name: string;
-  stocked: string;
-  status: 'Active' | 'Inactive' | 'Draft';
-  category: string;
-  price: string;
+  unit: string;
+  currentStock: number;
+  reorderLevel: number;
+  costPerUnit: number;
+  updatedAt: string;
 };
 
 export default function InventoryPage() {
   const [collapsed, setCollapsed] = useState(false);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
   const activeNav = 'Inventory';
 
-  const statusFilters = [
-    { label: 'All', count: 150 },
-    { label: 'Active', count: 120 },
-    { label: 'Inactive', count: 10 },
-    { label: 'Draft', count: 10 },
-  ];
-
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([
-    { id: 'inv-1', name: 'Chicken Parmesan', stocked: '10 In Stock', status: 'Active', category: 'Chicken', price: '$55.00' },
-    { id: 'inv-2', name: 'Chicken Parmesan', stocked: '10 In Stock', status: 'Active', category: 'Chicken', price: '$55.00' },
-    { id: 'inv-3', name: 'Chicken Parmesan', stocked: '10 In Stock', status: 'Active', category: 'Chicken', price: '$55.00' },
-    { id: 'inv-4', name: 'Chicken Parmesan', stocked: '10 In Stock', status: 'Active', category: 'Chicken', price: '$55.00' },
-    { id: 'inv-5', name: 'Chicken Parmesan', stocked: '10 In Stock', status: 'Active', category: 'Chicken', price: '$55.00' },
-    { id: 'inv-6', name: 'Chicken Parmesan', stocked: '10 In Stock', status: 'Active', category: 'Chicken', price: '$55.00' },
-  ]);
-
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
 
-  const handleLogout = async () => {
-    await logout();
+  const fetchInventory = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('Ingredient')
+      .select('ingredientID, name, unit, currentStock, reorderLevel, costPerUnit, updatedAt')
+      .order('name', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching inventory:', error);
+    } else {
+      setInventoryItems(data || []);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchInventory();
+  }, [fetchInventory]);
+
+  const handleSave = async (data: any) => {
+    // We only include columns that EXIST in your SQL table
+    const payload = {
+      name: data.name,
+      unit: data.unit,
+      currentStock: Number(data.quantity),
+      reorderLevel: Number(data.reorderLevel),
+      costPerUnit: parseFloat(data.price),
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      let error;
+      if (editItem) {
+        const { error: updateError } = await supabase
+          .from('Ingredient')
+          .update(payload)
+          .eq('ingredientID', editItem.ingredientID);
+        error = updateError;
+      } else {
+        const { error: insertError } = await supabase
+          .from('Ingredient')
+          .insert([payload]);
+        error = insertError;
+      }
+
+      if (error) throw error;
+
+      await fetchInventory();
+      setShowAddModal(false);
+      setShowEditModal(false);
+      setEditItem(null);
+    } catch (err: any) {
+      console.error("Database Error:", err);
+      alert(`Save failed: ${err.message}`);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (confirm('Are you sure you want to delete this ingredient?')) {
+      await supabase.from('Ingredient').delete().eq('ingredientID', id);
+      fetchInventory();
+    }
   };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div
-        className={`grid min-h-screen transition-[grid-template-columns] duration-200 ${
-          collapsed ? 'grid-cols-[82px_1fr]' : 'grid-cols-[220px_1fr]'
-        }`}
-      >
-        {/* Sidebar */}
+      <div className={`grid min-h-screen transition-[grid-template-columns] duration-200 ${collapsed ? 'grid-cols-[82px_1fr]' : 'grid-cols-[220px_1fr]'}`}>
         <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} activeNav={activeNav} />
 
-        {/* Main Content */}
         <main className="space-y-5 p-5 md:p-7">
-          {/* Header */}
           <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white/70 px-4 py-3 shadow-sm ring-1 ring-card-border">
             <div className="flex items-center gap-3">
-              <button
-                aria-label="Toggle sidebar"
-                onClick={() => setCollapsed((c) => !c)}
-                className="grid h-8 w-8 place-items-center rounded-full bg-white text-foreground ring-1 ring-card-border transition hover:bg-card"
-                title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              >
+              <button onClick={() => setCollapsed((c) => !c)} className="grid h-8 w-8 place-items-center rounded-full bg-white ring-1 ring-card-border">
                 {collapsed ? '›' : '‹'}
               </button>
-              <h1 className="text-lg font-semibold text-foreground">Inventory</h1>
-            </div>
-            <div className="flex items-center gap-3 text-text-muted">
-              <span className="text-sm">🔔</span>
-              <span className="text-sm">⚙️</span>
-              <button
-                onClick={() => router.push('/profile')}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-sm font-semibold text-primary shadow ring-1 ring-card-border"
-                aria-label="Open profile"
-              >
-                AC
-              </button>
+              <h1 className="text-lg font-semibold">Inventory Control</h1>
             </div>
           </header>
 
-          {/* Summary */}
           <section className="rounded-xl bg-white/70 px-4 py-3 shadow-sm ring-1 ring-card-border">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-baseline gap-2 text-foreground">
-                <span className="text-xl font-semibold">150</span>
-                <span className="text-sm text-text-muted">total products</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-baseline gap-2">
+                <span className="text-xl font-semibold">{inventoryItems.length}</span>
+                <span className="text-sm text-text-muted">Total Ingredients</span>
               </div>
-              <button
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow hover:bg-primary-dark"
-                onClick={() => setShowAddModal(true)}
-              >
-                Add New Inventory
+              <button onClick={() => setShowAddModal(true)} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow">
+                Add New Ingredient
               </button>
             </div>
           </section>
 
-          {/* Filters + list */}
-          <section className="grid gap-5 lg:grid-cols-[320px_1fr]">
-            {/* Filters */}
-            <div className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-card-border">
-              <div className="space-y-4">
-                <div className="space-y-3">
-                  <p className="text-sm font-semibold text-foreground">Product Status</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {statusFilters.map((status) => (
-                      <button
-                        key={status.label}
-                        className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm font-semibold ${
-                          status.label === 'All'
-                            ? 'border-primary/60 bg-white text-primary shadow'
-                            : 'border-card-border bg-white text-text-muted'
-                        }`}
-                      >
-                        <span>{status.label}</span>
-                        <span className="text-xs font-bold">{status.count}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground">Category</label>
-                  <button className="flex w-full items-center justify-between rounded-lg border border-card-border bg-white px-3 py-2 text-sm text-text-muted">
-                    <span>All</span>
-                    <span>▾</span>
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground">Stock</label>
-                  <button className="flex w-full items-center justify-between rounded-lg border border-card-border bg-white px-3 py-2 text-sm text-text-muted">
-                    <span>InStock</span>
-                    <span>▾</span>
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground">Value</label>
-                  <button className="flex w-full items-center justify-between rounded-lg border border-card-border bg-white px-3 py-2 text-sm text-text-muted">
-                    <span>Litre</span>
-                    <span>▾</span>
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground">Piece / Item / Quantity</label>
-                  <input
-                    placeholder="50"
-                    className="w-full rounded-lg border border-card-border bg-white px-3 py-2 text-sm text-foreground placeholder:text-text-muted"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground">Price</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      placeholder="50"
-                      className="w-full rounded-lg border border-card-border bg-white px-3 py-2 text-sm text-foreground placeholder:text-text-muted"
-                    />
-                    <input
-                      placeholder="120"
-                      className="w-full rounded-lg border border-card-border bg-white px-3 py-2 text-sm text-foreground placeholder:text-text-muted"
-                    />
-                  </div>
-                </div>
-
-                <button className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow hover:bg-primary-dark">
-                  Reset Filters
-                </button>
-              </div>
+          <section className="grid gap-5 lg:grid-cols-[280px_1fr]">
+            <div className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-card-border h-fit">
+               <p className="text-sm font-semibold mb-4">Stock Overview</p>
+               <div className="flex justify-between text-sm">
+                  <span>Low Stock Items:</span>
+                  <span className="text-red-500 font-bold">
+                      {inventoryItems.filter(i => i.currentStock <= i.reorderLevel).length}
+                  </span>
+               </div>
             </div>
 
-            {/* List */}
             <div className="space-y-3 rounded-xl bg-white/70 p-3 shadow-sm ring-1 ring-card-border">
-              <div className="flex items-center justify-between px-3 py-2">
-                <h2 className="text-base font-semibold text-foreground">Inventory</h2>
-              </div>
+              {loading ? (
+                <p className="p-10 text-center text-text-muted">Loading...</p>
+              ) : (
+                inventoryItems.map((item) => {
+                  const isLowStock = item.currentStock <= item.reorderLevel;
+                  return (
+                    <div key={item.ingredientID} className="flex flex-col gap-3 rounded-lg bg-white px-3 py-3 shadow-sm ring-1 ring-card-border md:flex-row md:items-center">
+                      <div className="flex flex-1 items-center gap-3">
+                        <div className={`h-12 w-12 rounded-lg flex items-center justify-center ${isLowStock ? 'bg-red-50 text-red-500' : 'bg-primary/10 text-primary'}`}>
+                           {isLowStock ? <MdWarning size={24} /> : '📦'}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold">{item.name}</p>
+                          <p className="text-xs text-text-muted">
+                            Stock: <span className={`font-bold ${isLowStock ? 'text-red-500' : 'text-primary'}`}>{item.currentStock} {item.unit}</span>
+                          </p>
+                        </div>
+                      </div>
 
-              <div className="space-y-2">
-                {inventoryItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex flex-col gap-3 rounded-lg bg-white px-3 py-3 shadow-sm ring-1 ring-card-border md:flex-row md:items-center"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="h-16 w-16 rounded-lg bg-linear-to-br from-primary/80 via-primary-dark/50 to-surface-dark shadow" />
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">{item.name}</p>
-                        <p className="text-xs text-text-muted">
-                          Stocked Product : <span className="text-primary font-semibold">{item.stocked}</span>
-                        </p>
+                      <div className="flex flex-1 flex-wrap items-center justify-between gap-3 text-sm">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] uppercase text-text-muted font-bold">Unit Cost</span>
+                          <span>${item.costPerUnit.toFixed(2)}</span>
+                        </div>
+                        <div className="flex flex-col text-right">
+                          <span className="text-[10px] uppercase text-text-muted font-bold">Last Updated</span>
+                          <span className="text-xs">{new Date(item.updatedAt).toLocaleDateString()}</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => { setEditItem(item); setShowEditModal(true); }} className="p-2 rounded-full hover:bg-gray-100 text-text-muted"><MdEdit /></button>
+                          <button onClick={() => handleDelete(item.ingredientID)} className="p-2 rounded-full hover:bg-red-50 text-primary"><MdDelete /></button>
+                        </div>
                       </div>
                     </div>
-
-                    <div className="flex flex-1 flex-wrap items-center justify-between gap-3 text-sm text-text-muted">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-foreground">Status</span>
-                        <span className="text-primary">{item.status}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-foreground">Category</span>
-                        <span>{item.category}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-foreground">Retail Price</span>
-                        <span className="text-foreground font-semibold">{item.price}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          className="grid h-8 w-8 place-items-center rounded-full border border-card-border text-text-muted hover:bg-card"
-                          onClick={() => {
-                            setEditItem(item);
-                            setShowEditModal(true);
-                          }}
-                        >
-                          <MdEdit className="h-4 w-4" />
-                        </button>
-                        <button className="grid h-8 w-8 place-items-center rounded-full border border-card-border text-primary hover:bg-card">
-                          <MdDelete className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  );
+                })
+              )}
             </div>
           </section>
         </main>
       </div>
 
-      <AddInventoryModal
-        open={showAddModal}
-        title="Add New Inventory"
-        onClose={() => setShowAddModal(false)}
-        onSave={(data) => {
-          const newItem: InventoryItem = {
-            id: `inv-${Date.now()}`,
-            name: data.name,
-            stocked: `${data.quantity} In Stock`,
-            status: data.status,
-            category: data.category,
-            price: `$${Number(data.price || 0).toFixed(2)}`,
-          };
-          setInventoryItems((prev) => [newItem, ...prev]);
-          setShowAddModal(false);
-        }}
-      />
-
-      <AddInventoryModal
-        open={showEditModal}
-        title="Edit Inventory"
-        initialData={
-          editItem
-            ? {
-                name: editItem.name,
-                category: editItem.category,
-                quantity: Number.parseInt(editItem.stocked) || 0,
-                stock: editItem.stocked.toLowerCase().includes('in stock') ? 'InStock' : 'OutOfStock',
-                status: editItem.status,
-                price: editItem.price.replace('$', ''),
-                featured: true,
-              }
-            : undefined
-        }
-        onClose={() => {
-          setShowEditModal(false);
-          setEditItem(null);
-        }}
-        onSave={(data) => {
-          if (!editItem) return;
-          setInventoryItems((prev) =>
-            prev.map((it) =>
-              it.id === editItem.id
-                ? {
-                    ...it,
-                    name: data.name,
-                    stocked: `${data.quantity} In Stock`,
-                    status: data.status,
-                    category: data.category,
-                    price: `$${Number(data.price || 0).toFixed(2)}`,
-                  }
-                : it
-            )
-          );
-          setShowEditModal(false);
-          setEditItem(null);
-        }}
+      <AddIngredientModal
+        open={showAddModal || showEditModal}
+        title={showEditModal ? "Edit Ingredient" : "Add New Ingredient"}
+        initialData={editItem}
+        onClose={() => { setShowAddModal(false); setShowEditModal(false); setEditItem(null); }}
+        onSave={handleSave}
       />
     </div>
   );
 }
 
-function AddInventoryModal({
-  open,
-  onClose,
-  onSave,
-  title = 'Add New Inventory',
-  initialData,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onSave: (data: {
-    name: string;
-    category: string;
-    quantity: number;
-    stock: 'InStock' | 'OutOfStock';
-    status: 'Active' | 'Inactive' | 'Draft';
-    price: string;
-    featured: boolean;
-    imageFile?: File | null;
-  }) => void;
-  title?: string;
-  initialData?: Partial<{
-    name: string;
-    category: string;
-    quantity: number;
-    stock: 'InStock' | 'OutOfStock';
-    status: 'Active' | 'Inactive' | 'Draft';
-    price: string;
-    featured: boolean;
-  }>;
-}) {
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState('All');
-  const [quantity, setQuantity] = useState<number>(10);
-  const [stock, setStock] = useState<'InStock' | 'OutOfStock'>('InStock');
-  const [status, setStatus] = useState<'Active' | 'Inactive' | 'Draft'>('Active');
-  const [price, setPrice] = useState<string>('55.00');
-  const [featured, setFeatured] = useState<boolean>(true);
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+function AddIngredientModal({ open, onClose, onSave, title, initialData }: any) {
+  const [formData, setFormData] = useState({
+    name: '',
+    quantity: 0,
+    unit: 'pcs',
+    reorderLevel: 5,
+    price: '0.00',
+  });
 
-  React.useEffect(() => {
-    if (open && initialData) {
-      setName(initialData.name ?? '');
-      setCategory(initialData.category ?? 'All');
-      setQuantity(initialData.quantity ?? 0);
-      setStock(initialData.stock ?? 'InStock');
-      setStatus(initialData.status ?? 'Active');
-      setPrice(initialData.price ?? '');
-      setFeatured(initialData.featured ?? true);
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        name: initialData.name,
+        quantity: initialData.currentStock,
+        unit: initialData.unit,
+        reorderLevel: initialData.reorderLevel,
+        price: initialData.costPerUnit.toString(),
+      });
+    } else {
+      setFormData({ name: '', quantity: 0, unit: 'pcs', reorderLevel: 5, price: '0.00' });
     }
-  }, [open, initialData]);
-
-  React.useEffect(() => {
-    if (!open) return;
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
-  }, [open, onClose]);
+  }, [initialData, open]);
 
   if (!open) return null;
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] || null;
-    setFile(f);
-    if (f) setPreview(URL.createObjectURL(f));
-    else setPreview(null);
-  };
-
-  const save = () => {
-    onSave({ name, category, quantity, stock, status, price, featured, imageFile: file });
-  };
-
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/40 transition-opacity duration-200"
-      onClick={onClose}
-    >
-      {/* Right-side drawer */}
-      <div
-        className="absolute right-0 top-0 h-full w-full max-w-lg overflow-y-auto rounded-l-2xl bg-white shadow-xl ring-1 ring-card-border transition-transform duration-300 ease-out"
-        style={{
-          transform: open ? 'translateX(0)' : 'translateX(100%)',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-card-border px-5 py-4">
-          <h3 className="text-base font-semibold text-foreground">{title}</h3>
-          <button
-            aria-label="Close"
-            className="grid h-8 w-8 place-items-center rounded-full bg-card text-text-muted ring-1 ring-card-border hover:bg-white"
-            onClick={onClose}
-          >
-            <MdClose className="h-5 w-5" />
-          </button>
+    <div className="fixed inset-0 z-50 bg-black/40 flex justify-end" onClick={onClose}>
+      <div className="w-full max-w-lg bg-white h-full p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-6 border-b pb-4">
+          <h3 className="font-bold text-lg">{title}</h3>
+          <button onClick={onClose}><MdClose size={24} /></button>
         </div>
 
-        <div className="mb-4 mt-4 grid place-items-center px-5">
-          <label className="relative grid h-28 w-28 cursor-pointer place-items-center rounded-xl border-2 border-dashed border-card-border bg-white text-text-muted hover:border-primary">
-            {preview ? (
-              <img src={preview} alt="Preview" className="h-28 w-28 rounded-xl object-cover" />
-            ) : (
-              <span className="text-xs">Upload</span>
-            )}
-            <input type="file" accept="image/*" className="absolute inset-0 opacity-0" onChange={handleFile} />
-          </label>
-          <button
-            className="mt-2 text-xs font-semibold text-primary hover:text-primary-dark"
-            onClick={() => document.querySelector<HTMLInputElement>('input[type=file]')?.click()}
-          >
-            Change Profile Picture
-          </button>
-        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-bold block mb-1">Ingredient Name</label>
+            <input className="w-full border rounded-lg p-2" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="e.g. Flour" />
+          </div>
 
-        <div className="grid gap-3 px-5">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-sm font-semibold text-foreground">Name</label>
-              <input
-                className="w-full rounded-lg border border-card-border bg-white px-3 py-2 text-sm"
-                placeholder="Enter inventory name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-bold block mb-1">Current Stock</label>
+              <input type="number" className="w-full border rounded-lg p-2" value={formData.quantity} onChange={e => setFormData({...formData, quantity: parseFloat(e.target.value)})} />
             </div>
-            <div className="space-y-1">
-              <label className="text-sm font-semibold text-foreground">Category</label>
-              <select
-                className="w-full rounded-lg border border-card-border bg-white px-3 py-2 text-sm"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-              >
-                <option>All</option>
-                <option>Chicken</option>
-                <option>Beef</option>
-                <option>Seafood</option>
-                <option>Drinks</option>
-                <option>Other</option>
-              </select>
+            <div>
+              <label className="text-sm font-bold block mb-1">Unit</label>
+              <input className="w-full border rounded-lg p-2" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} placeholder="kg" />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-sm font-semibold text-foreground">Quantity</label>
-              <input
-                type="number"
-                min={0}
-                className="w-full rounded-lg border border-card-border bg-white px-3 py-2 text-sm"
-                placeholder="10"
-                value={quantity}
-                onChange={(e) => setQuantity(Number(e.target.value))}
-              />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-bold block mb-1">Reorder Level</label>
+              <input type="number" className="w-full border rounded-lg p-2" value={formData.reorderLevel} onChange={e => setFormData({...formData, reorderLevel: parseFloat(e.target.value)})} />
             </div>
-            <div className="space-y-1">
-              <label className="text-sm font-semibold text-foreground">Stock</label>
-              <select
-                className="w-full rounded-lg border border-card-border bg-white px-3 py-2 text-sm"
-                value={stock}
-                onChange={(e) => setStock(e.target.value as 'InStock' | 'OutOfStock')}
-              >
-                <option value="InStock">InStock</option>
-                <option value="OutOfStock">OutOfStock</option>
-              </select>
+            <div>
+              <label className="text-sm font-bold block mb-1">Cost Per Unit</label>
+              <input type="number" step="0.01" className="w-full border rounded-lg p-2" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} />
             </div>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-sm font-semibold text-foreground">Status</label>
-            <select
-              className="w-full rounded-lg border border-card-border bg-white px-3 py-2 text-sm"
-              value={status}
-              onChange={(e) => setStatus(e.target.value as 'Active' | 'Inactive' | 'Draft')}
-            >
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-              <option value="Draft">Draft</option>
-            </select>
+          <div className="pt-6 flex gap-3">
+             <button onClick={onClose} className="flex-1 border p-2 rounded-lg font-bold">Cancel</button>
+             <button onClick={() => onSave(formData)} className="flex-1 bg-primary text-white p-2 rounded-lg font-bold">Save</button>
           </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-semibold text-foreground">Price</label>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              className="w-full rounded-lg border border-card-border bg-white px-3 py-2 text-sm"
-              placeholder="55.00"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-            />
-          </div>
-
-          <div className="flex items-center gap-6">
-            <span className="text-sm font-semibold text-foreground">Featured</span>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="radio" name="featured" checked={featured} onChange={() => setFeatured(true)} />
-              Yes
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="radio" name="featured" checked={!featured} onChange={() => setFeatured(false)} />
-              No
-            </label>
-          </div>
-        </div>
-
-        <div className="mt-5 flex justify-end gap-2 border-t border-card-border px-5 py-4">
-          <button
-            className="rounded-lg bg-card px-4 py-2 text-sm font-semibold text-text-muted ring-1 ring-card-border hover:bg-white"
-            onClick={onClose}
-          >
-            Cancel
-          </button>
-          <button
-            className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white shadow hover:bg-primary-dark"
-            onClick={save}
-          >
-            Save
-          </button>
         </div>
       </div>
     </div>

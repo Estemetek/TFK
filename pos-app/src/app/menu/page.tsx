@@ -9,6 +9,8 @@ import {
   MdGridView, MdLocalDining, MdFastfood,
   MdRiceBowl, MdLocalCafe, MdEdit, MdDelete, MdClose, MdImage,
 } from 'react-icons/md';
+import { RecipeModal } from '../components/RecipeModal';
+import { MdReceiptLong } from 'react-icons/md';
 
 // --- TYPES ---
 type Category = {
@@ -124,6 +126,15 @@ export default function MenuPage() {
     isAvailable: true,
     imageUrl: ''
   });
+
+  // To edit recipe of menu item
+  const [isRecipeOpen, setIsRecipeOpen] = useState(false);
+  const [activeRecipeItem, setActiveRecipeItem] = useState<MenuItem | null>(null);
+
+  const handleRecipeClick = (item: MenuItem) => {
+    setActiveRecipeItem(item);
+    setIsRecipeOpen(true);
+  };
 
   // 1. Open drawer and pre-fill data
   const handleEditClick = (item: MenuItem) => {
@@ -371,9 +382,9 @@ export default function MenuPage() {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr className="text-left text-xs font-bold text-gray-600 uppercase">
-                    <th className="w-10 p-3">
+                    {/* <th className="w-10 p-3">
                       <input type="checkbox" className="h-4 w-4 accent-[#b80f24]" />
-                    </th>
+                    </th> */}
                     <th className="p-3">Product</th>
                     <th className="p-3">Product Name</th>
                     <th className="p-3">Item ID</th>
@@ -388,9 +399,9 @@ export default function MenuPage() {
                 <tbody className="divide-y divide-gray-200">
                   {filteredItems.map((item) => (
                     <tr key={item.menuItemID} className="hover:bg-gray-50">
-                      <td className="p-3">
+                      {/* <td className="p-3">
                         <input type="checkbox" className="h-4 w-4 accent-[#b80f24]" />
-                      </td>
+                      </td> */}
                       <td className="p-3">
                         <div className="h-12 w-12 rounded-lg bg-gray-200 overflow-hidden">
                           {item.imageUrl ? (
@@ -439,8 +450,18 @@ export default function MenuPage() {
                           </span>
                         </div>
                       </td>
+                      {/* Actions COLUMN */}
                       <td className="p-3">
                         <div className="flex justify-end gap-2">
+                          {/* RECIPE BUTTON */}
+                          <button 
+                            onClick={() => handleRecipeClick(item)}
+                            className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center hover:bg-blue-100 transition-colors"
+                            title="Manage Recipe"
+                          >
+                            <MdReceiptLong className="h-4 w-4 text-blue-600" />
+                          </button>
+
                           <button 
                             onClick={() => handleEditClick(item)} // Add this line
                             className="h-8 w-8 rounded-lg bg-gray-100 flex items-center justify-center hover:bg-gray-200"
@@ -708,6 +729,17 @@ export default function MenuPage() {
           </div>
         </div>
       </RightDrawer>
+
+      {/* --- RECIPE MODAL --- */}
+      {isRecipeOpen && activeRecipeItem && (
+        <RecipeModal 
+          menuItem={activeRecipeItem} 
+          onClose={() => {
+            setIsRecipeOpen(false);
+            setActiveRecipeItem(null);
+          }} 
+        />
+      )}
     </div>
   );
 }
