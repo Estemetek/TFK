@@ -41,6 +41,8 @@ export default function OrderPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [amountPaid, setAmountPaid] = useState<number>(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'gcash' | 'bank'>('cash');
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
 
   // 4. DERIVED CALCULATIONS (Order matters here!)
   const cartTotal = cart.reduce((sum, item) => sum + (Number(item.price) * item.quantity), 0);
@@ -100,25 +102,52 @@ export default function OrderPage() {
   // 7. CHECKOUT LOGIC
   const handleCheckout = async () => {
     if (cart.length === 0) return;
-    if (amountPaid < cartTotal) {
+    if (paymentMethod === 'cash' && amountPaid < cartTotal) {
       alert("Insufficient payment amount!");
       return;
     }
 
+    if (paymentMethod !== 'cash' && !paymentConfirmed) {
+      alert("Please confirm payment first!");
+      return;
+    }
+
     setIsSubmitting(true);
+    
+    console.log('=== CHECKOUT DEBUG ===');
+    console.log('Cart:', cart);
+    console.log('Total:', cartTotal);
+    console.log('Payment Method:', paymentMethod);
+    
     try {
-      // Create Order (Matches: amount, amountPaid, change)
+      // Create Order (Matches: amount, amountPaid, change, paymentMethod)
+      const finalAmountPaid = paymentMethod === 'cash' ? amountPaid : cartTotal;
+      const finalChange = paymentMethod === 'cash' ? changeDue : 0;
+      
+      console.log('Creating order with data:', {
+        amount: cartTotal,
+        amountPaid: finalAmountPaid,
+        change: finalChange,
+        paymentMethod: paymentMethod
+      });
+      
       const { data: order, error: orderErr } = await supabase
         .from('Order')
         .insert([{ 
             amount: cartTotal, 
-            amountPaid: amountPaid,
-            change: changeDue
+            amountPaid: finalAmountPaid,
+            change: finalChange,
+            paymentmethod: paymentMethod
         }])
         .select()
         .single();
 
-      if (orderErr) throw orderErr;
+      if (orderErr) {
+        console.error('Order insertion error:', orderErr);
+        throw orderErr;
+      }
+      
+      console.log('Order created:', order);
 
       // Create OrderItems (Matches: orderID, menuItemID, quantity)
       const orderItems = cart.map(item => ({
@@ -126,22 +155,47 @@ export default function OrderPage() {
         menuItemID: item.menuItemID,
         quantity: item.quantity
       }));
+      
+      console.log('Creating order items:', orderItems);
 
       const { error: itemErr } = await supabase.from('OrderItem').insert(orderItems);
-      if (itemErr) throw itemErr;
+      
+      if (itemErr) {
+        console.error('OrderItem insertion error:', itemErr);
+        throw itemErr;
+      }
 
-      alert(`Order Successful! Change: ₱${changeDue.toFixed(2)}`);
+      alert(`Order Successful! ${paymentMethod === 'cash' ? `Change: ₱${changeDue.toFixed(2)}` : 'Payment confirmed'}`);
       setCart([]);
       setAmountPaid(0);
-    } catch (err) {
+      setPaymentMethod('cash');
+      setPaymentConfirmed(false);
+    } catch (err: any) {
       console.error("Checkout Error:", err);
-      alert("Error processing order. Check ingredients/inventory stock.");
+      
+      // More detailed error message
+      if (err.message) {
+        alert(`Error: ${err.message}`);
+      } else if (err.details) {
+        alert(`Error processing order: ${err.details}`);
+      } else {
+        alert("Error processing order. Check console for details.");
+      }
+      
+      console.error("Full error details:", JSON.stringify(err, null, 2));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   if (loading) return <div className="flex h-screen items-center justify-center font-bold text-[#B80F24]">Loading TFK POS...</div>;
+
+  // Debug logs
+  console.log('Payment Method:', paymentMethod);
+  console.log('Payment Confirmed:', paymentConfirmed);
+  console.log('Cart Total:', cartTotal);
+  console.log('Amount Paid:', amountPaid);
+  console.log('Cart Length:', cart.length);
 
   return (
     <div className="flex h-screen bg-[#F8F9FA] overflow-hidden">
@@ -227,32 +281,119 @@ export default function OrderPage() {
 
           {/* PAYMENT SECTION */}
           <div className="p-6 bg-gray-50 border-t space-y-4">
+            {/* Payment Method Selection */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase">Payment Method</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => {
+                    setPaymentMethod('cash');
+                    setPaymentConfirmed(false);
+                  }}
+                  className={`p-3 rounded-xl font-bold text-xs transition-all ${
+                    paymentMethod === 'cash' 
+                      ? 'bg-[#B80F24] text-white shadow-md' 
+                      : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-[#B80F24]'
+                  }`}
+                >
+                  💵 Cash
+                </button>
+                <button
+                  onClick={() => {
+                    setPaymentMethod('gcash');
+                    setPaymentConfirmed(false);
+                  }}
+                  className={`p-3 rounded-xl font-bold text-xs transition-all ${
+                    paymentMethod === 'gcash' 
+                      ? 'bg-[#B80F24] text-white shadow-md' 
+                      : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-[#B80F24]'
+                  }`}
+                >
+                  📱 GCash
+                </button>
+                <button
+                  onClick={() => {
+                    setPaymentMethod('bank');
+                    setPaymentConfirmed(false);
+                  }}
+                  className={`p-3 rounded-xl font-bold text-xs transition-all ${
+                    paymentMethod === 'bank' 
+                      ? 'bg-[#B80F24] text-white shadow-md' 
+                      : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-[#B80F24]'
+                  }`}
+                >
+                  🏦 Bank
+                </button>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <div className="flex justify-between items-center text-sm font-bold text-gray-500">
                 <span>TOTAL DUE</span>
                 <span className="text-xl font-black text-gray-900">₱{cartTotal.toFixed(2)}</span>
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-black text-gray-400 uppercase">Cash Received</label>
-                <input 
-                  type="number"
-                  value={amountPaid || ''}
-                  onChange={(e) => setAmountPaid(Number(e.target.value))}
-                  placeholder="0.00"
-                  className="w-full p-3 rounded-xl border-2 border-gray-200 focus:border-[#B80F24] outline-none font-bold text-lg"
-                />
-              </div>
-              <div className="flex justify-between items-center text-sm font-bold">
-                <span className="text-gray-500">CHANGE</span>
-                <span className={`text-lg font-black ${changeDue < 0 ? 'text-red-500' : 'text-green-600'}`}>
-                  ₱{changeDue.toFixed(2)}
-                </span>
-              </div>
+
+              {/* Conditionally show cash input only for cash payments */}
+              {paymentMethod === 'cash' ? (
+                <>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase">Cash Received</label>
+                    <input 
+                      type="number"
+                      value={amountPaid || ''}
+                      onChange={(e) => setAmountPaid(Number(e.target.value))}
+                      placeholder="0.00"
+                      className="w-full p-3 rounded-xl border-2 border-gray-200 focus:border-[#B80F24] outline-none font-bold text-lg"
+                    />
+                  </div>
+                  <div className="flex justify-between items-center text-sm font-bold">
+                    <span className="text-gray-500">CHANGE</span>
+                    <span className={`text-lg font-black ${changeDue < 0 ? 'text-red-500' : 'text-green-600'}`}>
+                      ₱{changeDue.toFixed(2)}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-3">
+                  <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-center">
+                    <p className="text-xs font-bold text-blue-600 mb-2">
+                      {paymentMethod === 'gcash' ? '📱 GCash Payment' : '🏦 Bank Transfer'}
+                    </p>
+                    <p className="text-[10px] text-blue-500">
+                      Customer will show payment proof
+                    </p>
+                  </div>
+
+                  {/* Confirmation Checkbox */}
+                  <label className="flex items-center gap-2 bg-white border-2 border-gray-200 rounded-xl p-3 cursor-pointer hover:border-green-500 transition">
+                    <input 
+                      type="checkbox"
+                      checked={paymentConfirmed}
+                      onChange={(e) => setPaymentConfirmed(e.target.checked)}
+                      className="w-4 h-4 accent-green-600"
+                    />
+                    <span className="text-xs font-bold text-gray-700">
+                      ✓ Payment received and verified
+                    </span>
+                  </label>
+                </div>
+              )}
             </div>
+            
             <button 
               onClick={handleCheckout}
-              disabled={cart.length === 0 || isSubmitting || amountPaid < cartTotal}
-              className="w-full bg-[#B80F24] text-white py-4 rounded-2xl font-black shadow-lg hover:bg-red-700 transition-all disabled:bg-gray-200"
+              disabled={
+                cart.length === 0 || 
+                isSubmitting || 
+                (paymentMethod === 'cash' ? amountPaid < cartTotal : !paymentConfirmed)
+              }
+              className={`w-full py-4 rounded-2xl font-black shadow-lg transition-all ${
+                cart.length === 0 || 
+                isSubmitting || 
+                (paymentMethod === 'cash' ? amountPaid < cartTotal : !paymentConfirmed)
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-[#B80F24] text-white hover:bg-red-700'
+              }`}
             >
               {isSubmitting ? 'PROCESSING...' : 'CONFIRM & PAY'}
             </button>

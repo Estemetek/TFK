@@ -4,7 +4,7 @@
 
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import { logout } from '../lib/auth';
@@ -182,7 +182,7 @@ function LineAreaChart() {
   );
 }
 
-type ReportTab = 'Reservation Report' | 'Revenue Report' | 'Staff Report' | 'Sales & EOD Report';
+type ReportTab = 'Reservation Report' | 'Revenue Report' | 'Staff Report' | 'Sales & EOD Report' | 'Receipts';
 
 function n2(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -191,16 +191,211 @@ function money(n: number) {
   return `$${n2(n)}`;
 }
 
+// Format date/time in formal readable format
+function formatDateTime(dateString: string): string {
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return dateString;
+  }
+}
+
+// Receipt Modal Component
+function ReceiptModal({ order, onClose }: { order: any; onClose: () => void }) {
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleDownloadPDF = () => {
+    alert('PDF download feature - integrate jsPDF or similar library');
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="relative max-h-[90vh] w-full max-w-md overflow-auto rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600 transition"
+        >
+          ✕
+        </button>
+
+        {/* Receipt Header */}
+        <div className="bg-gradient-to-b from-[#B80F24] to-[#7E0012] px-8 py-6 text-center text-white">
+          <div className="mb-2 flex justify-center">
+            <img src="/TFK.png" alt="TFK Logo" className="h-16 w-16 rounded-full bg-white p-1 shadow-lg" />
+          </div>
+          <h2 className="text-[18px] font-extrabold">Taiwan Fried Kitchen</h2>
+          <p className="text-[11px] font-bold opacity-90">Official Receipt</p>
+        </div>
+
+        {/* Receipt Body */}
+        <div className="space-y-4 px-8 py-6">
+          {/* Order Info */}
+          <div className="border-b-2 border-dashed border-gray-300 pb-4">
+            <div className="mb-2 flex items-center justify-between text-[11px]">
+              <span className="font-bold text-gray-500">Order ID:</span>
+              <span className="font-extrabold text-[#B80F24]">#{order.orderID}</span>
+            </div>
+            <div className="mb-2 flex items-center justify-between text-[11px]">
+              <span className="font-bold text-gray-500">Date & Time:</span>
+              <span className="font-extrabold text-gray-800">
+                {formatDateTime(order.createdAt)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="font-bold text-gray-500">Payment Method:</span>
+              <span className="font-extrabold text-gray-800 uppercase">
+                {order.paymentmethod === 'cash' && '💵 Cash'}
+                {order.paymentmethod === 'gcash' && '📱 GCash'}
+                {order.paymentmethod === 'bank' && '🏦 Bank Transfer'}
+                {!order.paymentmethod && '💵 Cash'}
+              </span>
+            </div>
+          </div>
+
+          {/* Items List */}
+          <div>
+            <h3 className="mb-3 text-[12px] font-extrabold text-gray-700 uppercase">Order Items</h3>
+            <div className="space-y-3">
+              {order.items && order.items.length > 0 ? (
+                order.items.map((item: any, idx: number) => {
+                  const itemTotal = Number(item.MenuItem?.price || 0) * item.quantity;
+                  return (
+                    <div key={idx} className="flex items-start justify-between border-b border-gray-100 pb-2">
+                      <div className="flex-1">
+                        <div className="text-[12px] font-extrabold text-gray-800">
+                          {item.MenuItem?.name || 'Unknown Item'}
+                        </div>
+                        <div className="mt-0.5 text-[10px] font-bold text-gray-500">
+                          ₱{Number(item.MenuItem?.price || 0).toFixed(2)} × {item.quantity}
+                        </div>
+                      </div>
+                      <div className="text-[12px] font-extrabold text-gray-800">
+                        ₱{itemTotal.toFixed(2)}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-[11px] text-gray-500">No items</p>
+              )}
+            </div>
+          </div>
+
+          {/* Totals */}
+          <div className="space-y-2 border-t-2 border-gray-200 pt-4">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="font-bold text-gray-600">Subtotal:</span>
+              <span className="font-extrabold text-gray-800">₱{Number(order.amount).toFixed(2)}</span>
+            </div>
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="font-bold text-gray-600">Amount Paid:</span>
+              <span className="font-extrabold text-gray-800">₱{Number(order.amountPaid).toFixed(2)}</span>
+            </div>
+            <div className="flex items-center justify-between border-t border-dashed border-gray-300 pt-2 text-[13px]">
+              <span className="font-extrabold text-green-600">Change:</span>
+              <span className="font-extrabold text-green-600">₱{Number(order.change).toFixed(2)}</span>
+            </div>
+          </div>
+
+          {/* Footer Message */}
+          <div className="border-t-2 border-dashed border-gray-300 pt-4 text-center">
+            <p className="text-[10px] font-bold text-gray-500">Thank you for your order!</p>
+            <p className="mt-1 text-[9px] text-gray-400">
+              This is an official receipt from Taiwan Fried Kitchen
+            </p>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex gap-2 border-t border-gray-200 bg-gray-50 px-8 py-4">
+          <button
+            onClick={handlePrint}
+            className="flex-1 rounded-lg bg-[#B80F24] py-2.5 text-[11px] font-extrabold text-white transition hover:bg-[#7E0012]"
+          >
+            🖨️ Print Receipt
+          </button>
+          <button
+            onClick={handleDownloadPDF}
+            className="flex-1 rounded-lg border-2 border-[#B80F24] py-2.5 text-[11px] font-extrabold text-[#B80F24] transition hover:bg-[#B80F24] hover:text-white"
+          >
+            📄 Download PDF
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ReportsPage() {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const activeNav = 'Reports';
 
-  const [tab, setTab] = useState<ReportTab>('Reservation Report');
+  const [tab, setTab] = useState<ReportTab>('Receipts');
   const [status, setStatus] = useState<'Confirmed' | 'Awaited' | 'Cancelled' | 'Failed'>('Confirmed');
 
   const [from, setFrom] = useState('2024-04-01');
   const [to, setTo] = useState('2024-08-08');
+
+  // Receipts state
+  const [receipts, setReceipts] = useState<any[]>([]);
+  const [receiptsLoading, setReceiptsLoading] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
+
+  // Fetch receipts when tab changes
+  useEffect(() => {
+    if (tab === 'Receipts') {
+      fetchReceipts();
+    }
+  }, [tab]);
+
+  const fetchReceipts = async () => {
+    setReceiptsLoading(true);
+    try {
+      // Fetch orders with their items
+      const { data: orders, error: orderErr } = await supabase
+        .from('Order')
+        .select('*')
+        .order('createdAt', { ascending: false });
+      
+      if (orderErr) throw orderErr;
+
+      // For each order, fetch its items
+      const ordersWithItems = await Promise.all(
+        (orders || []).map(async (order) => {
+          const { data: items } = await supabase
+            .from('OrderItem')
+            .select('*, MenuItem(name, price)')
+            .eq('orderID', order.orderID);
+          
+          return {
+            ...order,
+            items: items || []
+          };
+        })
+      );
+
+      setReceipts(ordersWithItems);
+      console.log('Orders with items fetched:', ordersWithItems);
+    } catch (err: any) {
+      console.error('Error fetching receipts:', err);
+      alert(`Failed to fetch receipts: ${err.message || 'Unknown error'}`);
+    } finally {
+      setReceiptsLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -285,6 +480,14 @@ export default function ReportsPage() {
 
   return (
     <div className="min-h-screen bg-[#F3F3F3] text-[#1E1E1E]">
+      {/* Receipt Modal */}
+      {selectedOrder && (
+        <ReceiptModal 
+          order={selectedOrder} 
+          onClose={() => setSelectedOrder(null)} 
+        />
+      )}
+
       <div
         className={`grid min-h-screen transition-[grid-template-columns] duration-200 ${
           collapsed ? 'grid-cols-[82px_1fr]' : 'grid-cols-[220px_1fr]'
@@ -397,6 +600,9 @@ export default function ReportsPage() {
               <Tab active={tab === 'Sales & EOD Report'} onClick={() => setTab('Sales & EOD Report')}>
                 Sales &amp; EOD Report
               </Tab>
+              <Tab active={tab === 'Receipts'} onClick={() => setTab('Receipts')}>
+                Receipts
+              </Tab>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -422,6 +628,60 @@ export default function ReportsPage() {
               </button>
             </div>
           </section>
+
+          {/* Receipts Tab */}
+          {tab === 'Receipts' && (
+            <section className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_20px_rgba(0,0,0,0.06)] ring-1 ring-black/5">
+              <div className="rounded-t-2xl bg-[#B80F24] px-6 py-4 flex items-center justify-between">
+                <div className="text-[14px] font-extrabold text-white">Order Receipts</div>
+              </div>
+
+              {receiptsLoading ? (
+                <div className="px-6 py-12 text-center text-[12px] text-[#6D6D6D]">Loading receipts...</div>
+              ) : receipts.length === 0 ? (
+                <div className="px-6 py-12 text-center text-[12px] text-[#6D6D6D]">No receipts found</div>
+              ) : (
+                <div className="divide-y divide-black/5">
+                  {receipts.map((order, idx) => (
+                    <div
+                      key={order.orderID}
+                      onClick={() => setSelectedOrder(order)}
+                      className={`cursor-pointer px-6 py-4 transition hover:bg-gray-100 ${
+                        idx % 2 === 0 ? 'bg-[#F7F7F7]' : 'bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="grid grid-cols-4 gap-4 flex-1">
+                          <div>
+                            <div className="text-[10px] font-extrabold text-[#B80F24]">Order ID</div>
+                            <div className="text-[12px] font-extrabold text-[#1E1E1E]">#{order.orderID}</div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] font-extrabold text-[#B80F24]">Date &amp; Time</div>
+                            <div className="text-[11px] font-bold text-[#6D6D6D]">
+                              {formatDateTime(order.createdAt)}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] font-extrabold text-[#B80F24]">Total Amount</div>
+                            <div className="text-[12px] font-extrabold text-[#1E1E1E]">
+                              ₱{Number(order.amount).toFixed(2)}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-[10px] font-extrabold text-[#B80F24]">Change</div>
+                            <div className="text-[12px] font-extrabold text-green-600">
+                              ₱{Number(order.change).toFixed(2)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
           {/* Sales & EOD Report layout (matches screenshot) */}
           {tab === 'Sales & EOD Report' ? (
