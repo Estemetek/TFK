@@ -182,7 +182,7 @@ function LineAreaChart() {
   );
 }
 
-type ReportTab = 'Reservation Report' | 'Revenue Report' | 'Staff Report' | 'Sales & EOD Report' | 'Receipts';
+type ReportTab = 'Reservation Report' | 'Revenue Report' | 'Staff Report' | 'Sales & EOD Report' | 'Receipts' | 'Purchase Transactions';
 
 function n2(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -231,7 +231,7 @@ function ReceiptModal({ order, onClose }: { order: any; onClose: () => void }) {
         </button>
 
         {/* Receipt Header */}
-        <div className="bg-gradient-to-b from-[#B80F24] to-[#7E0012] px-8 py-6 text-center text-white">
+        <div className="bg-linear-to-b from-[#B80F24] to-[#7E0012] px-8 py-6 text-center text-white">
           <div className="mb-2 flex justify-center">
             <img src="/TFK.png" alt="TFK Logo" className="h-16 w-16 rounded-full bg-white p-1 shadow-lg" />
           </div>
@@ -344,6 +344,9 @@ export default function ReportsPage() {
   const activeNav = 'Reports';
 
   const [tab, setTab] = useState<ReportTab>('Receipts');
+  // Purchase Transactions state
+  const [purchases, setPurchases] = useState<any[]>([]);
+  const [purchasesLoading, setPurchasesLoading] = useState(false);
   const [status, setStatus] = useState<'Confirmed' | 'Awaited' | 'Cancelled' | 'Failed'>('Confirmed');
 
   const [from, setFrom] = useState('2024-04-01');
@@ -354,12 +357,52 @@ export default function ReportsPage() {
   const [receiptsLoading, setReceiptsLoading] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
 
-  // Fetch receipts when tab changes
+
+  // Fetch receipts or purchases when tab changes
   useEffect(() => {
     if (tab === 'Receipts') {
       fetchReceipts();
+    } else if (tab === 'Purchase Transactions') {
+      fetchPurchases();
     }
   }, [tab]);
+  // Fetch purchase transactions
+  const fetchPurchases = async () => {
+    setPurchasesLoading(true);
+    try {
+      // Fetch purchases with their items and ingredient info
+      const { data: purchasesData, error: purchaseErr } = await supabase
+        .from('Purchase')
+        .select('*')
+        .order('createdAt', { ascending: false });
+      if (purchaseErr) throw purchaseErr;
+
+      // For each purchase, fetch its items and ingredient info
+      const purchasesWithItems = await Promise.all(
+        (purchasesData || []).map(async (purchase) => {
+          console.log('Fetching items for purchaseID:', purchase.purchaseID);
+          const { data: items, error: itemsErr } = await supabase
+            .from('PurchaseItem')
+            .select('*, Ingredient(name, unit)')
+            .eq('purchaseID', purchase.purchaseID);
+          if (itemsErr) {
+            console.error('Error fetching items for purchaseID', purchase.purchaseID, itemsErr);
+          }
+          console.log('Items fetched for purchaseID', purchase.purchaseID, items);
+          return {
+            ...purchase,
+            items: items || [],
+          };
+        })
+      );
+      setPurchases(purchasesWithItems);
+    } catch (err: any) {
+      console.error('Error fetching purchases:', err);
+      alert(`Failed to fetch purchase transactions: ${err.message || 'Unknown error'}`);
+    } finally {
+      setPurchasesLoading(false);
+    }
+  };
 
   const fetchReceipts = async () => {
     setReceiptsLoading(true);
@@ -603,31 +646,70 @@ export default function ReportsPage() {
               <Tab active={tab === 'Receipts'} onClick={() => setTab('Receipts')}>
                 Receipts
               </Tab>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-2 rounded-md bg-white px-3 py-2 shadow">
-                <MdCalendarMonth className="h-5 w-5 text-[#6D6D6D]" />
-                <input
-                  type="date"
-                  value={from}
-                  onChange={(e) => setFrom(e.target.value)}
-                  className="bg-transparent text-[11px] font-extrabold text-[#6D6D6D] outline-none"
-                />
-                <span className="text-[11px] font-extrabold text-[#6D6D6D]">—</span>
-                <input
-                  type="date"
-                  value={to}
-                  onChange={(e) => setTo(e.target.value)}
-                  className="bg-transparent text-[11px] font-extrabold text-[#6D6D6D] outline-none"
-                />
-              </div>
-
-              <button className="rounded-md bg-[#B80F24] px-4 py-2 text-[11px] font-extrabold text-white shadow">
-                Generate Report
-              </button>
+              <Tab active={tab === 'Purchase Transactions'} onClick={() => setTab('Purchase Transactions')}>
+                Purchase Transactions
+              </Tab>
             </div>
           </section>
+
+          {/* Purchase Transactions Card - match Receipts layout and placement */}
+          {tab === 'Purchase Transactions' && (
+            <section className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_20px_rgba(0,0,0,0.06)] ring-1 ring-black/5 mb-4">
+              <div className="rounded-t-2xl bg-[#B80F24] px-6 py-4 flex items-center justify-between">
+                <div className="text-[14px] font-extrabold text-white">Purchase Transactions</div>
+              </div>
+              {purchasesLoading ? (
+                <div className="px-6 py-12 text-center text-[12px] text-[#6D6D6D]">Loading purchase transactions...</div>
+              ) : purchases.length === 0 ? (
+                <div className="px-6 py-12 text-center text-[12px] text-[#6D6D6D]">No purchase transactions found</div>
+              ) : (
+                <div className="divide-y divide-black/5">
+                  {purchases.map((purchase, idx) => (
+                    <div
+                      key={purchase.purchaseID}
+                      className={`px-6 py-4 ${idx % 2 === 0 ? 'bg-[#F7F7F7]' : 'bg-white'}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="grid grid-cols-4 gap-4 flex-1">
+                          <div>
+                            <div className="text-[10px] font-extrabold text-[#B80F24]">Purchase ID</div>
+                            <div className="text-[12px] font-extrabold text-[#1E1E1E]">#{purchase.purchaseID}</div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] font-extrabold text-[#B80F24]">Date &amp; Time</div>
+                            <div className="text-[11px] font-bold text-[#6D6D6D]">{formatDateTime(purchase.createdAt)}</div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] font-extrabold text-[#B80F24]">Total Cost</div>
+                            <div className="text-[12px] font-extrabold text-[#1E1E1E]">₱{Number(purchase.totalCost || 0).toFixed(2)}</div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] font-extrabold text-[#B80F24]">Items</div>
+                            <div className="text-[11px] font-normal text-[#1E1E1E]">
+                              {purchase.items && purchase.items.length > 0 ? (
+                                <ul className="list-disc ml-4">
+                                  {purchase.items.map((item: any, i: number) => (
+                                    <li key={i} className="mb-1">
+                                      {item.Ingredient?.name || 'Unknown'}
+                                      {item.quantity ? ` × ${item.quantity}` : ''}
+                                      {item.Ingredient?.unit ? ` ${item.Ingredient.unit}` : ''}
+                                      {item.cost ? ` @ ₱${Number(item.cost).toFixed(2)}` : ''}
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <span className="text-gray-500">No items</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
           {/* Receipts Tab */}
           {tab === 'Receipts' && (
