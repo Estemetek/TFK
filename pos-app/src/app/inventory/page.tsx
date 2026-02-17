@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import { logout } from '../lib/auth';
 import { Sidebar } from '../components/Sidebar';
 import { MdEdit, MdDelete, MdClose, MdWarning } from 'react-icons/md';
-import React from 'react';
 
 // 1. Types strictly matching your SQL schema
 type InventoryItem = {
@@ -29,7 +28,9 @@ export default function InventoryPage() {
   const [showRestockModal, setShowRestockModal] = useState(false);
   const [restockItem, setRestockItem] = useState<InventoryItem | null>(null);
   const [restockQuantity, setRestockQuantity] = useState(0);
-  const [restockUnitCost, setRestockUnitCost] = useState(0);
+  const [restockUnitCost, setRestockUnitCost] = useState<string>('');
+  const [restockLoading, setRestockLoading] = useState(false);
+  const restockClickedRef = useRef(false);
 
   // Fetch inventory
   const fetchInventory = useCallback(async () => {
@@ -53,7 +54,7 @@ export default function InventoryPage() {
   // Handle restock
   const handleRestock = async (ingredient: InventoryItem, quantity: number, unitCost: number) => {
     if (!ingredient || quantity <= 0 || unitCost <= 0) return;
-    setLoading(true);
+    setRestockLoading(true);
     try {
       // 1. Insert into Purchase table
       const { data: purchase, error: purchaseError } = await supabase
@@ -80,18 +81,7 @@ export default function InventoryPage() {
         }]);
       if (itemError) throw itemError;
 
-      // 3. Insert into InventoryTransaction table
-      const { error: txError } = await supabase.from('InventoryTransaction').insert([
-        {
-          ingredientID: ingredient.ingredientID,
-          type: 'IN',
-          quantity,
-          referenceNo: purchase.purchaseID.toString(),
-        },
-      ]);
-      if (txError) throw txError;
-
-      // 4. Update Ingredient costPerUnit and currentStock
+      // 3. Update Ingredient costPerUnit and currentStock
       const { error: updError } = await supabase.from('Ingredient')
         .update({
           currentStock: ingredient.currentStock + quantity,
@@ -105,15 +95,16 @@ export default function InventoryPage() {
       setShowRestockModal(false);
       setRestockItem(null);
       setRestockQuantity(0);
-      setRestockUnitCost(0);
+      setRestockUnitCost('');
+      setRestockLoading(false);
     } catch (err: any) {
       alert('Restock failed: ' + err.message);
     }
-    setLoading(false);
+    setRestockLoading(false);
   };
 
 // --- Restock Modal Component ---
-function RestockModal({ open, ingredient, quantity, setQuantity, unitCost, setUnitCost, onClose, onRestock, loading }: any) {
+function RestockModal({ open, ingredient, quantity, setQuantity, unitCost, setUnitCost, onClose, onRestock, loading, restockClickedRef }: any) {
   if (!open || !ingredient) return null;
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex justify-end" onClick={onClose}>
@@ -144,7 +135,16 @@ function RestockModal({ open, ingredient, quantity, setQuantity, unitCost, setUn
             </div>
             <div>
               <label className="text-sm font-bold block mb-1">Unit Cost</label>
-              <input className="w-full border rounded-lg p-2" type="number" value={unitCost} min={0.01} step={0.01} onChange={e => setUnitCost(Number(e.target.value))} placeholder="Enter unit cost" />
+              <input
+                className="w-full border rounded-lg p-2"
+                type="number"
+                value={unitCost}
+                min={0.01}
+                step={0.01}
+                onChange={e => setUnitCost(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
+                placeholder="Enter unit cost"
+              />
             </div>
           </div>
           <div>
@@ -162,7 +162,11 @@ function RestockModal({ open, ingredient, quantity, setQuantity, unitCost, setUn
           <div className="pt-6 flex gap-3">
             <button onClick={onClose} className="flex-1 border p-2 rounded-lg font-bold">Cancel</button>
             <button
-              onClick={() => { if (quantity > 0 && unitCost > 0 && !loading) onRestock(); }}
+              onClick={() => {
+                if (loading || quantity <= 0 || unitCost <= 0 || restockClickedRef.current) return;
+                restockClickedRef.current = true;
+                onRestock();
+              }}
               className="flex-1 bg-primary text-white p-2 rounded-lg font-bold"
               disabled={quantity <= 0 || unitCost <= 0 || loading}
             >{loading ? "Processing..." : "Confirm"}</button>
@@ -226,7 +230,6 @@ function RestockModal({ open, ingredient, quantity, setQuantity, unitCost, setUn
     <div className="min-h-screen bg-background text-foreground">
       <div className={`grid min-h-screen transition-[grid-template-columns] duration-200 ${collapsed ? 'grid-cols-[82px_1fr]' : 'grid-cols-[220px_1fr]'}`}>
         <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} activeNav={activeNav} />
-
         <main className="space-y-5 p-5 md:p-7">
           <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white/70 px-4 py-3 shadow-sm ring-1 ring-card-border">
             <div className="flex items-center gap-3">
@@ -236,7 +239,6 @@ function RestockModal({ open, ingredient, quantity, setQuantity, unitCost, setUn
               <h1 className="text-lg font-semibold">Inventory Control</h1>
             </div>
           </header>
-
           <section className="rounded-xl bg-white/70 px-4 py-3 shadow-sm ring-1 ring-card-border">
             <div className="flex items-center justify-between">
               <div className="flex items-baseline gap-2">
@@ -248,97 +250,98 @@ function RestockModal({ open, ingredient, quantity, setQuantity, unitCost, setUn
               </button>
             </div>
           </section>
-
           <section className="grid gap-5 lg:grid-cols-[280px_1fr]">
             <div className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-card-border h-fit">
-               <p className="text-sm font-semibold mb-4">Stock Overview</p>
-               <div className="flex justify-between text-sm mb-2">
-                  <span>Low Stock Items:</span>
-                  <span className="text-red-500 font-bold">
-                      {inventoryItems.filter(i => i.currentStock <= i.reorderLevel).length}
-                  </span>
-               </div>
-               <ul className="space-y-1">
-                 {inventoryItems.filter(i => i.currentStock <= i.reorderLevel).map(item => (
-                   <li key={item.ingredientID} className="flex items-center justify-between">
-                     <span>{item.name} ({item.currentStock} {item.unit})</span>
-                     <button
-                       className="ml-2 px-2 py-1 text-xs rounded bg-primary text-white hover:bg-primary/80"
-                       onClick={() => { setRestockItem(item); setRestockQuantity(0); setShowRestockModal(true); }}
-                     >Restock</button>
-                   </li>
-                 ))}
-               </ul>
+              <p className="text-sm font-semibold mb-4">Stock Overview</p>
+              <ul className="space-y-1">
+                {inventoryItems.map((item: InventoryItem) => (
+                  <li key={item.ingredientID} className="flex items-center justify-between">
+                    <span>{item.name}</span>
+                    <button
+                      className="ml-2 px-2 py-1 text-xs rounded bg-primary text-white hover:bg-primary/80"
+                      onClick={() => { setRestockItem(item); setRestockQuantity(0); setRestockUnitCost(item.costPerUnit.toString()); setShowRestockModal(true); }}
+                    >Restock</button>
+                  </li>
+                ))}
+              </ul>
             </div>
-
             <div className="space-y-3 rounded-xl bg-white/70 p-3 shadow-sm ring-1 ring-card-border">
               {loading ? (
                 <p className="p-10 text-center text-text-muted">Loading...</p>
               ) : (
-                inventoryItems.map((item) => {
-                  const isLowStock = item.currentStock <= item.reorderLevel;
-                  return (
-                    <div key={item.ingredientID} className="flex flex-col gap-3 rounded-lg bg-white px-3 py-3 shadow-sm ring-1 ring-card-border md:flex-row md:items-center">
-                      <div className="flex flex-1 items-center gap-3">
-                        <div className={`h-12 w-12 rounded-lg flex items-center justify-center ${isLowStock ? 'bg-red-50 text-red-500' : 'bg-primary/10 text-primary'}`}>
-                           {isLowStock ? <MdWarning size={24} /> : '📦'}
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold">{item.name}</p>
-                          <p className="text-xs text-text-muted">
-                            Stock: <span className={`font-bold ${isLowStock ? 'text-red-500' : 'text-primary'}`}>{item.currentStock} {item.unit}</span>
-                          </p>
-                        </div>
+                inventoryItems.map((item: InventoryItem) => (
+                  <div
+                    key={item.ingredientID}
+                    className="flex flex-col gap-3 rounded-lg bg-white px-3 py-3 shadow-sm ring-1 ring-card-border md:flex-row md:items-center"
+                  >
+                    <div className="flex flex-1 items-center gap-3">
+                      <div className={`h-12 w-12 rounded-lg flex items-center justify-center ${
+                        item.currentStock <= item.reorderLevel
+                          ? 'bg-red-50 text-red-500'
+                          : 'bg-primary/10 text-primary'
+                      }`}>
+                        {item.currentStock <= item.reorderLevel ? <MdWarning size={24} /> : '📦'}
                       </div>
-
-                      <div className="flex flex-1 flex-wrap items-center justify-between gap-3 text-sm">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] uppercase text-text-muted font-bold">Unit Cost</span>
-                          <span>${item.costPerUnit.toFixed(2)}</span>
-                        </div>
-                        <div className="flex flex-col text-right">
-                          <span className="text-[10px] uppercase text-text-muted font-bold">Last Updated</span>
-                          <span className="text-xs">{new Date(item.updatedAt).toLocaleDateString()}</span>
-                        </div>
-                        
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => { setEditItem(item); setShowEditModal(true); }} className="p-2 rounded-full hover:bg-gray-100 text-text-muted"><MdEdit /></button>
-                          <button onClick={() => handleDelete(item.ingredientID)} className="p-2 rounded-full hover:bg-red-50 text-primary"><MdDelete /></button>
-                          {isLowStock && (
-                            <button
-                              className="ml-1 px-2 py-1 text-xs rounded bg-primary text-white hover:bg-primary/80"
-                              onClick={() => { setRestockItem(item); setShowRestockModal(true); }}
-                            >Restock</button>
+                      <div>
+                        <p className="text-sm font-semibold">{item.name}</p>
+                        <p className="text-xs text-text-muted">
+                          Stock: <span className={`font-bold ${item.currentStock <= item.reorderLevel ? 'text-red-500' : ''}`}>{item.currentStock} {item.unit}</span>
+                          {item.currentStock <= item.reorderLevel && (
+                            <span className="ml-2 text-xs text-red-500 font-bold">Low Stock!</span>
                           )}
-                        </div>
+                        </p>
                       </div>
                     </div>
-                  );
-                })
+                    <div className="flex flex-1 flex-wrap items-center justify-between gap-3 text-sm">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase text-text-muted font-bold">Unit Cost</span>
+                        <span>${item.costPerUnit.toFixed(2)}</span>
+                      </div>
+                      <div className="flex flex-col text-right">
+                        <span className="text-[10px] uppercase text-text-muted font-bold">Last Updated</span>
+                        <span className="text-xs">{new Date(item.updatedAt).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleDelete(item.ingredientID)}
+                          className="p-2 rounded-full hover:bg-red-50 text-primary"
+                        >
+                          <MdDelete />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </section>
         </main>
+        <RestockModal
+          open={showRestockModal}
+          ingredient={restockItem}
+          quantity={restockQuantity}
+          setQuantity={setRestockQuantity}
+          unitCost={restockUnitCost}
+          setUnitCost={setRestockUnitCost}
+          onClose={() => { setShowRestockModal(false); setRestockItem(null); setRestockQuantity(0); setRestockUnitCost(''); setRestockLoading(false); restockClickedRef.current = false; }}
+          onRestock={async () => {
+            if (restockLoading || !restockItem) return;
+            setRestockLoading(true);
+            await handleRestock(restockItem, restockQuantity, Number(restockUnitCost));
+            setRestockLoading(false);
+            restockClickedRef.current = false;
+          }}
+          loading={restockLoading}
+          restockClickedRef={restockClickedRef}
+        />
+        <AddIngredientModal
+          open={showAddModal || showEditModal}
+          title={showEditModal ? "Edit Ingredient" : "Add New Ingredient"}
+          initialData={editItem}
+          onClose={() => { setShowAddModal(false); setShowEditModal(false); setEditItem(null); }}
+          onSave={handleSave}
+        />
       </div>
-
-      <RestockModal
-        open={showRestockModal}
-        ingredient={restockItem}
-        quantity={restockQuantity}
-        setQuantity={setRestockQuantity}
-        unitCost={restockUnitCost}
-        setUnitCost={setRestockUnitCost}
-        onClose={() => { setShowRestockModal(false); setRestockItem(null); setRestockQuantity(0); setRestockUnitCost(0); }}
-        onRestock={() => restockItem && handleRestock(restockItem, restockQuantity, restockUnitCost)}
-        loading={loading}
-      />
-      <AddIngredientModal
-        open={showAddModal || showEditModal}
-        title={showEditModal ? "Edit Ingredient" : "Add New Ingredient"}
-        initialData={editItem}
-        onClose={() => { setShowAddModal(false); setShowEditModal(false); setEditItem(null); }}
-        onSave={handleSave}
-      />
     </div>
   );
 }
@@ -406,7 +409,16 @@ function AddIngredientModal({ open, onClose, onSave, title, initialData }: any) 
             </div>
             <div>
               <label className="text-sm font-bold block mb-1">Cost Per Unit</label>
-              <input type="number" step="0.01" className="w-full border rounded-lg p-2" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} />
+              <input
+                className="w-full border rounded-lg p-2"
+                type="number"
+                value={formData.price}
+                min={0.01}
+                step={0.01}
+                onChange={e => setFormData({...formData, price: e.target.value})}
+                onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
+                placeholder="Enter unit cost"
+              />
             </div>
           </div>
 
