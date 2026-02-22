@@ -1,3 +1,7 @@
+// Show voided status in modal header
+  // Place this where you show receipt info (e.g., after receipt number or customer info)
+  // Example:
+  // <div>{order.status === 'voided' && <StatusChip status="Voided" />}</div>
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -202,7 +206,7 @@ const Tab = ({
     onClick={onClick}
     className={classNames(
       'rounded-md px-4 py-2 text-[11px] font-extrabold shadow transition focus:outline-none focus-visible:ring-4 focus-visible:ring-[#B80F24]/15',
-      active ? 'bg-[#B80F24] text-white hover:bg-[#7E0012]' : 'bg-white text-[#6D6D6D] hover:bg-black/[0.02]'
+      active ? 'bg-[#B80F24] text-white hover:bg-[#7E0012]' : 'bg-white text-[#6D6D6D] hover:bg-black/0.02'
     )}
   >
     {children}
@@ -338,7 +342,7 @@ function LineAreaChart() {
 
 /* ----------------------------- Receipt Modal (enhanced) ----------------------------- */
 
-function ReceiptModal({ order, onClose }: { order: any; onClose: () => void }) {
+function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => void; onVoid: () => void }) {
   const pm = paymentMeta(order?.paymentmethod);
 
   const subtotal = Number(order?.amount || 0);
@@ -356,7 +360,7 @@ function ReceiptModal({ order, onClose }: { order: any; onClose: () => void }) {
         className="relative max-h-[92vh] w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/10"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="relative bg-gradient-to-b from-[#B80F24] to-[#7E0012] px-6 py-5 text-white">
+        <div className="relative bg-linear-to-b from-[#B80F24] to-[#7E0012] px-6 py-5 text-white">
           <button
             onClick={onClose}
             className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-xl bg-white/15 ring-1 ring-white/20 transition hover:bg-white/25"
@@ -414,7 +418,7 @@ function ReceiptModal({ order, onClose }: { order: any; onClose: () => void }) {
                     const line = price * qty;
 
                     return (
-                      <div key={idx} className="px-4 py-3 hover:bg-black/[0.015] transition">
+                      <div key={idx} className="px-4 py-3 hover:bg-black/0.015 transition">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="text-[12px] font-extrabold text-[#1E1E1E] truncate">
@@ -472,6 +476,21 @@ function ReceiptModal({ order, onClose }: { order: any; onClose: () => void }) {
             >
               <MdDownload className="h-4 w-4" />
               Download
+            </button>
+            <button
+              className={classNames(BTN_SUBTLE, 'flex-1 border-[#B80F24] text-[#B80F24] hover:bg-[#B80F24] hover:text-white hover:border-[#B80F24]')}
+              onClick={async () => {
+                if (!window.confirm('Are you sure you want to void this receipt?')) return;
+                await supabase
+                  .from('Order')
+                  .update({ status: 'voided' })
+                  .eq('orderID', order.orderID);
+                onVoid(); // <-- Call the callback function
+                onClose();
+              }}
+            >
+              <MdCancel className="h-4 w-4" />
+              Void Receipt
             </button>
           </div>
         </div>
@@ -601,8 +620,12 @@ export default function ReportsPage() {
   }, [receipts, receiptQuery, paymentFilter, dateFilter]);
 
   const receiptsTotals = useMemo(() => {
-    const totalSales = receiptsView.reduce((sum, r) => sum + Number(r.amount || 0), 0);
-    const totalChange = receiptsView.reduce((sum, r) => sum + Number(r.change || 0), 0);
+    const totalSales = receiptsView
+      .filter(r => r.status !== 'voided')
+      .reduce((sum, r) => sum + Number(r.amount || 0), 0);
+    const totalChange = receiptsView
+      .filter(r => r.status !== 'voided')
+      .reduce((sum, r) => sum + Number(r.change || 0), 0);
     return { count: receiptsView.length, totalSales, totalChange };
   }, [receiptsView]);
 
@@ -732,7 +755,7 @@ export default function ReportsPage() {
 
   return (
     <div className="min-h-screen bg-[#F3F3F3] text-[#1E1E1E]">
-      {selectedOrder && <ReceiptModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />}
+      {selectedOrder && <ReceiptModal order={selectedOrder} onClose={() => setSelectedOrder(null)} onVoid={fetchReceipts} />}
 
       <div
         className={classNames(
@@ -808,7 +831,7 @@ export default function ReportsPage() {
               <button
                 aria-label="Toggle sidebar"
                 onClick={() => setCollapsed((c) => !c)}
-                className="grid h-8 w-8 place-items-center rounded-full bg-[#E7E7E7] text-[#1E1E1E] shadow transition hover:bg-black/[0.03] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#B80F24]/15"
+                className="grid h-8 w-8 place-items-center rounded-full bg-[#E7E7E7] text-[#1E1E1E] shadow transition hover:bg-black/0.03 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#B80F24]/15"
                 title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               >
                 {collapsed ? '›' : '‹'}
@@ -820,7 +843,7 @@ export default function ReportsPage() {
               <span className="text-[14px]">🔔</span>
               <button
                 onClick={() => router.push('/profile')}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[12px] font-extrabold text-[#B80F24] shadow transition hover:bg-black/[0.02] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#B80F24]/15"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[12px] font-extrabold text-[#B80F24] shadow transition hover:bg-black/0.02 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#B80F24]/15"
                 aria-label="Open profile"
               >
                 AC
@@ -899,7 +922,7 @@ export default function ReportsPage() {
                       <option value="7d">Last 7 days</option>
                       <option value="30d">Last 30 days</option>
                     </select>
-                    <MdArrowDropDown className="pointer-events-none absolute right-3 top-[38px] text-[#6D6D6D]" size={22} />
+                    <MdArrowDropDown className="pointer-events-none absolute right-3 top-38px text-[#6D6D6D]" size={22} />
                   </div>
 
                   <div>
@@ -937,7 +960,7 @@ export default function ReportsPage() {
                       setPurchaseMin('');
                       setPurchaseMax('');
                     }}
-                    className={classNames(BTN_SUBTLE, 'h-[42px]')}
+                    className={classNames(BTN_SUBTLE, 'h-42px')}
                   >
                     Clear
                   </button>
@@ -996,17 +1019,15 @@ export default function ReportsPage() {
                             <div className="min-w-0">
                               <div className="text-[10px] font-extrabold text-[#B80F24]">Date &amp; Time</div>
                               <div className="text-[11px] font-bold text-[#6D6D6D] truncate">{formatDateTime(purchase.createdAt)}</div>
-                              <div className="mt-1 text-[10px] font-extrabold text-[#6D6D6D]">
-                                {items.length} item line(s)
-                                {preview ? (
-                                  <>
-                                    <span className="mx-2 text-black/20">•</span>
-                                    <span className="font-bold text-black/40">
-                                      {preview}
-                                      {items.length > 2 ? '…' : ''}
-                                    </span>
-                                  </>
-                                ) : null}
+                              <div className="mt-1 flex items-center gap-2">
+                                <span className="text-[10px] font-extrabold text-[#6D6D6D]">
+                                  {items.length} item{items.length !== 1 ? 's' : ''}
+                                </span>
+                                <span className="h-1 w-1 rounded-full bg-black/20" />
+                                <span className="text-[10px] font-bold text-black/40 truncate">
+                                  {preview || 'No items'}
+                                  {items.length > 2 ? '…' : ''}
+                                </span>
                               </div>
                             </div>
 
@@ -1040,14 +1061,18 @@ export default function ReportsPage() {
                                 <div className="text-[10px] font-extrabold text-[#B80F24]">Purchase #{purchase.purchaseID}</div>
                                 <div className="mt-1 text-[11px] font-bold text-[#6D6D6D]">{formatDateTime(purchase.createdAt)}</div>
                                 <div className="mt-2 flex items-center gap-2">
-                                  <StatusChip status={purchase.status || 'Completed'} />
-                                  <span className="text-[10px] font-extrabold text-[#6D6D6D]">{items.length} item(s)</span>
+                                  <StatusChip status={purchase.status === 'voided' ? 'Voided' : 'Completed'} />
+                                  <span className="text-[10px] font-extrabold text-[#6D6D6D]">
+                                    {items.length} item{items.length !== 1 ? 's' : ''}
+                                  </span>
                                 </div>
                               </div>
 
                               <div className="text-right">
-                                <div className="text-[10px] font-extrabold text-[#B80F24]">Total Cost</div>
+                                <div className="text-[10px] font-extrabold text-[#B80F24]">Total</div>
                                 <div className="text-[13px] font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(purchase.totalCost || 0)}</div>
+                                <div className="mt-2 text-[10px] font-extrabold text-[#B80F24]">Change</div>
+                                <div className="text-[12px] font-extrabold text-green-600">{fmtMoneyPhp(purchase.change)}</div>
                               </div>
                             </div>
 
@@ -1142,7 +1167,7 @@ export default function ReportsPage() {
                       <option value="gcash">GCash</option>
                       <option value="bank">Bank</option>
                     </select>
-                    <MdArrowDropDown className="pointer-events-none absolute right-3 top-[38px] text-[#6D6D6D]" size={22} />
+                    <MdArrowDropDown className="pointer-events-none absolute right-3 top-38px text-[#6D6D6D]" size={22} />
                   </div>
 
                   <div className="relative">
@@ -1156,7 +1181,7 @@ export default function ReportsPage() {
                       <option value="7d">Last 7 days</option>
                       <option value="30d">Last 30 days</option>
                     </select>
-                    <MdArrowDropDown className="pointer-events-none absolute right-3 top-[38px] text-[#6D6D6D]" size={22} />
+                    <MdArrowDropDown className="pointer-events-none absolute right-3 top-38px text-[#6D6D6D]" size={22} />
                   </div>
 
                   <button
@@ -1165,7 +1190,7 @@ export default function ReportsPage() {
                       setPaymentFilter('all');
                       setDateFilter('all');
                     }}
-                    className={classNames(BTN_SUBTLE, 'h-[42px]')}
+                    className={classNames(BTN_SUBTLE, 'h-42px')}
                   >
                     Clear
                   </button>
@@ -1192,9 +1217,10 @@ export default function ReportsPage() {
                 </div>
               ) : (
                 <>
-                  <div className="hidden md:grid grid-cols-[140px_1.4fr_160px_160px_120px] gap-3 px-6 py-3 text-[10px] font-extrabold text-[#6D6D6D] bg-white">
+                  <div className="hidden md:grid grid-cols-[140px_1.4fr_120px_160px_160px_120px] gap-3 px-6 py-3 text-[10px] font-extrabold text-[#6D6D6D] bg-white">
                     <div>Order</div>
                     <div>Date & Items</div>
+                    <div>Status</div>
                     <div>Payment</div>
                     <div className="text-right">Total</div>
                     <div className="text-right">Change</div>
@@ -1216,12 +1242,11 @@ export default function ReportsPage() {
                           onClick={() => setSelectedOrder(order)}
                           className="group cursor-pointer px-6 py-4 bg-white transition hover:bg-[#FAFAFA]"
                         >
-                          <div className="hidden md:grid grid-cols-[140px_1.4fr_160px_160px_120px] gap-3 items-center">
+                          <div className="hidden md:grid grid-cols-[140px_1.4fr_120px_160px_160px_120px] gap-3 items-center">
                             <div>
                               <div className="text-[10px] font-extrabold text-[#B80F24]">Order ID</div>
                               <div className="text-[13px] font-extrabold text-[#1E1E1E]">#{order.orderID}</div>
                             </div>
-
                             <div className="min-w-0">
                               <div className="text-[10px] font-extrabold text-[#B80F24]">Date &amp; Time</div>
                               <div className="text-[11px] font-bold text-[#6D6D6D] truncate">{formatDateTime(order.createdAt)}</div>
@@ -1236,26 +1261,16 @@ export default function ReportsPage() {
                                 </span>
                               </div>
                             </div>
-
-                            <div className="flex items-center justify-between gap-3">
-                              <Chip label={`${p.emoji} ${p.label}`} tone={p.tone} />
-                              <button
-                                className={classNames(BTN_SUBTLE, 'px-3 py-2 opacity-0 group-hover:opacity-100')}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedOrder(order);
-                                }}
-                              >
-                                <MdVisibility className="h-4 w-4" />
-                                View
-                              </button>
+                            <div>
+                              <StatusChip status={order.status === 'voided' ? 'Voided' : 'Completed'} />
                             </div>
-
+                            <div className="flex items-center gap-3">
+                              <Chip label={`${p.emoji} ${p.label}`} tone={p.tone} />
+                            </div>
                             <div className="text-right">
                               <div className="text-[10px] font-extrabold text-[#B80F24]">Total</div>
                               <div className="text-[13px] font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(order.amount)}</div>
                             </div>
-
                             <div className="text-right">
                               <div className="text-[10px] font-extrabold text-[#B80F24]">Change</div>
                               <div className="text-[13px] font-extrabold text-green-600">{fmtMoneyPhp(order.change)}</div>
@@ -1268,7 +1283,7 @@ export default function ReportsPage() {
                                 <div className="text-[10px] font-extrabold text-[#B80F24]">Order #{order.orderID}</div>
                                 <div className="mt-1 text-[11px] font-bold text-[#6D6D6D]">{formatDateTime(order.createdAt)}</div>
                                 <div className="mt-2 flex items-center gap-2">
-                                  <Chip label={`${p.emoji} ${p.label}`} tone={p.tone} />
+                                  <StatusChip status={order.status === 'voided' ? 'Voided' : 'Completed'} />
                                   <span className="text-[10px] font-extrabold text-[#6D6D6D]">
                                     {itemsQty} item{itemsQty !== 1 ? 's' : ''}
                                   </span>
@@ -1352,7 +1367,7 @@ export default function ReportsPage() {
                             className={classNames(
                               'grid grid-cols-[90px_1fr_140px_90px_160px_90px_140px_160px] gap-3 px-6 py-5 text-[12px] font-extrabold',
                               i % 2 === 0 ? 'bg-white' : 'bg-[#FCFCFC]',
-                              'hover:bg-black/[0.02] transition'
+                              'hover:bg-black/0.02 transition'
                             )}
                           >
                             <div className="text-[#1E1E1E]">{r.code}</div>

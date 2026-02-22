@@ -284,7 +284,7 @@ export default function InventoryPage() {
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setCollapsed((c) => !c)}
-                    className="grid h-9 w-9 place-items-center rounded-full bg-white ring-1 ring-card-border hover:bg-black/[0.03] transition"
+                    className="grid h-9 w-9 place-items-center rounded-full bg-white ring-1 ring-card-border hover:bg-black/3 transition"
                     aria-label="Toggle sidebar"
                   >
                     {collapsed ? '›' : '‹'}
@@ -301,7 +301,7 @@ export default function InventoryPage() {
                     onClick={fetchInventory}
                     className={cn(
                       'grid h-10 w-10 place-items-center rounded-xl bg-white ring-1 ring-card-border',
-                      'hover:bg-black/[0.03] transition focus:outline-none focus:ring-4 focus:ring-black/10'
+                      'hover:bg-black/3 transition focus:outline-none focus:ring-4 focus:ring-black/10'
                     )}
                     aria-label="Refresh"
                     title="Refresh"
@@ -333,7 +333,7 @@ export default function InventoryPage() {
                     'px-3 py-2',
                     showOnlyLow
                       ? 'bg-red-50 text-red-700 ring-1 ring-red-200 hover:bg-red-100/70 focus:ring-red-200'
-                      : 'bg-white text-foreground ring-1 ring-card-border hover:bg-black/[0.03] focus:ring-black/10'
+                      : 'bg-white text-foreground ring-1 ring-card-border hover:bg-black/3 focus:ring-black/10'
                   )}
                 >
                   <MdWarning size={18} />
@@ -347,7 +347,7 @@ export default function InventoryPage() {
                     className={cn(
                       'w-full appearance-none rounded-xl bg-white px-3 py-2 pr-9 text-sm font-semibold',
                       'border-2 border-black/15 shadow-[0_1px_0_rgba(0,0,0,0.06)]',
-                      'hover:bg-black/[0.03] focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/15 transition'
+                      'hover:bg-black/3 focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/15 transition'
                     )}
                   >
                     <option value="name-asc">Name (A–Z)</option>
@@ -369,7 +369,7 @@ export default function InventoryPage() {
                       'grid h-10 w-10 place-items-center rounded-xl border-2 transition focus:outline-none focus:ring-4',
                       view === 'list'
                         ? 'bg-primary text-white border-transparent hover:brightness-95 focus:ring-primary/20'
-                        : 'bg-white border-black/10 hover:bg-black/[0.03] focus:ring-black/10'
+                        : 'bg-white border-black/10 hover:bg-black/3 focus:ring-black/10'
                     )}
                     aria-label="List view"
                   >
@@ -381,7 +381,7 @@ export default function InventoryPage() {
                       'grid h-10 w-10 place-items-center rounded-xl border-2 transition focus:outline-none focus:ring-4',
                       view === 'grid'
                         ? 'bg-primary text-white border-transparent hover:brightness-95 focus:ring-primary/20'
-                        : 'bg-white border-black/10 hover:bg-black/[0.03] focus:ring-black/10'
+                        : 'bg-white border-black/10 hover:bg-black/3 focus:ring-black/10'
                     )}
                     aria-label="Grid view"
                   >
@@ -630,7 +630,7 @@ function InventoryRow({
       className={cn(
         'group flex flex-col gap-3 md:flex-row md:items-center',
         'rounded-2xl bg-white px-4 py-4 shadow-sm ring-1 ring-card-border',
-        'hover:shadow-md hover:-translate-y-[1px] transition'
+        'hover:shadow-md hover:-translate-y-px transition'
       )}
     >
       <div className="flex flex-1 items-center gap-3 min-w-0">
@@ -714,7 +714,7 @@ function InventoryCard({
   const isLowStock = item.currentStock <= item.reorderLevel;
 
   return (
-    <div className={cn(CARD, 'p-4 hover:shadow-md hover:-translate-y-[1px]')}>
+    <div className={cn(CARD, 'p-4 hover:shadow-md hover:-translate-y-px transition')}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -762,7 +762,7 @@ function InventoryCard({
             'flex-1 rounded-xl px-3 py-2 text-xs font-semibold border-2 transition focus:outline-none focus:ring-4',
             isLowStock
               ? 'bg-primary text-white border-transparent hover:brightness-95 focus:ring-primary/20'
-              : 'bg-white border-black/15 hover:bg-black/[0.03] focus:ring-black/10'
+              : 'bg-white border-black/15 hover:bg-black/3 focus:ring-black/10'
           )}
         >
           Restock
@@ -791,7 +791,7 @@ function IconButton({
         'grid h-10 w-10 place-items-center rounded-xl border-2 transition focus:outline-none focus:ring-4 active:scale-[0.99]',
         danger
           ? 'text-red-600 border-red-200 hover:bg-red-50 focus:ring-red-200'
-          : 'text-text-muted border-black/10 hover:bg-black/[0.03] focus:ring-black/10'
+          : 'text-text-muted border-black/10 hover:bg-black/3 focus:ring-black/10'
       )}
     >
       {children}
@@ -850,7 +850,7 @@ function RestockModal({
               onClick={onClose}
               className={cn(
                 'grid h-10 w-10 place-items-center rounded-xl border-2 border-black/10',
-                'hover:bg-black/[0.03] transition focus:outline-none focus:ring-4 focus:ring-black/10'
+                'hover:bg-black/3 transition focus:outline-none focus:ring-4 focus:ring-black/10'
               )}
               aria-label="Close"
             >
@@ -984,7 +984,7 @@ function AddIngredientModal({ open, onClose, onSave, title, initialData }: any) 
               onClick={onClose}
               className={cn(
                 'grid h-10 w-10 place-items-center rounded-xl border-2 border-black/10',
-                'hover:bg-black/[0.03] transition focus:outline-none focus:ring-4 focus:ring-black/10'
+                'hover:bg-black/3 transition focus:outline-none focus:ring-4 focus:ring-black/10'
               )}
               aria-label="Close"
             >

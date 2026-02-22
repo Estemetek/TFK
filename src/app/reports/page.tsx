@@ -202,7 +202,7 @@ const Tab = ({
     onClick={onClick}
     className={classNames(
       'rounded-md px-4 py-2 text-[11px] font-extrabold shadow transition focus:outline-none focus-visible:ring-4 focus-visible:ring-[#B80F24]/15',
-      active ? 'bg-[#B80F24] text-white hover:bg-[#7E0012]' : 'bg-white text-[#6D6D6D] hover:bg-black/[0.02]'
+      active ? 'bg-[#B80F24] text-white hover:bg-[#7E0012]' : 'bg-white text-[#6D6D6D] hover:bg-black/0.02'
     )}
   >
     {children}
@@ -356,7 +356,7 @@ function ReceiptModal({ order, onClose }: { order: any; onClose: () => void }) {
         className="relative max-h-[92vh] w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/10"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="relative bg-gradient-to-b from-[#B80F24] to-[#7E0012] px-6 py-5 text-white">
+        <div className="relative bg-linear-to-b from-[#B80F24] to-[#7E0012] px-6 py-5 text-white">
           <button
             onClick={onClose}
             className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-xl bg-white/15 ring-1 ring-white/20 transition hover:bg-white/25"
@@ -414,7 +414,7 @@ function ReceiptModal({ order, onClose }: { order: any; onClose: () => void }) {
                     const line = price * qty;
 
                     return (
-                      <div key={idx} className="px-4 py-3 hover:bg-black/[0.015] transition">
+                      <div key={idx} className="px-4 py-3 hover:bg-black/0.015 transition">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="text-[12px] font-extrabold text-[#1E1E1E] truncate">
@@ -808,7 +808,7 @@ export default function ReportsPage() {
               <button
                 aria-label="Toggle sidebar"
                 onClick={() => setCollapsed((c) => !c)}
-                className="grid h-8 w-8 place-items-center rounded-full bg-[#E7E7E7] text-[#1E1E1E] shadow transition hover:bg-black/[0.03] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#B80F24]/15"
+                className="grid h-8 w-8 place-items-center rounded-full bg-[#E7E7E7] text-[#1E1E1E] shadow transition hover:bg-black/0.03 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#B80F24]/15"
                 title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               >
                 {collapsed ? '›' : '‹'}
@@ -820,7 +820,7 @@ export default function ReportsPage() {
               <span className="text-[14px]">🔔</span>
               <button
                 onClick={() => router.push('/profile')}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[12px] font-extrabold text-[#B80F24] shadow transition hover:bg-black/[0.02] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#B80F24]/15"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[12px] font-extrabold text-[#B80F24] shadow transition hover:bg-black/0.02 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#B80F24]/15"
                 aria-label="Open profile"
               >
                 AC
@@ -830,17 +830,8 @@ export default function ReportsPage() {
 
           <section className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <Tab active={tab === 'Reservation Report'} onClick={() => setTab('Reservation Report')}>
-                Reservation Report
-              </Tab>
               <Tab active={tab === 'Revenue Report'} onClick={() => setTab('Revenue Report')}>
                 Revenue Report
-              </Tab>
-              <Tab active={tab === 'Staff Report'} onClick={() => setTab('Staff Report')}>
-                Staff Report
-              </Tab>
-              <Tab active={tab === 'Sales & EOD Report'} onClick={() => setTab('Sales & EOD Report')}>
-                Sales &amp; EOD Report
               </Tab>
               <Tab active={tab === 'Receipts'} onClick={() => setTab('Receipts')}>
                 Receipts
@@ -899,7 +890,7 @@ export default function ReportsPage() {
                       <option value="7d">Last 7 days</option>
                       <option value="30d">Last 30 days</option>
                     </select>
-                    <MdArrowDropDown className="pointer-events-none absolute right-3 top-[38px] text-[#6D6D6D]" size={22} />
+                    <MdArrowDropDown className="pointer-events-none absolute right-3 top-38px text-[#6D6D6D]" size={22} />
                   </div>
 
                   <div>
@@ -937,7 +928,7 @@ export default function ReportsPage() {
                       setPurchaseMin('');
                       setPurchaseMax('');
                     }}
-                    className={classNames(BTN_SUBTLE, 'h-[42px]')}
+                    className={classNames(BTN_SUBTLE, 'h-42px')}
                   >
                     Clear
                   </button>
@@ -1142,7 +1133,7 @@ export default function ReportsPage() {
                       <option value="gcash">GCash</option>
                       <option value="bank">Bank</option>
                     </select>
-                    <MdArrowDropDown className="pointer-events-none absolute right-3 top-[38px] text-[#6D6D6D]" size={22} />
+                    <MdArrowDropDown className="pointer-events-none absolute right-3 top-38px text-[#6D6D6D]" size={22} />
                   </div>
 
                   <div className="relative">
@@ -1156,7 +1147,7 @@ export default function ReportsPage() {
                       <option value="7d">Last 7 days</option>
                       <option value="30d">Last 30 days</option>
                     </select>
-                    <MdArrowDropDown className="pointer-events-none absolute right-3 top-[38px] text-[#6D6D6D]" size={22} />
+                    <MdArrowDropDown className="pointer-events-none absolute right-3 top-38px text-[#6D6D6D]" size={22} />
                   </div>
 
                   <button
@@ -1165,7 +1156,7 @@ export default function ReportsPage() {
                       setPaymentFilter('all');
                       setDateFilter('all');
                     }}
-                    className={classNames(BTN_SUBTLE, 'h-[42px]')}
+                    className={classNames(BTN_SUBTLE, 'h-42px')}
                   >
                     Clear
                   </button>
@@ -1352,7 +1343,7 @@ export default function ReportsPage() {
                             className={classNames(
                               'grid grid-cols-[90px_1fr_140px_90px_160px_90px_140px_160px] gap-3 px-6 py-5 text-[12px] font-extrabold',
                               i % 2 === 0 ? 'bg-white' : 'bg-[#FCFCFC]',
-                              'hover:bg-black/[0.02] transition'
+                              'hover:bg-black/0.02 transition'
                             )}
                           >
                             <div className="text-[#1E1E1E]">{r.code}</div>
