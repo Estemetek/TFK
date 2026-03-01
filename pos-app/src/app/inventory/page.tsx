@@ -413,7 +413,7 @@ if (itemError) throw itemError;
             />
             <StatCard
               title="Inventory Value (Est.)"
-              value={`$${totalValueEstimate.toFixed(2)}`}
+              value={`₱${totalValueEstimate.toFixed(2)}`}
               subtitle="Based on current stock × unit cost"
             />
           </section>
@@ -424,33 +424,40 @@ if (itemError) throw itemError;
                 <p className="text-sm font-semibold">Stock Overview</p>
                 <span className={cn(CHIP_BASE, 'bg-white')}>
                   <MdTune size={16} className="text-text-muted" />
-                  {inventoryItems.length} items
+                  {lowStockItems.length} items
                 </span>
               </div>
 
               <div className="mt-4 space-y-2">
-                {inventoryItems.length === 0 ? (
+                {lowStockItems.length === 0 ? (
                   <div className={cn(CARD, 'p-4')}>
-                    <p className="text-sm font-semibold">No ingredients found</p>
-                    <p className="text-xs text-text-muted mt-1">Add ingredients to start tracking inventory.</p>
+                    <p className="text-sm font-semibold">No low stock ingredients</p>
+                    <p className="text-xs text-text-muted mt-1">All ingredients are above reorder level.</p>
                   </div>
                 ) : (
-                  inventoryItems.map((item) => (
-                    <div key={item.ingredientID} className={cn(CARD, 'p-3 hover:shadow-md flex items-center justify-between')}>
-                      <span className="text-sm font-semibold truncate">{item.name}</span>
-                      <button
-                        className={cn(BTN_PRIMARY, 'px-3 py-1.5 text-xs')}
-                        onClick={() => {
-                          setRestockItem(item);
-                          setRestockQuantity(0);
-                          setRestockUnitCost(Number(item.costPerUnit || 0));
-                          setShowRestockModal(true);
-                        }}
-                      >
-                        Restock
-                      </button>
-                    </div>
-                  ))
+                  lowStockItems.map((item) => {
+                    let stockDisplay = '';
+                    let shortageMsg = '';
+                    if (item.currentStock <= 0) {
+                      stockDisplay = `Out of stock`;
+                      shortageMsg = 'Restock soon to avoid shortages!';
+                    } else {
+                      stockDisplay = `${item.currentStock} ${item.unit} left`;
+                      shortageMsg = 'Restock soon to avoid shortages!';
+                    }
+                    return (
+                      <div key={item.ingredientID} className={cn(CARD, 'p-3 flex flex-col gap-1')}>
+                        <div className="flex items-center gap-3">
+                          <MdWarning className="text-red-600" size={20} />
+                          <span className="text-sm font-semibold truncate">{item.name}</span>
+                          <span className="text-xs text-text-muted ml-auto">
+                            {stockDisplay} (Reorder at {item.reorderLevel})
+                          </span>
+                        </div>
+                        <span className="text-xs text-red-600 mt-1">{shortageMsg}</span>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -658,7 +665,7 @@ function InventoryRow({
         <div className="grid grid-cols-2 gap-5 md:flex md:items-center md:gap-8">
           <div>
             <p className="text-[10px] uppercase tracking-wide text-text-muted font-bold">Unit Cost</p>
-            <p className="text-sm font-semibold">${Number(item.costPerUnit || 0).toFixed(2)}</p>
+            <p className="text-sm font-semibold">₱{Number(item.costPerUnit || 0).toFixed(2)}</p>
           </div>
 
           <div className="text-right">
@@ -666,11 +673,18 @@ function InventoryRow({
             <p className="text-sm font-semibold">{new Date(item.updatedAt).toLocaleDateString()}</p>
           </div>
         </div>
-
-
-                       <IconButton onClick={onDelete} label="Delete" danger>
-                         <MdDelete size={18} />
-                       </IconButton>
+        <button
+          className={cn(BTN_PRIMARY, 'px-3 py-1.5 text-xs')}
+          onClick={onRestock}
+        >
+          Restock
+        </button>
+        <IconButton onClick={onEdit} label="Edit">
+          <MdEdit size={18} />
+        </IconButton>
+        <IconButton onClick={onDelete} label="Delete" danger>
+          <MdDelete size={18} />
+        </IconButton>
       </div>
     </div>
   );
@@ -723,7 +737,7 @@ function InventoryCard({
       <div className="mt-4 flex items-end justify-between">
         <div>
           <p className="text-[10px] uppercase tracking-wide text-text-muted font-bold">Unit Cost</p>
-          <p className="text-sm font-semibold">${Number(item.costPerUnit || 0).toFixed(2)}</p>
+          <p className="text-sm font-semibold">₱{Number(item.costPerUnit || 0).toFixed(2)}</p>
         </div>
         <div className="text-right">
           <p className="text-[10px] uppercase tracking-wide text-text-muted font-bold">Updated</p>
@@ -880,7 +894,7 @@ function RestockModal({
             <div className={cn(CARD, 'p-4')}>
               <p className="text-xs text-text-muted">Estimated added cost</p>
               <p className="text-lg font-semibold mt-1">
-                ${(Number(quantity || 0) * Number(unitCost || 0)).toFixed(2)}
+                ₱{isNaN(quantity * unitCost) ? '0.00' : (quantity * unitCost).toFixed(2)}
               </p>
             </div>
           </div>
