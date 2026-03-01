@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { syncMenuAvailability } from '../lib/syncMenuAvailability';
 import { MdClose, MdDelete, MdAdd } from 'react-icons/md';
 
-export function RecipeModal({ menuItem, onClose }: { menuItem: any, onClose: () => void }) {
+export function RecipeModal({ menuItem, onClose, onRecipeChange }: { menuItem: any, onClose: () => void, onRecipeChange?: () => void }) {
   const [availableIngredients, setAvailableIngredients] = useState<any[]>([]);
   const [recipeItems, setRecipeItems] = useState<any[]>([]);
   const [selectedIngredientId, setSelectedIngredientId] = useState('');
@@ -41,13 +42,17 @@ export function RecipeModal({ menuItem, onClose }: { menuItem: any, onClose: () 
     if (error) alert(error.message);
     else {
       setQuantity(0);
-      fetchData(); // Refresh list
+      await fetchData(); // Refresh list
+      await syncMenuAvailability(); // Sync menu item status
+      if (onRecipeChange) await onRecipeChange(); // UI refresh
     }
   }
 
   async function removeIngredient(id: number) {
     await supabase.from('MenuIngredient').delete().eq('menuIngredientID', id);
-    fetchData();
+    await fetchData();
+    await syncMenuAvailability(); // Sync menu item status
+    if (onRecipeChange) await onRecipeChange(); // UI refresh
   }
 
   return (
@@ -60,26 +65,62 @@ export function RecipeModal({ menuItem, onClose }: { menuItem: any, onClose: () 
 
         {/* Add New Ingredient to Recipe */}
         <div className="grid grid-cols-3 gap-2 mb-6 bg-gray-50 p-3 rounded-lg">
-          <select 
+          <select
             className="border p-2 rounded-lg text-sm col-span-1"
             value={selectedIngredientId}
             onChange={(e) => setSelectedIngredientId(e.target.value)}
           >
             <option value="">Select Ingredient...</option>
-            {availableIngredients.map(ing => (
-              <option key={ing.ingredientID} value={ing.ingredientID}>{ing.name} ({ing.unit})</option>
+            {/* Group available ingredients first */}
+            {availableIngredients.filter(ing => ing.currentStock > 0).map(ing => {
+              const isInsufficient = quantity > 0 && ing.currentStock < quantity;
+              return (
+                <option
+                  key={ing.ingredientID}
+                  value={ing.ingredientID}
+                  style={isInsufficient ? { color: 'orange', fontWeight: 'bold' } : {}}
+                >
+                  {ing.name} ({ing.unit}) — {ing.currentStock} in stock
+                  {isInsufficient ? ' (Insufficient!)' : ''}
+                </option>
+              );
+            })}
+            {/* Divider for out-of-stock group */}
+            {availableIngredients.some(ing => ing.currentStock <= 0) && (
+              <option disabled style={{ fontStyle: 'italic', color: '#888' }}>─────────────</option>
+            )}
+            {/* Out-of-stock ingredients at bottom */}
+            {availableIngredients.filter(ing => ing.currentStock <= 0).map(ing => (
+              <option
+                key={ing.ingredientID}
+                value={ing.ingredientID}
+                disabled
+                style={{ color: 'red', fontStyle: 'italic' }}
+              >
+                {ing.name} ({ing.unit}) — {ing.currentStock} in stock (Out of Stock)
+              </option>
             ))}
           </select>
-          <input 
-            type="number" 
-            placeholder="Qty" 
+          <input
+            type="number"
+            placeholder="Qty"
             className="border p-2 rounded-lg text-sm"
             value={quantity}
             onChange={(e) => setQuantity(parseFloat(e.target.value))}
+            disabled={
+              !!selectedIngredientId &&
+              availableIngredients.find(i => i.ingredientID === parseInt(selectedIngredientId))?.currentStock <= 0
+            }
           />
-          <button 
+          <button
             onClick={addIngredient}
             className="bg-primary text-white rounded-lg flex items-center justify-center gap-2 font-bold"
+            disabled={
+              !selectedIngredientId ||
+              availableIngredients.find(i => i.ingredientID === parseInt(selectedIngredientId))?.currentStock <= 0 ||
+              quantity <= 0 ||
+              (quantity > 0 && availableIngredients.find(i => i.ingredientID === parseInt(selectedIngredientId))?.currentStock < quantity)
+            }
           >
             <MdAdd /> Add
           </button>

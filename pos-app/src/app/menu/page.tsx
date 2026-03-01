@@ -22,6 +22,7 @@ import {
   MdCancel,
 } from 'react-icons/md';
 import { RecipeModal } from '../components/RecipeModal';
+import { syncMenuAvailability } from '../lib/syncMenuAvailability';
 
 // --- TYPES ---
 type Category = {
@@ -71,7 +72,7 @@ const AvailabilityPill = ({ value }: { value: boolean }) => (
     ].join(' ')}
   >
     {value ? <MdCheckCircle className="h-4 w-4" /> : <MdCancel className="h-4 w-4" />}
-    {value ? 'In Stock' : 'Out of Stock'}
+    {value ? 'In Stock' : 'Unavailable'}
   </span>
 );
 
@@ -282,7 +283,7 @@ export default function MenuPage() {
     price: '',
     regularPrice: '',
     categoryID: '',
-    isAvailable: true,
+    isAvailable: false, // default to out of stock, sync logic will update
     imageUrl: '',
   });
 
@@ -321,7 +322,11 @@ export default function MenuPage() {
   }, []);
 
   useEffect(() => {
-    fetchAllData();
+    async function runSyncAndFetch() {
+      await syncMenuAvailability();
+      await fetchAllData();
+    }
+    runSyncAndFetch();
   }, [fetchAllData]);
 
   const handleLogout = async () => {
@@ -387,7 +392,7 @@ export default function MenuPage() {
       price: '',
       regularPrice: '',
       categoryID: '',
-      isAvailable: true,
+      isAvailable: false, // default to out of stock, sync logic will update
       imageUrl: '',
     });
     setIsAddOpen(true);
@@ -436,7 +441,7 @@ export default function MenuPage() {
         price,
         regularPrice: regular,
         categoryID: Number(form.categoryID),
-        isAvailable: form.isAvailable,
+        isAvailable: false, // default to out of stock, sync logic will update
         imageUrl: form.imageUrl.trim() || null,
         status: 'Active',
       },
@@ -492,7 +497,7 @@ export default function MenuPage() {
         price,
         regularPrice: regular,
         categoryID: Number(editForm.categoryID),
-        isAvailable: editForm.isAvailable,
+        // isAvailable is managed by sync logic, not editable here
         imageUrl: editForm.imageUrl.trim() || null,
         updatedBy: user?.id,
       })
@@ -594,10 +599,10 @@ export default function MenuPage() {
                 type="button"
                 onClick={() => setSelectedCatID('all')}
                 className={[
-                  'min-w-[150px] text-left rounded-2xl p-4 shadow-sm ring-1 transition',
+                  'min-w-150px text-left rounded-2xl p-4 shadow-sm ring-1 transition',
                   selectedCatID === 'all'
                     ? 'bg-[#b80f24] text-white ring-[#b80f24]'
-                    : 'bg-[#F7F7F7] text-[#1E1E1E] ring-black/5 hover:bg-black/[0.03]',
+                    : 'bg-[#F7F7F7] text-[#1E1E1E] ring-black/5 hover:bg-black/0.03',
                 ].join(' ')}
               >
                 <div className="flex items-center gap-3">
@@ -628,10 +633,10 @@ export default function MenuPage() {
                     type="button"
                     onClick={() => setSelectedCatID(c.categoryID)}
                     className={[
-                      'min-w-[170px] text-left rounded-2xl p-4 shadow-sm ring-1 transition',
+                      'min-w-170px text-left rounded-2xl p-4 shadow-sm ring-1 transition',
                       active
                         ? 'bg-[#b80f24] text-white ring-[#b80f24]'
-                        : 'bg-[#F7F7F7] text-[#1E1E1E] ring-black/5 hover:bg-black/[0.03]',
+                        : 'bg-[#F7F7F7] text-[#1E1E1E] ring-black/5 hover:bg-black/0.03',
                     ].join(' ')}
                   >
                     <div className="flex items-center gap-3">
@@ -727,7 +732,7 @@ export default function MenuPage() {
             {/* Table */}
             <div className="overflow-hidden rounded-2xl border border-black/10">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[980px]">
+                <table className="w-full min-w-980px">
                   <thead className="bg-[#FAFAFA]">
                     <tr className="text-left text-[11px] font-extrabold text-black/55 uppercase">
                       <th className="p-3">Product</th>
@@ -783,7 +788,7 @@ export default function MenuPage() {
                       ))
                     ) : visibleItems.length ? (
                       visibleItems.map((item) => (
-                        <tr key={item.menuItemID} className="hover:bg-black/[0.02]">
+                        <tr key={item.menuItemID} className="hover:bg-black/0.02">
                           <td className="p-3">
                             <div className="h-12 w-12 rounded-xl bg-black/5 overflow-hidden ring-1 ring-black/10">
                               {item.imageUrl ? (
@@ -1025,19 +1030,6 @@ export default function MenuPage() {
             </Select>
           </Field>
 
-          <Field label="Availability">
-            <label className="flex items-center gap-3 select-none">
-              <input
-                type="checkbox"
-                checked={form.isAvailable}
-                onChange={(e) => setForm({ ...form, isAvailable: e.target.checked })}
-                className="h-4 w-4"
-                style={{ accentColor: PRIMARY }}
-              />
-              <span className="text-xs font-bold text-black/50">Available for order</span>
-            </label>
-          </Field>
-
           <div className="pt-5 flex justify-end gap-2 border-t border-black/10">
             <GhostButton onClick={() => setIsAddOpen(false)}>Cancel</GhostButton>
             <PrimaryButton disabled={isSubmitting} onClick={handleAddItem}>
@@ -1108,16 +1100,7 @@ export default function MenuPage() {
           </Field>
 
           <Field label="Availability">
-            <label className="flex items-center gap-3 select-none">
-              <input
-                type="checkbox"
-                checked={editForm.isAvailable}
-                onChange={(e) => setEditForm({ ...editForm, isAvailable: e.target.checked })}
-                className="h-4 w-4"
-                style={{ accentColor: PRIMARY }}
-              />
-              <span className="text-xs font-bold text-black/50">In Stock / Available</span>
-            </label>
+            <span className="text-xs font-bold text-black/50">In Stock / Available</span>
           </Field>
 
           <div className="pt-5 flex justify-end gap-2 border-t border-black/10">
@@ -1136,6 +1119,10 @@ export default function MenuPage() {
           onClose={() => {
             setIsRecipeOpen(false);
             setActiveRecipeItem(null);
+          }}
+          onRecipeChange={async () => {
+            await syncMenuAvailability();
+            fetchAllData();
           }}
         />
       )}

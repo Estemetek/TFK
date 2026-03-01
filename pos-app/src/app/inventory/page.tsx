@@ -157,6 +157,49 @@ export default function InventoryPage() {
     return sorted;
   }, [inventoryItems, query, showOnlyLow, sort]);
 
+  // Strict sync: menu item is unavailable if NO ingredients or ANY ingredient is out of stock
+  const syncMenuAvailability = async () => {
+    // Fetch all menu items
+    const { data: menuItems, error: menuError } = await supabase
+      .from('MenuItem')
+      .select('menuItemID');
+    if (menuError) {
+      console.error('Error fetching menu items:', menuError);
+      return;
+    }
+
+    for (const menu of menuItems) {
+      // Get all recipe ingredients for this menu item
+      const { data: recipeIngredients, error: recipeError } = await supabase
+        .from('MenuIngredient')
+        .select('ingredientID, quantityRequired')
+        .eq('menuItemID', menu.menuItemID);
+
+      let anyOutOfStock = false;
+      // If no ingredients, mark as unavailable
+      if (!recipeIngredients || recipeIngredients.length === 0) {
+        anyOutOfStock = true;
+      } else {
+        for (const recipeIng of recipeIngredients) {
+          const { data: ingredientData, error: ingError } = await supabase
+            .from('Ingredient')
+            .select('currentStock')
+            .eq('ingredientID', recipeIng.ingredientID)
+            .single();
+          // Check for required quantity
+          if (ingError || !ingredientData || ingredientData.currentStock < (recipeIng.quantityRequired ?? 1)) {
+            anyOutOfStock = true;
+            break;
+          }
+        }
+      }
+      await supabase
+        .from('MenuItem')
+        .update({ isAvailable: !anyOutOfStock })
+        .eq('menuItemID', menu.menuItemID);
+    }
+  };
+
   const handleRestock = async (ingredient: InventoryItem, quantity: number, unitCost: number) => {
     if (!ingredient || quantity <= 0 || unitCost <= 0) return;
 
@@ -169,18 +212,16 @@ export default function InventoryPage() {
         .single();
       if (purchaseError) throw purchaseError;
 
-      
-
       const { error: itemError } = await supabase.from('PurchaseItem').insert([
-  {
-    purchaseID: purchase.purchaseID,
-    ingredientID: ingredient.ingredientID,
-    quantity,
-    cost: unitCost,
-    // createdAt: new Date().toISOString(),
-  },
-]);
-if (itemError) throw itemError;
+        {
+          purchaseID: purchase.purchaseID,
+          ingredientID: ingredient.ingredientID,
+          quantity,
+          cost: unitCost,
+          // createdAt: new Date().toISOString(),
+        },
+      ]);
+      if (itemError) throw itemError;
 
       // const { error: txError } = await supabase.from('InventoryTransaction').insert([
       //   {
@@ -203,6 +244,7 @@ if (itemError) throw itemError;
       // if (updError) throw updError;
 
       await fetchInventory();
+      await syncMenuAvailability();
       setShowRestockModal(false);
       setRestockItem(null);
       setRestockQuantity(0);
@@ -244,6 +286,7 @@ if (itemError) throw itemError;
       }
 
       await fetchInventory();
+      await syncMenuAvailability();
       setShowAddModal(false);
       setShowEditModal(false);
       setEditItem(null);

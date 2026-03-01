@@ -53,7 +53,7 @@ function Toast({
 }) {
   if (!show) return null;
   return (
-    <div className="fixed z-[999] left-1/2 top-5 -translate-x-1/2">
+    <div className="fixed z-999 left-1/2 top-5 -translate-x-1/2">
       <div className="flex items-center gap-2 rounded-2xl bg-gray-900 text-white px-4 py-3 shadow-xl border border-white/10">
         <span className="text-sm font-bold">{text}</span>
         <button
@@ -166,7 +166,7 @@ function CartPanel({
               <MdReceipt size={34} className="opacity-30" />
             </div>
             <p className="text-sm font-black">No items selected</p>
-            <p className="text-[11px] font-bold text-gray-400 mt-1 text-center max-w-[220px]">
+            <p className="text-[11px] font-bold text-gray-400 mt-1 text-center max-w-220px">
               Tap a menu item to add it here.
             </p>
           </div>
@@ -556,6 +556,34 @@ export default function OrderPage() {
   const handleCheckout = async () => {
     if (cart.length === 0) return;
 
+    // Check ingredient stock before placing order
+    for (const item of cart) {
+      const { data: recipeIngredients } = await supabase
+        .from('MenuIngredient')
+        .select('ingredientID, quantityRequired')
+        .eq('menuItemID', item.menuItemID);
+
+      if (!recipeIngredients || recipeIngredients.length === 0) {
+        alert(`"${item.name}" has no ingredients and cannot be ordered.`);
+        return;
+      }
+
+      for (const recipeIng of recipeIngredients) {
+        const { data: ingredientData } = await supabase
+          .from('Ingredient')
+          .select('currentStock')
+          .eq('ingredientID', recipeIng.ingredientID)
+          .single();
+
+        if (!ingredientData || ingredientData.currentStock < recipeIng.quantityRequired * item.quantity) {
+          alert(
+            `Not enough stock for "${item.name}". Required: ${recipeIng.quantityRequired * item.quantity}, Available: ${ingredientData?.currentStock ?? 0}`
+          );
+          return;
+        }
+      }
+    }
+
     if (paymentMethod === 'cash' && amountPaid < cartTotal) {
       alert('Insufficient payment amount!');
       return;
@@ -596,6 +624,51 @@ export default function OrderPage() {
       const { error: itemErr } = await supabase.from('OrderItem').insert(orderItems);
       if (itemErr) throw itemErr;
 
+      // --- Deduct inventory for recipes with multiple ingredients ---
+      for (const item of cart) {
+        // 1. Get all ingredients for this menu item (recipe)
+        const { data: recipeIngredients, error: recipeErr } = await supabase
+          .from('MenuIngredient')
+          .select('ingredientID, quantityRequired')
+          .eq('menuItemID', item.menuItemID);
+
+        if (recipeErr || !recipeIngredients) continue;
+
+        let anyOutOfStock = false;
+
+        for (const recipeIng of recipeIngredients) {
+          // 2. Deduct stock for each ingredient
+          const { data: ingredientData, error: ingredientErr } = await supabase
+            .from('Ingredient')
+            .select('currentStock')
+            .eq('ingredientID', recipeIng.ingredientID)
+            .single();
+
+          if (ingredientErr || !ingredientData) continue;
+
+          const deductionQty = recipeIng.quantityRequired * item.quantity;
+          const newStock = Math.max(0, ingredientData.currentStock - deductionQty);
+
+          await supabase
+            .from('Ingredient')
+            .update({
+              currentStock: newStock,
+              isAvailable: newStock === 0 ? false : true,
+            })
+            .eq('ingredientID', recipeIng.ingredientID);
+
+          if (newStock === 0) anyOutOfStock = true;
+        }
+
+        // 3. If any ingredient is out of stock, mark menu item as unavailable
+        await supabase
+          .from('MenuItem')
+          .update({
+            isAvailable: anyOutOfStock ? false : true,
+          })
+          .eq('menuItemID', item.menuItemID);
+      }
+
       alert(
         `Order Successful! ${
           paymentMethod === 'cash' ? `Change: ${money(changeDue)}` : 'Payment confirmed'
@@ -613,6 +686,44 @@ export default function OrderPage() {
       setIsSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    async function syncMenuAvailability() {
+      // Fetch all menu items
+      const { data: menuData } = await supabase.from('MenuItem').select('menuItemID');
+      if (!menuData) return;
+
+      for (const menu of menuData) {
+        // Get all ingredients for this menu item
+        const { data: recipeIngredients } = await supabase
+          .from('MenuIngredient')
+          .select('ingredientID, quantityRequired')
+          .eq('menuItemID', menu.menuItemID);
+
+        let anyOutOfStock = false;
+        if (!recipeIngredients || recipeIngredients.length === 0) {
+          anyOutOfStock = true;
+        } else {
+          for (const recipeIng of recipeIngredients) {
+            const { data: ingredientData } = await supabase
+              .from('Ingredient')
+              .select('currentStock')
+              .eq('ingredientID', recipeIng.ingredientID)
+              .single();
+            if (!ingredientData || ingredientData.currentStock < (recipeIng.quantityRequired ?? 1)) {
+              anyOutOfStock = true;
+              break;
+            }
+          }
+        }
+        await supabase
+          .from('MenuItem')
+          .update({ isAvailable: !anyOutOfStock })
+          .eq('menuItemID', menu.menuItemID);
+      }
+    }
+    syncMenuAvailability();
+  }, []);
 
   if (loading) {
     return (
@@ -745,7 +856,7 @@ export default function OrderPage() {
                     disabled={!item.isAvailable}
                     className={[
                       'group relative flex flex-col rounded-2xl bg-white border shadow-sm overflow-hidden text-left transition',
-                      'hover:-translate-y-[2px] hover:shadow-lg',
+                      'hover:-translate-y-[2px hover:shadow-lg',
                       item.isAvailable ? 'border-gray-100' : 'border-gray-100 opacity-55 grayscale',
                     ].join(' ')}
                   >
@@ -844,7 +955,7 @@ export default function OrderPage() {
         </div>
 
         {/* RIGHT: CART (Desktop) */}
-        <div className="hidden lg:block w-[420px] border-l shadow-2xl z-10">
+        <div className="hidden lg:block w-420px border-l shadow-2xl z-10">
           <CartPanel
             cart={cart}
             cartCount={cartCount}
@@ -871,7 +982,7 @@ export default function OrderPage() {
         {showCartMobile && (
           <div className="lg:hidden fixed inset-0 z-50">
             <div className="absolute inset-0 bg-black/40" onClick={() => setShowCartMobile(false)} />
-            <div className="absolute right-0 top-0 h-full w-[92%] max-w-[420px] shadow-2xl">
+            <div className="absolute right-0 top-0 h-full w-[92%] max-w-420px shadow-2xl">
               <CartPanel
                 compact
                 cart={cart}
