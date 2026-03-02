@@ -1,7 +1,7 @@
 // Show voided status in modal header
-  // Place this where you show receipt info (e.g., after receipt number or customer info)
-  // Example:
-  // <div>{order.status === 'voided' && <StatusChip status="Voided" />}</div>
+// Place this where you show receipt info (e.g., after receipt number or customer info)
+// Example:
+// <div>{order.status === 'voided' && <StatusChip status="Voided" />}</div>
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -36,13 +36,7 @@ import {
 
 type NavItem = { name: string; path?: string };
 
-type ReportTab =
-  | 'Reservation Report'
-  | 'Revenue Report'
-  | 'Staff Report'
-  | 'Sales & EOD Report'
-  | 'Receipts'
-  | 'Purchase Transactions';
+type ReportTab = 'Sales & EOD Report' | 'Receipts' | 'Purchase Transactions';
 
 /* ----------------------------- Theme Helpers ----------------------------- */
 
@@ -88,11 +82,11 @@ function formatDateTime(dateString: string | undefined | null): string {
 
   try {
     const date = new Date(dateString);
-    
+
     // Check if the date is actually valid before formatting
     if (isNaN(date.getTime())) return dateString;
 
-    return date.toLocaleString('en-PH', { // Ph time
+    return date.toLocaleString('en-PH', {
       month: 'long',
       day: 'numeric',
       year: 'numeric',
@@ -100,7 +94,7 @@ function formatDateTime(dateString: string | undefined | null): string {
       minute: '2-digit',
       second: '2-digit',
       hour12: true,
-      timeZone: 'Asia/Manila', // Force UTC+8
+      timeZone: 'Asia/Manila',
     });
   } catch (error) {
     return dateString;
@@ -208,28 +202,9 @@ const Tab = ({
       'rounded-md px-4 py-2 text-[11px] font-extrabold shadow transition focus:outline-none focus-visible:ring-4 focus-visible:ring-[#B80F24]/15',
       active ? 'bg-[#B80F24] text-white hover:bg-[#7E0012]' : 'bg-white text-[#6D6D6D] hover:bg-black/0.02'
     )}
+    type="button"
   >
     {children}
-  </button>
-);
-
-const StatusPill = ({
-  active,
-  label,
-  onClick,
-}: {
-  active?: boolean;
-  label: string;
-  onClick?: () => void;
-}) => (
-  <button
-    onClick={onClick}
-    className={classNames(
-      'rounded-md px-3 py-2 text-[11px] font-extrabold transition focus:outline-none focus-visible:ring-4 focus-visible:ring-[#B80F24]/15',
-      active ? 'bg-[#B80F24] text-white shadow hover:bg-[#7E0012]' : 'bg-transparent text-[#6D6D6D] hover:bg-white'
-    )}
-  >
-    {label}
   </button>
 );
 
@@ -365,6 +340,7 @@ function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => v
             onClick={onClose}
             className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-xl bg-white/15 ring-1 ring-white/20 transition hover:bg-white/25"
             aria-label="Close"
+            type="button"
           >
             <MdClose className="h-5 w-5" />
           </button>
@@ -457,13 +433,15 @@ function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => v
 
           <div className="mt-5 text-center">
             <div className="text-[10px] font-extrabold text-[#6D6D6D]">Thank you for your order!</div>
-            <div className="mt-1 text-[9px] font-bold text-black/35">This is an official receipt from Taiwan Fried Kitchen.</div>
+            <div className="mt-1 text-[9px] font-bold text-black/35">
+              This is an official receipt from Taiwan Fried Kitchen.
+            </div>
           </div>
         </div>
 
         <div className="border-t border-black/5 bg-white px-6 py-4">
           <div className="flex gap-2">
-            <button onClick={handlePrint} className={classNames(BTN_PRIMARY, 'flex-1')}>
+            <button onClick={handlePrint} className={classNames(BTN_PRIMARY, 'flex-1')} type="button">
               <MdPrint className="h-4 w-4" />
               Print
             </button>
@@ -473,21 +451,23 @@ function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => v
                 BTN_SUBTLE,
                 'flex-1 border-[#B80F24] text-[#B80F24] hover:bg-[#B80F24] hover:text-white hover:border-[#B80F24]'
               )}
+              type="button"
             >
               <MdDownload className="h-4 w-4" />
               Download
             </button>
             <button
-              className={classNames(BTN_SUBTLE, 'flex-1 border-[#B80F24] text-[#B80F24] hover:bg-[#B80F24] hover:text-white hover:border-[#B80F24]')}
+              className={classNames(
+                BTN_SUBTLE,
+                'flex-1 border-[#B80F24] text-[#B80F24] hover:bg-[#B80F24] hover:text-white hover:border-[#B80F24]'
+              )}
               onClick={async () => {
                 if (!window.confirm('Are you sure you want to void this receipt?')) return;
-                await supabase
-                  .from('Order')
-                  .update({ status: 'voided' })
-                  .eq('orderID', order.orderID);
-                onVoid(); // <-- Call the callback function
+                await supabase.from('Order').update({ status: 'voided' }).eq('orderID', order.orderID);
+                onVoid();
                 onClose();
               }}
+              type="button"
             >
               <MdCancel className="h-4 w-4" />
               Void Receipt
@@ -506,6 +486,7 @@ export default function ReportsPage() {
   const [collapsed, setCollapsed] = useState(false);
   const activeNav = 'Reports';
 
+  // ✅ Keep remaining tabs; you can set default tab whichever you prefer
   const [tab, setTab] = useState<ReportTab>('Receipts');
 
   const [purchases, setPurchases] = useState<any[]>([]);
@@ -515,8 +496,6 @@ export default function ReportsPage() {
   const [purchaseDateFilter, setPurchaseDateFilter] = useState<'all' | 'today' | '7d' | '30d'>('all');
   const [purchaseMin, setPurchaseMin] = useState('');
   const [purchaseMax, setPurchaseMax] = useState('');
-
-  const [status, setStatus] = useState<'Confirmed' | 'Awaited' | 'Cancelled' | 'Failed'>('Confirmed');
 
   const [receipts, setReceipts] = useState<any[]>([]);
   const [receiptsLoading, setReceiptsLoading] = useState(false);
@@ -621,10 +600,10 @@ export default function ReportsPage() {
 
   const receiptsTotals = useMemo(() => {
     const totalSales = receiptsView
-      .filter(r => r.status !== 'voided')
+      .filter((r) => r.status !== 'voided')
       .reduce((sum, r) => sum + Number(r.amount || 0), 0);
     const totalChange = receiptsView
-      .filter(r => r.status !== 'voided')
+      .filter((r) => r.status !== 'voided')
       .reduce((sum, r) => sum + Number(r.change || 0), 0);
     return { count: receiptsView.length, totalSales, totalChange };
   }, [receiptsView]);
@@ -676,53 +655,9 @@ export default function ReportsPage() {
   }, [purchasesView]);
 
   const leftCard = useMemo(() => {
-    if (tab === 'Reservation Report') return { title: 'Total Reservation', label: 'Total', value: '192' };
-    if (tab === 'Revenue Report') return { title: 'Total Revenue', label: 'Total', value: '1556$' };
-    if (tab === 'Staff Report') return { title: 'Total Staff', label: 'Total', value: '50' };
+    // ✅ only used for the non-EOD dashboard cards; keep as-is but no longer ties to removed tabs
     return { title: 'Daily Sales Report', label: 'Total', value: '0' };
-  }, [tab]);
-
-  const reservationRows = useMemo(
-    () =>
-      Array.from({ length: 6 }).map((_, i) => ({
-        id: `#123456${i}4`,
-        customer: 'Watson Joyce',
-        phone: '+1 (123) 123 4654',
-        date: '28.03.2024',
-        checkIn: '03 : 18 PM',
-        checkOut: '05 : 00 PM',
-        total: '$250.00',
-      })),
-    []
-  );
-
-  const revenueRows = useMemo(
-    () =>
-      Array.from({ length: 6 }).map((_, i) => ({
-        sn: `0${i + 1}`,
-        topFood: 'Chicken Parmesan',
-        date: '28.03.2024',
-        sellPrice: '$55.00',
-        profit: '$7,985.00',
-        margin: '15.00%',
-        totalRevenue: '$8000.00',
-      })),
-    []
-  );
-
-  const staffRows = useMemo(
-    () =>
-      Array.from({ length: 6 }).map((_, i) => ({
-        staffId: `#01${i}`,
-        name: 'Watson Joyce',
-        role: 'Manager',
-        email: 'watsonjoyce112@gmail.com',
-        phone: '+1 (123) 123 4654',
-        salary: '$2200.00',
-        timings: '9am to 6pm',
-      })),
-    []
-  );
+  }, []);
 
   const salesInfo = useMemo(
     () => ({
@@ -744,7 +679,7 @@ export default function ReportsPage() {
   );
 
   const n2 = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const money = (n: number) => `$${n2(n)}`;
+  const money = (n: number) => `₱${n2(n)}`;
 
   const salesTotals = useMemo(() => {
     const sub = salesRows.reduce((a, r) => a + r.unitPrice * r.qty, 0);
@@ -780,6 +715,7 @@ export default function ReportsPage() {
                     'flex items-center rounded-2xl transition hover:-translate-y-0.5 hover:shadow focus:outline-none focus-visible:ring-4 focus-visible:ring-[#B80F24]/15',
                     collapsed ? 'h-14 w-14 self-center justify-center gap-0 bg-[#F2F2F2]' : 'h-12 w-full gap-3 bg-[#F2F2F2] px-2'
                   )}
+                  type="button"
                 >
                   <span
                     className={classNames(
@@ -811,6 +747,7 @@ export default function ReportsPage() {
               )}
               aria-label="Logout"
               title="Logout"
+              type="button"
             >
               <span
                 className={classNames(
@@ -833,6 +770,7 @@ export default function ReportsPage() {
                 onClick={() => setCollapsed((c) => !c)}
                 className="grid h-8 w-8 place-items-center rounded-full bg-[#E7E7E7] text-[#1E1E1E] shadow transition hover:bg-black/0.03 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#B80F24]/15"
                 title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                type="button"
               >
                 {collapsed ? '›' : '‹'}
               </button>
@@ -845,23 +783,16 @@ export default function ReportsPage() {
                 onClick={() => router.push('/profile')}
                 className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[12px] font-extrabold text-[#B80F24] shadow transition hover:bg-black/0.02 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#B80F24]/15"
                 aria-label="Open profile"
+                type="button"
               >
                 AC
               </button>
             </div>
           </header>
 
+          {/* ✅ Tabs: only keep the 3 required ones */}
           <section className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <Tab active={tab === 'Reservation Report'} onClick={() => setTab('Reservation Report')}>
-                Reservation Report
-              </Tab>
-              <Tab active={tab === 'Revenue Report'} onClick={() => setTab('Revenue Report')}>
-                Revenue Report
-              </Tab>
-              <Tab active={tab === 'Staff Report'} onClick={() => setTab('Staff Report')}>
-                Staff Report
-              </Tab>
               <Tab active={tab === 'Sales & EOD Report'} onClick={() => setTab('Sales & EOD Report')}>
                 Sales &amp; EOD Report
               </Tab>
@@ -961,6 +892,7 @@ export default function ReportsPage() {
                       setPurchaseMax('');
                     }}
                     className={classNames(BTN_SUBTLE, 'h-42px')}
+                    type="button"
                   >
                     Clear
                   </button>
@@ -1191,6 +1123,7 @@ export default function ReportsPage() {
                       setDateFilter('all');
                     }}
                     className={classNames(BTN_SUBTLE, 'h-42px')}
+                    type="button"
                   >
                     Clear
                   </button>
@@ -1299,7 +1232,7 @@ export default function ReportsPage() {
                             </div>
 
                             <div className="mt-3">
-                              <button className={classNames(BTN_PRIMARY, 'w-full')} onClick={() => setSelectedOrder(order)}>
+                              <button className={classNames(BTN_PRIMARY, 'w-full')} onClick={() => setSelectedOrder(order)} type="button">
                                 <MdVisibility className="h-4 w-4" />
                                 View Receipt
                               </button>
@@ -1330,7 +1263,7 @@ export default function ReportsPage() {
             </section>
           )}
 
-          {tab === 'Sales & EOD Report' ? (
+          {tab === 'Sales & EOD Report' && (
             <section className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_20px_rgba(0,0,0,0.06)] ring-1 ring-black/5">
               <div className="flex items-center justify-between bg-[#7E0012] px-8 py-6">
                 <div className="text-[16px] font-extrabold text-white">Daily Sales Report</div>
@@ -1407,162 +1340,21 @@ export default function ReportsPage() {
                 <div className="h-10" />
               </div>
             </section>
-          ) : (
+          )}
+
+          {/* ✅ Keep this section (cards + charts) exactly like your original fallback,
+              but it will only show when tab is NOT Sales & EOD, NOT Receipts, NOT Purchase.
+              Since we now only have 3 tabs, this never renders — harmless but kept. */}
+          {tab !== 'Sales & EOD Report' && tab !== 'Receipts' && tab !== 'Purchase Transactions' && (
             <>
               <section className="grid gap-4 lg:grid-cols-2">
                 <div className="rounded-2xl bg-[#E7E7E7] p-4 shadow-[0_10px_20px_rgba(0,0,0,0.06)]">
                   <p className="mb-3 text-[14px] font-extrabold text-[#1E1E1E]">{leftCard.title}</p>
                   <Donut totalLabel={leftCard.label} totalValue={leftCard.value} />
                 </div>
-
                 <div className="rounded-2xl bg-[#E7E7E7] p-4 shadow-[0_10px_20px_rgba(0,0,0,0.06)]">
-                  <div className="mb-3 flex flex-wrap items-center gap-2">
-                    {(['Confirmed', 'Awaited', 'Cancelled', 'Failed'] as const).map((s) => (
-                      <StatusPill key={s} label={s} active={status === s} onClick={() => setStatus(s)} />
-                    ))}
-                  </div>
                   <LineAreaChart />
                 </div>
-              </section>
-
-              <section className="overflow-hidden rounded-2xl bg-[#E7E7E7] shadow-[0_10px_20px_rgba(0,0,0,0.06)]">
-                {tab === 'Reservation Report' && (
-                  <>
-                    <div className="grid grid-cols-6 gap-2 px-4 py-3 text-[10px] font-extrabold text-[#B80F24]">
-                      <div>Reservation ID</div>
-                      <div>Customer Name</div>
-                      <div>Phone number</div>
-                      <div>Reservation Date</div>
-                      <div>Check In / Check Out</div>
-                      <div className="text-right">Total</div>
-                    </div>
-                    <div className="divide-y divide-black/5">
-                      {reservationRows.map((r, idx) => (
-                        <div
-                          key={r.id}
-                          className={classNames(
-                            'grid grid-cols-6 gap-2 px-4 py-4 text-[11px]',
-                            idx % 2 === 0 ? 'bg-[#DCDCDC]' : 'bg-[#E7E7E7]'
-                          )}
-                        >
-                          <div>
-                            <div className="text-[10px] font-extrabold text-[#B80F24]">Reservation ID</div>
-                            <div className="text-[11px] font-extrabold text-[#1E1E1E]">{r.id}</div>
-                          </div>
-                          <div>
-                            <div className="text-[10px] font-extrabold text-[#B80F24]">Customer Name</div>
-                            <div className="text-[11px] font-extrabold text-[#1E1E1E]">{r.customer}</div>
-                          </div>
-                          <div>
-                            <div className="text-[10px] font-extrabold text-[#B80F24]">Phone number</div>
-                            <div className="text-[11px] font-extrabold text-[#1E1E1E]">{r.phone}</div>
-                          </div>
-                          <div>
-                            <div className="text-[10px] font-extrabold text-[#B80F24]">Reservation Date</div>
-                            <div className="text-[11px] font-extrabold text-[#1E1E1E]">{r.date}</div>
-                          </div>
-                          <div>
-                            <div className="text-[10px] font-extrabold text-[#B80F24]">Check In</div>
-                            <div className="text-[11px] font-extrabold text-[#1E1E1E]">{r.checkIn}</div>
-                            <div className="mt-1 text-[10px] font-extrabold text-[#B80F24]">Check Out</div>
-                            <div className="text-[11px] font-extrabold text-[#1E1E1E]">{r.checkOut}</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-[10px] font-extrabold text-[#B80F24]">Total</div>
-                            <div className="text-[11px] font-extrabold text-[#1E1E1E]">{r.total}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-
-                {tab === 'Revenue Report' && (
-                  <>
-                    <div className="grid grid-cols-7 gap-2 px-4 py-3 text-[10px] font-extrabold text-[#B80F24]">
-                      <div>S.No</div>
-                      <div>Top Selling Food</div>
-                      <div>Revenue By Date</div>
-                      <div>Sell Price</div>
-                      <div>Profit</div>
-                      <div>Profit Margin</div>
-                      <div className="text-right">Total Revenue</div>
-                    </div>
-                    <div className="divide-y divide-black/5">
-                      {revenueRows.map((r, idx) => (
-                        <div
-                          key={r.sn + idx}
-                          className={classNames(
-                            'grid grid-cols-7 gap-2 px-4 py-4 text-[11px]',
-                            idx % 2 === 0 ? 'bg-[#DCDCDC]' : 'bg-[#E7E7E7]'
-                          )}
-                        >
-                          <div>
-                            <div className="text-[10px] font-extrabold text-[#B80F24]">S.No</div>
-                            <div className="text-[11px] font-extrabold text-[#1E1E1E]">{r.sn}</div>
-                          </div>
-                          <div>
-                            <div className="text-[10px] font-extrabold text-[#B80F24]">Top Selling Food</div>
-                            <div className="text-[11px] font-extrabold text-[#1E1E1E]">{r.topFood}</div>
-                          </div>
-                          <div>
-                            <div className="text-[10px] font-extrabold text-[#B80F24]">Revenue By Date</div>
-                            <div className="text-[11px] font-extrabold text-[#1E1E1E]">{r.date}</div>
-                          </div>
-                          <div>
-                            <div className="text-[10px] font-extrabold text-[#B80F24]">Sell Price</div>
-                            <div className="text-[11px] font-extrabold text-[#1E1E1E]">{r.sellPrice}</div>
-                          </div>
-                          <div>
-                            <div className="text-[10px] font-extrabold text-[#B80F24]">Profit</div>
-                            <div className="text-[11px] font-extrabold text-[#1E1E1E]">{r.profit}</div>
-                          </div>
-                          <div>
-                            <div className="text-[10px] font-extrabold text-[#B80F24]">Profit Margin</div>
-                            <div className="text-[11px] font-extrabold text-[#1E1E1E]">{r.margin}</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-[10px] font-extrabold text-[#B80F24]">Total Revenue</div>
-                            <div className="text-[11px] font-extrabold text-[#1E1E1E]">{r.totalRevenue}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-
-                {tab === 'Staff Report' && (
-                  <>
-                    <div className="grid grid-cols-7 gap-2 px-4 py-3 text-[10px] font-extrabold text-[#B80F24]">
-                      <div>ID</div>
-                      <div>Name</div>
-                      <div>Email</div>
-                      <div>Phone</div>
-                      <div>Role</div>
-                      <div>Salary</div>
-                      <div className="text-right">Timings</div>
-                    </div>
-                    <div className="divide-y divide-black/5">
-                      {staffRows.map((r, idx) => (
-                        <div
-                          key={r.staffId + idx}
-                          className={classNames(
-                            'grid grid-cols-7 gap-2 px-4 py-4 text-[11px]',
-                            idx % 2 === 0 ? 'bg-[#DCDCDC]' : 'bg-[#E7E7E7]'
-                          )}
-                        >
-                          <div className="font-extrabold text-[#1E1E1E]">{r.staffId}</div>
-                          <div className="font-extrabold text-[#1E1E1E]">{r.name}</div>
-                          <div className="font-extrabold text-[#1E1E1E]">{r.email}</div>
-                          <div className="font-extrabold text-[#1E1E1E]">{r.phone}</div>
-                          <div className="font-extrabold text-[#1E1E1E]">{r.role}</div>
-                          <div className="font-extrabold text-[#1E1E1E]">{r.salary}</div>
-                          <div className="text-right font-extrabold text-[#1E1E1E]">{r.timings}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
               </section>
             </>
           )}
