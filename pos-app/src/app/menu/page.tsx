@@ -738,7 +738,6 @@ export default function MenuPage() {
                       <th className="p-3">Product</th>
                       <th className="p-3">Product Name</th>
                       <th className="p-3">Item ID</th>
-                      <th className="p-3">Stock</th>
                       <th className="p-3">Category</th>
                       <th className="p-3">Price</th>
                       <th className="p-3">Availability</th>
@@ -812,11 +811,6 @@ export default function MenuPage() {
                             <span className="text-sm font-extrabold text-black/65">
                               #{item.menuItemID.toString().padStart(8, '0')}
                             </span>
-                          </td>
-
-                          <td className="p-3">
-                            {/* If you have a real stock column later, wire it here */}
-                            <span className="text-sm font-extrabold text-black/65">119 Items</span>
                           </td>
 
                           <td className="p-3">
