@@ -1,7 +1,3 @@
-// Show voided status in modal header
-// Place this where you show receipt info (e.g., after receipt number or customer info)
-// Example:
-// <div>{order.status === 'voided' && <StatusChip status="Voided" />}</div>
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -30,6 +26,9 @@ import {
   MdCheckCircle,
   MdHourglassTop,
   MdCancel,
+  MdChecklist,
+  MdTrendingUp,
+  MdWarningAmber,
 } from 'react-icons/md';
 
 /* ----------------------------- Types ----------------------------- */
@@ -37,6 +36,31 @@ import {
 type NavItem = { name: string; path?: string };
 
 type ReportTab = 'Sales & EOD Report' | 'Receipts' | 'Purchase Transactions';
+
+type InventoryAuditRow = {
+  auditID?: number;
+  ingredientID: number;
+  systemStock: number;
+  physicalStock: number;
+  variance: number;
+  recordedBy?: string | null;
+  createdAt?: string;
+  Ingredient?: {
+    name: string;
+    unit: string;
+  } | null;
+};
+
+type OrderRow = {
+  orderID: number;
+  amount: number;
+  change: number;
+  amountPaid?: number;
+  paymentmethod?: string;
+  status?: string;
+  createdAt?: string;
+  items?: any[];
+};
 
 /* ----------------------------- Theme Helpers ----------------------------- */
 
@@ -77,13 +101,15 @@ function fmtMoneyPhp(n: any) {
   return `₱${v.toFixed(2)}`;
 }
 
+function fmtQty(n: any) {
+  return Number(n || 0).toFixed(2);
+}
+
 function formatDateTime(dateString: string | undefined | null): string {
   if (!dateString) return '---';
 
   try {
     const date = new Date(dateString);
-
-    // Check if the date is actually valid before formatting
     if (isNaN(date.getTime())) return dateString;
 
     return date.toLocaleString('en-PH', {
@@ -99,6 +125,31 @@ function formatDateTime(dateString: string | undefined | null): string {
   } catch (error) {
     return dateString;
   }
+}
+
+function formatDateOnly(dateString: string | undefined | null): string {
+  if (!dateString) return '---';
+
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
+
+    return date.toLocaleDateString('en-PH', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'Asia/Manila',
+    });
+  } catch {
+    return dateString;
+  }
+}
+
+function toLocalDateInput(date: Date) {
+  const y = date.getFullYear();
+  const m = `${date.getMonth() + 1}`.padStart(2, '0');
+  const d = `${date.getDate()}`.padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 function paymentMeta(pm?: string) {
@@ -315,7 +366,7 @@ function LineAreaChart() {
   );
 }
 
-/* ----------------------------- Receipt Modal (enhanced) ----------------------------- */
+/* ----------------------------- Receipt Modal ----------------------------- */
 
 function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => void; onVoid: () => void }) {
   const pm = paymentMeta(order?.paymentmethod);
@@ -486,7 +537,6 @@ export default function ReportsPage() {
   const [collapsed, setCollapsed] = useState(false);
   const activeNav = 'Reports';
 
-  // ✅ Keep remaining tabs; you can set default tab whichever you prefer
   const [tab, setTab] = useState<ReportTab>('Receipts');
 
   const [purchases, setPurchases] = useState<any[]>([]);
@@ -497,7 +547,7 @@ export default function ReportsPage() {
   const [purchaseMin, setPurchaseMin] = useState('');
   const [purchaseMax, setPurchaseMax] = useState('');
 
-  const [receipts, setReceipts] = useState<any[]>([]);
+  const [receipts, setReceipts] = useState<OrderRow[]>([]);
   const [receiptsLoading, setReceiptsLoading] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
 
@@ -505,11 +555,27 @@ export default function ReportsPage() {
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'cash' | 'gcash' | 'bank'>('all');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | '7d' | '30d'>('all');
 
+  const [eodRows, setEodRows] = useState<InventoryAuditRow[]>([]);
+  const [eodLoading, setEodLoading] = useState(false);
+  const [eodDate, setEodDate] = useState<string>(toLocalDateInput(new Date()));
+  const [eodQuery, setEodQuery] = useState('');
+
   useEffect(() => {
     if (tab === 'Receipts') fetchReceipts();
     if (tab === 'Purchase Transactions') fetchPurchases();
+    if (tab === 'Sales & EOD Report') {
+      fetchReceipts();
+      fetchEodAudit();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
+
+  useEffect(() => {
+    if (tab === 'Sales & EOD Report') {
+      fetchEodAudit();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eodDate]);
 
   const fetchPurchases = async () => {
     setPurchasesLoading(true);
@@ -563,6 +629,40 @@ export default function ReportsPage() {
     }
   };
 
+  const fetchEodAudit = async () => {
+    setEodLoading(true);
+
+    try {
+      const start = new Date(`${eodDate}T00:00:00`);
+      const end = new Date(`${eodDate}T23:59:59.999`);
+
+      const { data, error } = await supabase
+        .from('InventoryAudit')
+        .select(`
+          auditID,
+          ingredientID,
+          systemStock,
+          physicalStock,
+          variance,
+          recordedBy,
+          createdAt,
+          Ingredient(name, unit)
+        `)
+        .gte('createdAt', start.toISOString())
+        .lte('createdAt', end.toISOString())
+        .order('createdAt', { ascending: false });
+
+      if (error) throw error;
+
+      setEodRows((data || []) as InventoryAuditRow[]);
+    } catch (err: any) {
+      console.error('Error fetching EOD audit:', err);
+      alert(`Failed to fetch EOD audit: ${err.message || 'Unknown error'}`);
+    } finally {
+      setEodLoading(false);
+    }
+  };
+
   const handleLogout = async () => {
     await logout();
   };
@@ -574,7 +674,7 @@ export default function ReportsPage() {
     const daysAgo = (d: number) => new Date(now.getTime() - d * 24 * 60 * 60 * 1000);
 
     return (receipts || []).filter((o) => {
-      const created = new Date(o.createdAt);
+      const created = new Date(o.createdAt || '');
 
       const matchQuery =
         !q ||
@@ -654,39 +754,73 @@ export default function ReportsPage() {
     return { count: purchasesView.length, totalCost, totalItems };
   }, [purchasesView]);
 
+  const eodRowsView = useMemo(() => {
+    const q = eodQuery.trim().toLowerCase();
+
+    return (eodRows || []).filter((row) => {
+      const name = row.Ingredient?.name?.toLowerCase() || '';
+      const unit = row.Ingredient?.unit?.toLowerCase() || '';
+      const matchQuery =
+        !q ||
+        name.includes(q) ||
+        unit.includes(q) ||
+        String(row.ingredientID).includes(q) ||
+        String(row.systemStock).includes(q) ||
+        String(row.physicalStock).includes(q) ||
+        String(row.variance).includes(q);
+
+      return matchQuery;
+    });
+  }, [eodRows, eodQuery]);
+
+  const salesEodOrdersForDate = useMemo(() => {
+    return (receipts || []).filter((order) => {
+      if (!order.createdAt) return false;
+      const localDate = toLocalDateInput(new Date(order.createdAt));
+      return localDate === eodDate && order.status !== 'voided';
+    });
+  }, [receipts, eodDate]);
+
+  const salesEodSummary = useMemo(() => {
+    const totalSales = salesEodOrdersForDate.reduce((sum, order) => sum + Number(order.amount || 0), 0);
+    const totalChange = salesEodOrdersForDate.reduce((sum, order) => sum + Number(order.change || 0), 0);
+    const totalOrders = salesEodOrdersForDate.length;
+
+    const totalItemsSold = salesEodOrdersForDate.reduce((sum, order) => {
+      return sum + (order.items || []).reduce((itemSum: number, it: any) => itemSum + Number(it.quantity || 0), 0);
+    }, 0);
+
+    const totalAuditedItems = eodRowsView.length;
+    const totalSystemStock = eodRowsView.reduce((sum, row) => sum + Number(row.systemStock || 0), 0);
+    const totalPhysicalStock = eodRowsView.reduce((sum, row) => sum + Number(row.physicalStock || 0), 0);
+
+    const totalUsed = eodRowsView.reduce((sum, row) => {
+      const used = Number(row.systemStock || 0) - Number(row.physicalStock || 0);
+      return used > 0 ? sum + used : sum;
+    }, 0);
+
+    const totalVariance = eodRowsView.reduce((sum, row) => sum + Number(row.variance || 0), 0);
+    const overages = eodRowsView.filter((row) => Number(row.variance || 0) > 0).length;
+    const shortages = eodRowsView.filter((row) => Number(row.variance || 0) < 0).length;
+
+    return {
+      totalSales,
+      totalChange,
+      totalOrders,
+      totalItemsSold,
+      totalAuditedItems,
+      totalSystemStock,
+      totalPhysicalStock,
+      totalUsed,
+      totalVariance,
+      overages,
+      shortages,
+    };
+  }, [salesEodOrdersForDate, eodRowsView]);
+
   const leftCard = useMemo(() => {
-    // ✅ only used for the non-EOD dashboard cards; keep as-is but no longer ties to removed tabs
     return { title: 'Daily Sales Report', label: 'Total', value: '0' };
   }, []);
-
-  const salesInfo = useMemo(
-    () => ({
-      salesperson: 'John Doe',
-      date: 'November 10, 2025',
-      taxPct: 0.08,
-    }),
-    []
-  );
-
-  const salesRows = useMemo(
-    () => [
-      { code: '001', item: 'ITEM A', unitPrice: 999.99, qty: 2 },
-      { code: '002', item: 'ITEM B', unitPrice: 599.99, qty: 1 },
-      { code: '003', item: 'ITEM C', unitPrice: 149.99, qty: 3 },
-      { code: '004', item: 'ITEM D', unitPrice: 79.99, qty: 4 },
-    ],
-    []
-  );
-
-  const n2 = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const money = (n: number) => `₱${n2(n)}`;
-
-  const salesTotals = useMemo(() => {
-    const sub = salesRows.reduce((a, r) => a + r.unitPrice * r.qty, 0);
-    const tax = sub * salesInfo.taxPct;
-    const total = sub + tax;
-    return { sub, tax, total };
-  }, [salesRows, salesInfo.taxPct]);
 
   return (
     <div className="min-h-screen bg-[#F3F3F3] text-[#1E1E1E]">
@@ -790,7 +924,6 @@ export default function ReportsPage() {
             </div>
           </header>
 
-          {/* ✅ Tabs: only keep the 3 required ones */}
           <section className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <Tab active={tab === 'Sales & EOD Report'} onClick={() => setTab('Sales & EOD Report')}>
@@ -853,7 +986,6 @@ export default function ReportsPage() {
                       <option value="7d">Last 7 days</option>
                       <option value="30d">Last 30 days</option>
                     </select>
-                    <MdArrowDropDown className="pointer-events-none absolute right-3 top-38px text-[#6D6D6D]" size={22} />
                   </div>
 
                   <div>
@@ -891,22 +1023,11 @@ export default function ReportsPage() {
                       setPurchaseMin('');
                       setPurchaseMax('');
                     }}
-                    className={classNames(BTN_SUBTLE, 'h-42px')}
+                    className={BTN_SUBTLE}
                     type="button"
                   >
                     Clear
                   </button>
-                </div>
-
-                <div className="mt-3 flex md:hidden gap-2">
-                  <div className="flex-1 rounded-xl bg-white px-3 py-2 ring-1 ring-black/5">
-                    <div className="text-[10px] font-extrabold text-[#6D6D6D]">Purchases</div>
-                    <div className="text-[12px] font-extrabold text-[#1E1E1E]">{purchasesTotals.count}</div>
-                  </div>
-                  <div className="flex-1 rounded-xl bg-white px-3 py-2 ring-1 ring-black/5">
-                    <div className="text-[10px] font-extrabold text-[#6D6D6D]">Total Cost</div>
-                    <div className="text-[12px] font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(purchasesTotals.totalCost)}</div>
-                  </div>
                 </div>
               </div>
 
@@ -919,7 +1040,6 @@ export default function ReportsPage() {
                 </div>
               ) : (
                 <>
-                  {/* ✅ Desktop header row (CENTER Total Cost + Items) */}
                   <div className="hidden md:grid grid-cols-[160px_1.1fr_160px_1.6fr] gap-3 px-6 py-3 text-[10px] font-extrabold text-[#6D6D6D] bg-white">
                     <div>Purchase</div>
                     <div>Date</div>
@@ -937,8 +1057,7 @@ export default function ReportsPage() {
                         .join(', ');
 
                       return (
-                        <div key={purchase.purchaseID} className={classNames('px-6 py-4 bg-white hover:bg-[#FAFAFA] transition')}>
-                          {/* ✅ Desktop row (CENTER Total Cost + Items) */}
+                        <div key={purchase.purchaseID} className="px-6 py-4 bg-white hover:bg-[#FAFAFA] transition">
                           <div className="hidden md:grid grid-cols-[160px_1.1fr_160px_1.6fr] gap-3 items-start">
                             <div>
                               <div className="text-[10px] font-extrabold text-[#B80F24]">Purchase ID</div>
@@ -985,66 +1104,9 @@ export default function ReportsPage() {
                               )}
                             </div>
                           </div>
-
-                          {/* Mobile */}
-                          <div className="md:hidden">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <div className="text-[10px] font-extrabold text-[#B80F24]">Purchase #{purchase.purchaseID}</div>
-                                <div className="mt-1 text-[11px] font-bold text-[#6D6D6D]">{formatDateTime(purchase.createdAt)}</div>
-                                <div className="mt-2 flex items-center gap-2">
-                                  <StatusChip status={purchase.status === 'voided' ? 'Voided' : 'Completed'} />
-                                  <span className="text-[10px] font-extrabold text-[#6D6D6D]">
-                                    {items.length} item{items.length !== 1 ? 's' : ''}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div className="text-right">
-                                <div className="text-[10px] font-extrabold text-[#B80F24]">Total</div>
-                                <div className="text-[13px] font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(purchase.totalCost || 0)}</div>
-                                <div className="mt-2 text-[10px] font-extrabold text-[#B80F24]">Change</div>
-                                <div className="text-[12px] font-extrabold text-green-600">{fmtMoneyPhp(purchase.change)}</div>
-                              </div>
-                            </div>
-
-                            <div className="mt-3 rounded-2xl bg-white ring-1 ring-black/5 p-3">
-                              <div className="text-[10px] font-extrabold text-[#B80F24] mb-2">Items</div>
-                              {items.length > 0 ? (
-                                <ul className="list-disc ml-4 text-[11px]">
-                                  {items.map((item: any, i: number) => (
-                                    <li key={i} className="mb-1">
-                                      <span className="font-extrabold">{item.Ingredient?.name || 'Unknown'}</span>
-                                      {item.quantity ? ` × ${item.quantity}` : ''}
-                                      {item.Ingredient?.unit ? ` ${item.Ingredient.unit}` : ''}
-                                      {item.cost ? ` @ ${fmtMoneyPhp(item.cost)}` : ''}
-                                    </li>
-                                  ))}
-                                </ul>
-                              ) : (
-                                <div className="text-[11px] font-bold text-[#6D6D6D]">No items</div>
-                              )}
-                            </div>
-                          </div>
                         </div>
                       );
                     })}
-                  </div>
-
-                  <div className="bg-[#F7F7F7] px-6 py-4 border-t border-black/5 flex flex-wrap items-center justify-between gap-3">
-                    <div className="text-[11px] font-bold text-[#6D6D6D]">
-                      Showing <span className="font-extrabold text-[#1E1E1E]">{purchasesView.length}</span> purchase(s)
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-black/5">
-                        <div className="text-[10px] font-extrabold text-[#6D6D6D]">Item Lines</div>
-                        <div className="text-[12px] font-extrabold text-[#1E1E1E]">{purchasesTotals.totalItems}</div>
-                      </div>
-                      <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-black/5">
-                        <div className="text-[10px] font-extrabold text-[#6D6D6D]">Total Cost</div>
-                        <div className="text-[12px] font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(purchasesTotals.totalCost)}</div>
-                      </div>
-                    </div>
                   </div>
                 </>
               )}
@@ -1099,7 +1161,6 @@ export default function ReportsPage() {
                       <option value="gcash">GCash</option>
                       <option value="bank">Bank</option>
                     </select>
-                    <MdArrowDropDown className="pointer-events-none absolute right-3 top-38px text-[#6D6D6D]" size={22} />
                   </div>
 
                   <div className="relative">
@@ -1113,7 +1174,6 @@ export default function ReportsPage() {
                       <option value="7d">Last 7 days</option>
                       <option value="30d">Last 30 days</option>
                     </select>
-                    <MdArrowDropDown className="pointer-events-none absolute right-3 top-38px text-[#6D6D6D]" size={22} />
                   </div>
 
                   <button
@@ -1122,22 +1182,11 @@ export default function ReportsPage() {
                       setPaymentFilter('all');
                       setDateFilter('all');
                     }}
-                    className={classNames(BTN_SUBTLE, 'h-42px')}
+                    className={BTN_SUBTLE}
                     type="button"
                   >
                     Clear
                   </button>
-                </div>
-
-                <div className="mt-3 flex md:hidden gap-2">
-                  <div className="flex-1 rounded-xl bg-white px-3 py-2 ring-1 ring-black/5">
-                    <div className="text-[10px] font-extrabold text-[#6D6D6D]">Receipts</div>
-                    <div className="text-[12px] font-extrabold text-[#1E1E1E]">{receiptsTotals.count}</div>
-                  </div>
-                  <div className="flex-1 rounded-xl bg-white px-3 py-2 ring-1 ring-black/5">
-                    <div className="text-[10px] font-extrabold text-[#6D6D6D]">Total Sales</div>
-                    <div className="text-[12px] font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(receiptsTotals.totalSales)}</div>
-                  </div>
                 </div>
               </div>
 
@@ -1242,109 +1291,314 @@ export default function ReportsPage() {
                       );
                     })}
                   </div>
-
-                  <div className="bg-[#F7F7F7] px-6 py-4 border-t border-black/5 flex flex-wrap items-center justify-between gap-3">
-                    <div className="text-[11px] font-bold text-[#6D6D6D]">
-                      Showing <span className="font-extrabold text-[#1E1E1E]">{receiptsView.length}</span> receipt(s)
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-black/5">
-                        <div className="text-[10px] font-extrabold text-[#6D6D6D]">Total Change</div>
-                        <div className="text-[12px] font-extrabold text-green-600">{fmtMoneyPhp(receiptsTotals.totalChange)}</div>
-                      </div>
-                      <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-black/5">
-                        <div className="text-[10px] font-extrabold text-[#6D6D6D]">Total Sales</div>
-                        <div className="text-[12px] font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(receiptsTotals.totalSales)}</div>
-                      </div>
-                    </div>
-                  </div>
                 </>
               )}
             </section>
           )}
 
           {tab === 'Sales & EOD Report' && (
-            <section className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_20px_rgba(0,0,0,0.06)] ring-1 ring-black/5">
-              <div className="flex items-center justify-between bg-[#7E0012] px-8 py-6">
-                <div className="text-[16px] font-extrabold text-white">Daily Sales Report</div>
+            <section className="space-y-4">
+              <div className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_20px_rgba(0,0,0,0.06)] ring-1 ring-black/5">
+                <div className="flex flex-col gap-4 bg-[#7E0012] px-6 py-5 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <div className="text-[16px] font-extrabold text-white">Sales & EOD Report</div>
+                    <div className="mt-1 text-[11px] font-bold text-white/85">
+                      Connected daily summary from Orders and InventoryAudit
+                    </div>
+                  </div>
 
-                <div className="text-right text-[11px] font-extrabold text-white/90 leading-5">
-                  <div>Salesperson: {salesInfo.salesperson}</div>
-                  <div>Date: {salesInfo.date}</div>
-                </div>
-              </div>
-
-              <div className="px-8 py-6">
-                <div className="grid gap-5 lg:grid-cols-[1fr_330px] items-start">
-                  <div className="rounded-2xl bg-white ring-1 ring-black/10 shadow-sm overflow-hidden">
-                    <div className="grid grid-cols-[90px_1fr_140px_90px_160px_90px_140px_160px] gap-3 px-6 py-4 text-[11px] font-extrabold text-[#6D6D6D] bg-[#FAFAFA] border-b border-black/5">
-                      <div>Code</div>
-                      <div>Item</div>
-                      <div className="text-right">Unit Price</div>
-                      <div className="text-right">Qty</div>
-                      <div className="text-right">Subtotal</div>
-                      <div className="text-right">Tax %</div>
-                      <div className="text-right">Tax</div>
-                      <div className="text-right">Total</div>
+                  <div className="grid gap-3 md:grid-cols-[220px_auto] md:items-end">
+                    <div>
+                      <div className="mb-1 text-[10px] font-extrabold text-white/85">Select Date</div>
+                      <input
+                        type="date"
+                        value={eodDate}
+                        onChange={(e) => setEodDate(e.target.value)}
+                        className="w-full rounded-xl border border-white/20 bg-white px-3 py-2 text-[12px] font-extrabold text-[#1E1E1E] shadow-sm focus:outline-none focus:ring-4 focus:ring-white/20"
+                      />
                     </div>
 
-                    <div className="divide-y divide-black/5">
-                      {salesRows.map((r, i) => {
-                        const subtotal = r.unitPrice * r.qty;
-                        const tax = subtotal * salesInfo.taxPct;
-                        const total = subtotal + tax;
+                    <button
+                      onClick={fetchEodAudit}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2 text-[11px] font-extrabold text-[#7E0012] shadow hover:bg-[#F7F7F7]"
+                      type="button"
+                    >
+                      <MdChecklist className="h-4 w-4" />
+                      Refresh EOD
+                    </button>
+                  </div>
+                </div>
 
-                        return (
-                          <div
-                            key={r.code}
-                            className={classNames(
-                              'grid grid-cols-[90px_1fr_140px_90px_160px_90px_140px_160px] gap-3 px-6 py-5 text-[12px] font-extrabold',
-                              i % 2 === 0 ? 'bg-white' : 'bg-[#FCFCFC]',
-                              'hover:bg-black/0.02 transition'
-                            )}
-                          >
-                            <div className="text-[#1E1E1E]">{r.code}</div>
-                            <div className="text-[#1E1E1E]">{r.item}</div>
-                            <div className="text-right text-[#1E1E1E]">{money(r.unitPrice)}</div>
-                            <div className="text-right text-[#1E1E1E]">{r.qty}</div>
-                            <div className="text-right text-[#1E1E1E]">{money(subtotal)}</div>
-                            <div className="text-right text-[#1E1E1E]">{Math.round(salesInfo.taxPct * 100)}%</div>
-                            <div className="text-right text-[#1E1E1E]">{money(tax)}</div>
-                            <div className="text-right text-[#1E1E1E]">{money(total)}</div>
+                <div className="bg-[#F7F7F7] px-6 py-4 border-b border-black/5">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                    <SummaryCard
+                      title="Total Sales"
+                      value={fmtMoneyPhp(salesEodSummary.totalSales)}
+                      subtitle={`${salesEodSummary.totalOrders} completed order(s)`}
+                      icon={<MdTrendingUp className="h-5 w-5" />}
+                    />
+                    <SummaryCard
+                      title="Items Sold"
+                      value={String(salesEodSummary.totalItemsSold)}
+                      subtitle="Total item quantity from orders"
+                      icon={<MdReceiptLong className="h-5 w-5" />}
+                    />
+                    <SummaryCard
+                      title="Audited Items"
+                      value={String(salesEodSummary.totalAuditedItems)}
+                      subtitle="Rows from InventoryAudit"
+                      icon={<MdChecklist className="h-5 w-5" />}
+                    />
+                    <SummaryCard
+                      title="Total Used"
+                      value={fmtQty(salesEodSummary.totalUsed)}
+                      subtitle="System minus physical"
+                      icon={<MdInventory2 className="h-5 w-5" />}
+                    />
+                    <SummaryCard
+                      title="Variance"
+                      value={fmtQty(salesEodSummary.totalVariance)}
+                      subtitle={`${salesEodSummary.overages} overage(s), ${salesEodSummary.shortages} shortage(s)`}
+                      icon={<MdWarningAmber className="h-5 w-5" />}
+                      danger={salesEodSummary.totalVariance !== 0}
+                    />
+                  </div>
+                </div>
+
+                <div className="px-6 py-5">
+                  <div className="mb-4 grid gap-3 md:grid-cols-[1fr_220px]">
+                    <div className="relative">
+                      <MdSearch className="absolute left-3 top-5 -translate-y-1/2 text-[#6D6D6D]" size={18} />
+                      <input
+                        value={eodQuery}
+                        onChange={(e) => setEodQuery(e.target.value)}
+                        placeholder="Search ingredient, unit, stock, or variance..."
+                        className={classNames(INPUT, 'pl-10')}
+                      />
+                    </div>
+
+                    <div className="rounded-xl bg-[#F7F7F7] px-4 py-3 ring-1 ring-black/5">
+                      <div className="text-[10px] font-extrabold text-[#6D6D6D]">Report Date</div>
+                      <div className="mt-1 text-[13px] font-extrabold text-[#1E1E1E]">
+                        {formatDateOnly(`${eodDate}T00:00:00`)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+                    <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-black/10 shadow-sm">
+                      <div className="grid grid-cols-[1.4fr_0.8fr_0.8fr_0.8fr_0.8fr] gap-3 bg-[#FAFAFA] px-5 py-4 text-[10px] font-extrabold uppercase tracking-wide text-[#6D6D6D] border-b border-black/5">
+                        <div>Ingredient</div>
+                        <div className="text-right">System</div>
+                        <div className="text-right">Physical</div>
+                        <div className="text-right">Used</div>
+                        <div className="text-right">Variance</div>
+                      </div>
+
+                      {eodLoading ? (
+                        <div className="px-6 py-14 text-center text-[12px] font-bold text-[#6D6D6D]">Loading EOD audit data...</div>
+                      ) : eodRowsView.length === 0 ? (
+                        <div className="px-6 py-14 text-center">
+                          <div className="text-[13px] font-extrabold text-[#1E1E1E]">No EOD audit data found</div>
+                          <div className="mt-1 text-[11px] font-bold text-[#6D6D6D]">
+                            No InventoryAudit records were found for this selected date.
                           </div>
-                        );
-                      })}
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-black/5">
+                          {eodRowsView.map((row, index) => {
+                            const system = Number(row.systemStock || 0);
+                            const physical = Number(row.physicalStock || 0);
+                            const used = system - physical;
+                            const variance = Number(row.variance || 0);
+
+                            return (
+                              <div
+                                key={`${row.auditID || row.ingredientID}-${index}`}
+                                className="grid grid-cols-[1.4fr_0.8fr_0.8fr_0.8fr_0.8fr] gap-3 px-5 py-4 text-[12px] font-bold hover:bg-[#FAFAFA]"
+                              >
+                                <div className="min-w-0">
+                                  <div className="truncate font-extrabold text-[#1E1E1E]">
+                                    {row.Ingredient?.name || `Ingredient #${row.ingredientID}`}
+                                  </div>
+                                  <div className="mt-1 text-[10px] text-[#6D6D6D] font-extrabold">
+                                    Unit: {row.Ingredient?.unit || '—'}
+                                  </div>
+                                </div>
+
+                                <div className="text-right text-[#1E1E1E]">{fmtQty(system)}</div>
+                                <div className="text-right text-[#1E1E1E]">{fmtQty(physical)}</div>
+                                <div className={classNames('text-right', used > 0 ? 'text-[#B80F24]' : 'text-[#6D6D6D]')}>
+                                  {fmtQty(used)}
+                                </div>
+                                <div
+                                  className={classNames(
+                                    'text-right font-extrabold',
+                                    variance > 0
+                                      ? 'text-amber-600'
+                                      : variance < 0
+                                      ? 'text-red-600'
+                                      : 'text-[#6D6D6D]'
+                                  )}
+                                >
+                                  {variance > 0 ? '+' : ''}
+                                  {fmtQty(variance)}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="rounded-2xl bg-[#7E0012] p-6 text-white shadow-[0_18px_30px_rgba(0,0,0,0.15)] ring-1 ring-black/10">
+                        <div className="text-[13px] font-extrabold">Daily Sales Snapshot</div>
+
+                        <div className="mt-4 space-y-4 text-[12px] font-extrabold">
+                          <div className="flex items-center justify-between">
+                            <span className="text-white/90">Sales Amount</span>
+                            <span>{fmtMoneyPhp(salesEodSummary.totalSales)}</span>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <span className="text-white/90">Total Change</span>
+                            <span>{fmtMoneyPhp(salesEodSummary.totalChange)}</span>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <span className="text-white/90">Completed Orders</span>
+                            <span>{salesEodSummary.totalOrders}</span>
+                          </div>
+
+                          <div className="mt-4 border-t border-white/20 pt-4 flex items-center justify-between">
+                            <span className="text-white">Items Sold</span>
+                            <span className="text-[16px]">{salesEodSummary.totalItemsSold}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl bg-white p-5 ring-1 ring-black/10 shadow-sm">
+                        <div className="text-[13px] font-extrabold text-[#1E1E1E]">EOD Inventory Summary</div>
+
+                        <div className="mt-4 space-y-3 text-[11px] font-extrabold">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[#6D6D6D]">System Stock Total</span>
+                            <span className="text-[#1E1E1E]">{fmtQty(salesEodSummary.totalSystemStock)}</span>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <span className="text-[#6D6D6D]">Physical Stock Total</span>
+                            <span className="text-[#1E1E1E]">{fmtQty(salesEodSummary.totalPhysicalStock)}</span>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <span className="text-[#6D6D6D]">Used Today</span>
+                            <span className="text-[#B80F24]">{fmtQty(salesEodSummary.totalUsed)}</span>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <span className="text-[#6D6D6D]">Overages</span>
+                            <span className="text-amber-600">{salesEodSummary.overages}</span>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <span className="text-[#6D6D6D]">Shortages</span>
+                            <span className="text-red-600">{salesEodSummary.shortages}</span>
+                          </div>
+
+                          <div className="border-t border-black/10 pt-3 flex items-center justify-between">
+                            <span className="text-[#1E1E1E]">Net Variance</span>
+                            <span
+                              className={classNames(
+                                salesEodSummary.totalVariance > 0
+                                  ? 'text-amber-600'
+                                  : salesEodSummary.totalVariance < 0
+                                  ? 'text-red-600'
+                                  : 'text-[#1E1E1E]'
+                              )}
+                            >
+                              {salesEodSummary.totalVariance > 0 ? '+' : ''}
+                              {fmtQty(salesEodSummary.totalVariance)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl bg-[#F7F7F7] p-5 ring-1 ring-black/5">
+                        <div className="text-[12px] font-extrabold text-[#1E1E1E]">Notes</div>
+                        <div className="mt-2 text-[11px] font-bold leading-5 text-[#6D6D6D]">
+                          This report is based on the selected date. Sales are pulled from the Order table and inventory results
+                          are pulled from InventoryAudit.
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="rounded-2xl bg-[#7E0012] p-6 text-white shadow-[0_18px_30px_rgba(0,0,0,0.15)] ring-1 ring-black/10">
-                    <div className="space-y-4 text-[12px] font-extrabold">
-                      <div className="flex items-center justify-between">
-                        <span className="text-white/90">Sales Amount:</span>
-                        <span className="text-[14px]">{money(salesTotals.sub)}</span>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <span className="text-white/90">Sales Tax:</span>
-                        <span className="text-[14px]">{money(salesTotals.tax)}</span>
-                      </div>
-
-                      <div className="mt-4 border-t border-white/25 pt-4 flex items-center justify-between">
-                        <span className="text-white">Total Sales:</span>
-                        <span className="text-[16px]">{money(salesTotals.total)}</span>
+                  <div className="mt-5 overflow-hidden rounded-2xl bg-white ring-1 ring-black/10 shadow-sm">
+                    <div className="border-b border-black/5 bg-[#FAFAFA] px-5 py-4">
+                      <div className="text-[12px] font-extrabold text-[#1E1E1E]">Orders for Selected Date</div>
+                      <div className="mt-1 text-[10px] font-bold text-[#6D6D6D]">
+                        Connected daily sales entries from the Order table
                       </div>
                     </div>
+
+                    {salesEodOrdersForDate.length === 0 ? (
+                      <div className="px-6 py-10 text-center text-[11px] font-bold text-[#6D6D6D]">
+                        No completed orders found for this date.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-black/5">
+                        {salesEodOrdersForDate.map((order) => {
+                          const p = paymentMeta(order.paymentmethod);
+                          return (
+                            <div
+                              key={order.orderID}
+                              className="grid gap-3 px-5 py-4 md:grid-cols-[120px_1fr_140px_140px_120px] md:items-center hover:bg-[#FAFAFA]"
+                            >
+                              <div>
+                                <div className="text-[10px] font-extrabold text-[#B80F24]">Order</div>
+                                <div className="text-[12px] font-extrabold text-[#1E1E1E]">#{order.orderID}</div>
+                              </div>
+
+                              <div>
+                                <div className="text-[10px] font-extrabold text-[#B80F24]">Date & Time</div>
+                                <div className="text-[11px] font-bold text-[#6D6D6D]">{formatDateTime(order.createdAt)}</div>
+                              </div>
+
+                              <div>
+                                <div className="text-[10px] font-extrabold text-[#B80F24]">Payment</div>
+                                <div className="mt-1">
+                                  <Chip label={`${p.emoji} ${p.label}`} tone={p.tone} />
+                                </div>
+                              </div>
+
+                              <div className="md:text-right">
+                                <div className="text-[10px] font-extrabold text-[#B80F24]">Total</div>
+                                <div className="text-[12px] font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(order.amount)}</div>
+                              </div>
+
+                              <div className="md:text-right">
+                                <button
+                                  className={classNames(BTN_PRIMARY, 'w-full md:w-auto')}
+                                  onClick={() => setSelectedOrder(order)}
+                                  type="button"
+                                >
+                                  <MdVisibility className="h-4 w-4" />
+                                  View
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                <div className="h-10" />
               </div>
             </section>
           )}
 
-          {/* ✅ Keep this section (cards + charts) exactly like your original fallback,
-              but it will only show when tab is NOT Sales & EOD, NOT Receipts, NOT Purchase.
-              Since we now only have 3 tabs, this never renders — harmless but kept. */}
           {tab !== 'Sales & EOD Report' && tab !== 'Receipts' && tab !== 'Purchase Transactions' && (
             <>
               <section className="grid gap-4 lg:grid-cols-2">
@@ -1359,6 +1613,45 @@ export default function ReportsPage() {
             </>
           )}
         </main>
+      </div>
+    </div>
+  );
+}
+
+function SummaryCard({
+  title,
+  value,
+  subtitle,
+  icon,
+  danger = false,
+}: {
+  title: string;
+  value: string;
+  subtitle: string;
+  icon: React.ReactNode;
+  danger?: boolean;
+}) {
+  return (
+    <div className="rounded-2xl bg-white px-4 py-4 ring-1 ring-black/5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] font-extrabold uppercase tracking-wide text-[#6D6D6D]">{title}</div>
+          <div className={classNames('mt-2 text-[18px] font-extrabold', danger ? 'text-[#B80F24]' : 'text-[#1E1E1E]')}>
+            {value}
+          </div>
+          <div className="mt-1 text-[10px] font-bold text-[#6D6D6D]">{subtitle}</div>
+        </div>
+
+        <div
+          className={classNames(
+            'grid h-10 w-10 place-items-center rounded-xl ring-1',
+            danger
+              ? 'bg-[#FDECEC] text-[#B80F24] ring-[#F4B8B8]'
+              : 'bg-[#F7F7F7] text-[#7E0012] ring-black/5'
+          )}
+        >
+          {icon}
+        </div>
       </div>
     </div>
   );

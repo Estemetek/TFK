@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { Sidebar } from '../components/Sidebar';
+import { useRouter } from 'next/navigation';
 import {
   MdEdit,
   MdDelete,
@@ -14,6 +15,7 @@ import {
   MdGridView,
   MdArrowDropDown,
   MdRefresh,
+  MdChecklist,
 } from 'react-icons/md';
 import React from 'react';
 
@@ -30,7 +32,6 @@ type InventoryItem = {
 type SortKey = 'name-asc' | 'name-desc' | 'stock-asc' | 'stock-desc' | 'updated-desc';
 
 /* ----------------------------- Modern UI Tokens ----------------------------- */
-/** keep your palette via CSS vars: bg-background, text-foreground, primary, ring-card-border, text-text-muted */
 
 const INPUT_BASE =
   'w-full rounded-xl bg-white px-3 py-2 text-sm ' +
@@ -80,7 +81,13 @@ function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
 }
 
+function wholeNumber(value: number | string | null | undefined) {
+  return Math.max(0, Math.floor(Number(value) || 0));
+}
+
 export default function InventoryPage() {
+  const router = useRouter();
+
   const [collapsed, setCollapsed] = useState(false);
   const [activeNav, setActiveNav] = useState('Inventory');
 
@@ -109,7 +116,14 @@ export default function InventoryPage() {
       .order('name', { ascending: true });
 
     if (error) console.error('Error fetching inventory:', error);
-    setInventoryItems(data || []);
+
+    const normalized = (data || []).map((item) => ({
+      ...item,
+      currentStock: wholeNumber(item.currentStock),
+      reorderLevel: wholeNumber(item.reorderLevel),
+    }));
+
+    setInventoryItems(normalized);
     setLoading(false);
   }, []);
 
@@ -118,12 +132,12 @@ export default function InventoryPage() {
   }, [fetchInventory]);
 
   const lowStockItems = useMemo(
-    () => inventoryItems.filter((i) => i.currentStock <= i.reorderLevel),
+    () => inventoryItems.filter((i) => wholeNumber(i.currentStock) <= wholeNumber(i.reorderLevel)),
     [inventoryItems]
   );
 
   const totalValueEstimate = useMemo(() => {
-    return inventoryItems.reduce((sum, i) => sum + i.currentStock * i.costPerUnit, 0);
+    return inventoryItems.reduce((sum, i) => sum + wholeNumber(i.currentStock) * Number(i.costPerUnit || 0), 0);
   }, [inventoryItems]);
 
   const filteredSorted = useMemo(() => {
@@ -134,7 +148,7 @@ export default function InventoryPage() {
       arr = arr.filter((i) => i.name.toLowerCase().includes(q) || i.unit.toLowerCase().includes(q));
     }
     if (showOnlyLow) {
-      arr = arr.filter((i) => i.currentStock <= i.reorderLevel);
+      arr = arr.filter((i) => wholeNumber(i.currentStock) <= wholeNumber(i.reorderLevel));
     }
 
     const sorted = [...arr].sort((a, b) => {
@@ -144,9 +158,9 @@ export default function InventoryPage() {
         case 'name-desc':
           return b.name.localeCompare(a.name);
         case 'stock-asc':
-          return a.currentStock - b.currentStock;
+          return wholeNumber(a.currentStock) - wholeNumber(b.currentStock);
         case 'stock-desc':
-          return b.currentStock - a.currentStock;
+          return wholeNumber(b.currentStock) - wholeNumber(a.currentStock);
         case 'updated-desc':
           return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
         default:
@@ -157,26 +171,24 @@ export default function InventoryPage() {
     return sorted;
   }, [inventoryItems, query, showOnlyLow, sort]);
 
-  // Strict sync: menu item is unavailable if NO ingredients or ANY ingredient is out of stock
   const syncMenuAvailability = async () => {
-    // Fetch all menu items
     const { data: menuItems, error: menuError } = await supabase
       .from('MenuItem')
       .select('menuItemID');
+
     if (menuError) {
       console.error('Error fetching menu items:', menuError);
       return;
     }
 
     for (const menu of menuItems) {
-      // Get all recipe ingredients for this menu item
-      const { data: recipeIngredients, error: recipeError } = await supabase
+      const { data: recipeIngredients } = await supabase
         .from('MenuIngredient')
         .select('ingredientID, quantityRequired')
         .eq('menuItemID', menu.menuItemID);
 
       let anyOutOfStock = false;
-      // If no ingredients, mark as unavailable
+
       if (!recipeIngredients || recipeIngredients.length === 0) {
         anyOutOfStock = true;
       } else {
@@ -186,13 +198,18 @@ export default function InventoryPage() {
             .select('currentStock')
             .eq('ingredientID', recipeIng.ingredientID)
             .single();
-          // Check for required quantity
-          if (ingError || !ingredientData || ingredientData.currentStock < (recipeIng.quantityRequired ?? 1)) {
+
+          if (
+            ingError ||
+            !ingredientData ||
+            wholeNumber(ingredientData.currentStock) < wholeNumber(recipeIng.quantityRequired ?? 1)
+          ) {
             anyOutOfStock = true;
             break;
           }
         }
       }
+
       await supabase
         .from('MenuItem')
         .update({ isAvailable: !anyOutOfStock })
@@ -201,47 +218,43 @@ export default function InventoryPage() {
   };
 
   const handleRestock = async (ingredient: InventoryItem, quantity: number, unitCost: number) => {
-    if (!ingredient || quantity <= 0 || unitCost <= 0) return;
+    const safeQuantity = wholeNumber(quantity);
+
+    if (!ingredient || safeQuantity <= 0 || unitCost <= 0) return;
 
     setLoading(true);
     try {
       const { data: purchase, error: purchaseError } = await supabase
         .from('Purchase')
-        .insert([{ totalCost: quantity * unitCost }])
+        .insert([{ totalCost: safeQuantity * unitCost }])
         .select()
         .single();
+
       if (purchaseError) throw purchaseError;
 
       const { error: itemError } = await supabase.from('PurchaseItem').insert([
         {
           purchaseID: purchase.purchaseID,
           ingredientID: ingredient.ingredientID,
-          quantity,
+          quantity: safeQuantity,
           cost: unitCost,
-          // createdAt: new Date().toISOString(),
         },
       ]);
+
       if (itemError) throw itemError;
 
-      // const { error: txError } = await supabase.from('InventoryTransaction').insert([
-      //   {
-      //     ingredientID: ingredient.ingredientID,
-      //     type: 'IN',
-      //     quantity,
-      //     referenceNo: purchase.purchaseID.toString(),
-      //   },
-      // ]);
-      // if (txError) throw txError;
+      const newStock = wholeNumber(ingredient.currentStock) + safeQuantity;
 
-      // const { error: updError } = await supabase
-      //   .from('Ingredient')
-      //   .update({
-      //     currentStock: ingredient.currentStock + quantity,
-      //     costPerUnit: unitCost,
-      //     updatedAt: new Date().toISOString(),
-      //   })
-      //   .eq('ingredientID', ingredient.ingredientID);
-      // if (updError) throw updError;
+      const { error: updateError } = await supabase
+        .from('Ingredient')
+        .update({
+          currentStock: newStock,
+          costPerUnit: unitCost,
+          updatedAt: new Date().toISOString(),
+        })
+        .eq('ingredientID', ingredient.ingredientID);
+
+      if (updateError) throw updateError;
 
       await fetchInventory();
       await syncMenuAvailability();
@@ -263,7 +276,7 @@ export default function InventoryPage() {
           .update({
             name: formData.name,
             unit: formData.unit,
-            reorderLevel: formData.reorderLevel,
+            reorderLevel: wholeNumber(formData.reorderLevel),
             costPerUnit: parseFloat(formData.price),
             updatedAt: new Date().toISOString(),
           })
@@ -274,7 +287,7 @@ export default function InventoryPage() {
           .insert({
             name: formData.name,
             unit: formData.unit,
-            reorderLevel: formData.reorderLevel,
+            reorderLevel: wholeNumber(formData.reorderLevel),
             costPerUnit: parseFloat(formData.price),
             currentStock: 0,
             updatedAt: new Date().toISOString(),
@@ -305,7 +318,6 @@ export default function InventoryPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* subtle modern background without changing palette */}
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div className="absolute inset-0 bg-[radial-gradient(70%_50%_at_50%_0%,rgba(0,0,0,0.05),transparent)]" />
         <div className="absolute inset-0 bg-[radial-gradient(50%_40%_at_0%_30%,rgba(0,0,0,0.04),transparent)]" />
@@ -339,7 +351,7 @@ export default function InventoryPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={fetchInventory}
                     className={cn(
@@ -350,6 +362,15 @@ export default function InventoryPage() {
                     title="Refresh"
                   >
                     <MdRefresh size={20} className={cn(loading && 'animate-spin')} />
+                  </button>
+
+                  <button
+                    onClick={() => router.push('/inventory/audit')}
+                    className={BTN_NEUTRAL}
+                    title="Go to End of Day Audit"
+                  >
+                    <MdChecklist size={18} />
+                    EOD Audit
                   </button>
 
                   <button onClick={() => setShowAddModal(true)} className={BTN_PRIMARY}>
@@ -481,11 +502,11 @@ export default function InventoryPage() {
                   lowStockItems.map((item) => {
                     let stockDisplay = '';
                     let shortageMsg = '';
-                    if (item.currentStock <= 0) {
+                    if (wholeNumber(item.currentStock) <= 0) {
                       stockDisplay = `Out of stock`;
                       shortageMsg = 'Restock soon to avoid shortages!';
                     } else {
-                      stockDisplay = `${item.currentStock} ${item.unit} left`;
+                      stockDisplay = `${wholeNumber(item.currentStock)} ${item.unit} left`;
                       shortageMsg = 'Restock soon to avoid shortages!';
                     }
                     return (
@@ -494,7 +515,7 @@ export default function InventoryPage() {
                           <MdWarning className="text-red-600" size={20} />
                           <span className="text-sm font-semibold truncate">{item.name}</span>
                           <span className="text-xs text-text-muted ml-auto">
-                            {stockDisplay} (Reorder at {item.reorderLevel})
+                            {stockDisplay} (Reorder at {wholeNumber(item.reorderLevel)})
                           </span>
                         </div>
                         <span className="text-xs text-red-600 mt-1">{shortageMsg}</span>
@@ -628,9 +649,9 @@ function StatCard({
 }
 
 function StockBar({ current, target }: { current: number; target: number }) {
-  const safeTarget = Math.max(target, 1);
-  const pct = Math.max(0, Math.min(100, Math.round((current / safeTarget) * 100)));
-  const isLow = current <= target;
+  const safeTarget = Math.max(wholeNumber(target), 1);
+  const pct = Math.max(0, Math.min(100, Math.round((wholeNumber(current) / safeTarget) * 100)));
+  const isLow = wholeNumber(current) <= wholeNumber(target);
 
   return (
     <div className="mt-3">
@@ -659,7 +680,9 @@ function InventoryRow({
   onDelete: () => void;
   onRestock: () => void;
 }) {
-  const isLowStock = item.currentStock <= item.reorderLevel;
+  const stock = wholeNumber(item.currentStock);
+  const reorder = wholeNumber(item.reorderLevel);
+  const isLowStock = stock <= reorder;
 
   return (
     <div
@@ -692,14 +715,14 @@ function InventoryRow({
           <p className="text-xs text-text-muted mt-0.5">
             Stock:{' '}
             <span className={cn('font-semibold', isLowStock ? 'text-red-600' : 'text-primary')}>
-              {item.currentStock} {item.unit}
+              {stock} {item.unit}
             </span>
             <span className="mx-2 text-text-muted/60">•</span>
-            Reorder at <span className="font-semibold">{item.reorderLevel}</span>
+            Reorder at <span className="font-semibold">{reorder}</span>
           </p>
 
           <div className="mt-2 max-w-sm">
-            <StockBar current={item.currentStock} target={item.reorderLevel} />
+            <StockBar current={stock} target={reorder} />
           </div>
         </div>
       </div>
@@ -716,10 +739,7 @@ function InventoryRow({
             <p className="text-sm font-semibold">{new Date(item.updatedAt).toLocaleDateString()}</p>
           </div>
         </div>
-        <button
-          className={cn(BTN_PRIMARY, 'px-3 py-1.5 text-xs')}
-          onClick={onRestock}
-        >
+        <button className={cn(BTN_PRIMARY, 'px-3 py-1.5 text-xs')} onClick={onRestock}>
           Restock
         </button>
         <IconButton onClick={onEdit} label="Edit">
@@ -744,7 +764,9 @@ function InventoryCard({
   onDelete: () => void;
   onRestock: () => void;
 }) {
-  const isLowStock = item.currentStock <= item.reorderLevel;
+  const stock = wholeNumber(item.currentStock);
+  const reorder = wholeNumber(item.reorderLevel);
+  const isLowStock = stock <= reorder;
 
   return (
     <div className={cn(CARD, 'p-4 hover:shadow-md hover:-translate-y-px transition')}>
@@ -759,7 +781,7 @@ function InventoryCard({
             )}
           </div>
           <p className="text-xs text-text-muted mt-0.5">
-            {item.currentStock} {item.unit} • reorder at {item.reorderLevel}
+            {stock} {item.unit} • reorder at {reorder}
           </p>
         </div>
 
@@ -774,7 +796,7 @@ function InventoryCard({
       </div>
 
       <div className="mt-3">
-        <StockBar current={item.currentStock} target={item.reorderLevel} />
+        <StockBar current={stock} target={reorder} />
       </div>
 
       <div className="mt-4 flex items-end justify-between">
@@ -863,6 +885,9 @@ function RestockModal({
 }: any) {
   if (!open || !ingredient) return null;
 
+  const stock = wholeNumber(ingredient.currentStock);
+  const reorder = wholeNumber(ingredient.reorderLevel);
+
   return (
     <div className="fixed inset-0 z-50 bg-black/40" onClick={onClose}>
       <div
@@ -875,8 +900,8 @@ function RestockModal({
               <p className="text-[11px] uppercase tracking-wide text-text-muted">Restock</p>
               <h3 className="text-lg font-semibold">{ingredient.name}</h3>
               <p className="text-xs text-text-muted mt-1">
-                Current: <span className="font-semibold">{ingredient.currentStock}</span> {ingredient.unit} • Reorder:{' '}
-                <span className="font-semibold">{ingredient.reorderLevel}</span>
+                Current: <span className="font-semibold">{stock}</span> {ingredient.unit} • Reorder:{' '}
+                <span className="font-semibold">{reorder}</span>
               </p>
             </div>
             <button
@@ -898,7 +923,7 @@ function RestockModal({
 
             <div className="grid grid-cols-2 gap-3">
               <Field label="Current Stock">
-                <input className={INPUT_DISABLED} value={ingredient.currentStock} disabled />
+                <input className={INPUT_DISABLED} value={stock} disabled />
               </Field>
               <Field label="Unit">
                 <input className={INPUT_DISABLED} value={ingredient.unit} disabled />
@@ -907,7 +932,7 @@ function RestockModal({
 
             <div className="grid grid-cols-2 gap-3">
               <Field label="Reorder Level">
-                <input className={INPUT_DISABLED} value={ingredient.reorderLevel} disabled />
+                <input className={INPUT_DISABLED} value={reorder} disabled />
               </Field>
               <Field label="Unit Cost">
                 <input
@@ -928,7 +953,14 @@ function RestockModal({
                 className={INPUT_BASE}
                 value={quantity}
                 min={1}
-                onChange={(e) => setQuantity(Number(e.target.value))}
+                step={1}
+                inputMode="numeric"
+                onChange={(e) => setQuantity(wholeNumber(e.target.value))}
+                onKeyDown={(e) => {
+                  if (['.', ',', '-', 'e', 'E', '+'].includes(e.key)) {
+                    e.preventDefault();
+                  }
+                }}
                 placeholder="Enter quantity to add"
                 autoFocus
               />
@@ -937,7 +969,7 @@ function RestockModal({
             <div className={cn(CARD, 'p-4')}>
               <p className="text-xs text-text-muted">Estimated added cost</p>
               <p className="text-lg font-semibold mt-1">
-                ₱{isNaN(quantity * unitCost) ? '0.00' : (quantity * unitCost).toFixed(2)}
+                ₱{isNaN(wholeNumber(quantity) * unitCost) ? '0.00' : (wholeNumber(quantity) * unitCost).toFixed(2)}
               </p>
             </div>
           </div>
@@ -948,10 +980,10 @@ function RestockModal({
             </button>
             <button
               onClick={() => {
-                if (quantity > 0 && unitCost > 0 && !loading) onRestock();
+                if (wholeNumber(quantity) > 0 && unitCost > 0 && !loading) onRestock();
               }}
               className={cn(BTN_PRIMARY, 'disabled:opacity-60')}
-              disabled={quantity <= 0 || unitCost <= 0 || loading}
+              disabled={wholeNumber(quantity) <= 0 || unitCost <= 0 || loading}
             >
               {loading ? 'Processing...' : 'Confirm'}
             </button>
@@ -986,9 +1018,9 @@ function AddIngredientModal({ open, onClose, onSave, title, initialData }: any) 
     if (initialData) {
       setFormData({
         name: initialData.name,
-        quantity: initialData.currentStock,
+        quantity: wholeNumber(initialData.currentStock),
         unit: initialData.unit,
-        reorderLevel: initialData.reorderLevel,
+        reorderLevel: wholeNumber(initialData.reorderLevel),
         price: initialData.costPerUnit.toString(),
       });
     } else {
@@ -1037,7 +1069,7 @@ function AddIngredientModal({ open, onClose, onSave, title, initialData }: any) 
 
             <div className="grid grid-cols-2 gap-3">
               <Field label="Current Stock">
-                <input type="number" className={INPUT_DISABLED} value={formData.quantity} disabled />
+                <input type="number" className={INPUT_DISABLED} value={wholeNumber(formData.quantity)} disabled />
               </Field>
               <Field label="Unit">
                 <input
@@ -1055,7 +1087,15 @@ function AddIngredientModal({ open, onClose, onSave, title, initialData }: any) 
                   type="number"
                   className={INPUT_BASE}
                   value={formData.reorderLevel}
-                  onChange={(e) => setFormData({ ...formData, reorderLevel: parseFloat(e.target.value) })}
+                  min={0}
+                  step={1}
+                  inputMode="numeric"
+                  onChange={(e) => setFormData({ ...formData, reorderLevel: wholeNumber(e.target.value) })}
+                  onKeyDown={(e) => {
+                    if (['.', ',', '-', 'e', 'E', '+'].includes(e.key)) {
+                      e.preventDefault();
+                    }
+                  }}
                 />
               </Field>
               <Field label="Cost Per Unit">
