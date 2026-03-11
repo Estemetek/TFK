@@ -848,16 +848,16 @@ export default function ReportsPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#F3F3F3] text-[#1E1E1E]">
+    <div className="h-screen overflow-hidden bg-[#F3F3F3] text-[#1E1E1E]">
       {selectedOrder && <ReceiptModal order={selectedOrder} onClose={() => setSelectedOrder(null)} onVoid={fetchReceipts} />}
 
       <div
         className={classNames(
-          'grid min-h-screen transition-[grid-template-columns] duration-200',
+          'grid h-screen transition-[grid-template-columns] duration-200',
           collapsed ? 'grid-cols-[82px_1fr]' : 'grid-cols-[220px_1fr]'
         )}
       >
-        <aside className="flex flex-col items-stretch gap-4 rounded-r-2xl bg-surface px-3 py-5 shadow-md">
+        <aside className="flex flex-col items-stretch gap-4 rounded-r-2xl bg-surface px-3 py-5 shadow-md h-screen overflow-y-auto">
           <div className="mb-2 flex items-center gap-3 px-2">
             <img src="/TFK.png" alt="TFK Logo" className="h-12 w-12 rounded-full shadow" />
             {!collapsed && <span className="text-sm font-semibold text-foreground">Taiwan Fried Kitchen</span>}
@@ -921,7 +921,7 @@ export default function ReportsPage() {
           </div>
         </aside>
 
-        <main className="space-y-4 p-4 md:p-6">
+        <main className="h-screen overflow-y-auto space-y-4 p-4 md:p-6">
           <header className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <button

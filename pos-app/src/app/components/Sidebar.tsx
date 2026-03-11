@@ -129,14 +129,14 @@ export function Sidebar({
 
   if (loading) {
     return (
-      <aside className="flex flex-col items-stretch gap-4 rounded-r-2xl bg-surface px-3 py-5 shadow-md">
+      <aside className="flex flex-col items-stretch gap-4 rounded-r-2xl bg-surface px-3 py-5 shadow-md h-screen overflow-y-auto">
         <div className="text-sm text-text-muted">Loading...</div>
       </aside>
     );
   }
 
   return (
-    <aside className="flex flex-col items-stretch gap-4 rounded-r-2xl bg-surface px-3 py-5 shadow-md">
+    <aside className="flex flex-col items-stretch gap-4 rounded-r-2xl bg-surface px-3 py-5 shadow-md h-screen overflow-y-auto">
       <div className="mb-2 flex items-center gap-3 px-2">
         <img src="/TFK.png" alt="TFK Logo" className="h-12 w-12 rounded-full shadow" />
         {!collapsed && (

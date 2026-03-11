@@ -546,7 +546,7 @@ export default function StaffPage() {
         className={cn(
           'flex h-full flex-col items-stretch gap-4 bg-surface px-3 py-5 shadow-md',
           variant === 'desktop' ? 'rounded-r-3xl' : 'rounded-3xl',
-          variant === 'mobile' && 'w-[280px]'
+          variant === 'mobile' && 'w-280px'
         )}
       >
         <div className={cn('mb-1 flex items-center gap-3 px-2', isCollapsed && 'justify-center')}>
@@ -632,7 +632,7 @@ export default function StaffPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="h-screen overflow-hidden bg-background text-foreground">
       {/* Mobile backdrop */}
       {mobileOpen && (
         <button
@@ -665,7 +665,7 @@ export default function StaffPage() {
 
       <div
         className={cn(
-          'grid min-h-screen transition-[grid-template-columns] duration-200',
+          'grid h-screen transition-[grid-template-columns] duration-200',
           collapsed ? 'lg:grid-cols-[88px_1fr]' : 'lg:grid-cols-[240px_1fr]'
         )}
       >
@@ -675,7 +675,7 @@ export default function StaffPage() {
         </div>
 
         {/* Main */}
-        <main className="min-w-0 space-y-4 p-4 sm:p-5 md:p-7">
+        <main className="min-w-0 h-screen overflow-y-auto space-y-4 p-4 sm:p-5 md:p-7">
           {/* Top bar */}
           <header className="sticky top-3 z-30 rounded-2xl bg-white/70 px-4 py-3 shadow-sm ring-1 ring-card-border backdrop-blur">
             <div className="flex flex-wrap items-center justify-between gap-3">

@@ -115,11 +115,11 @@ function genSegmentsFromMap(
 
 function downloadCSV(filename: string, rows: Array<Record<string, any>>) {
   const headers = Array.from(
-    rows.reduce((set, r) => {
-      Object.keys(r).forEach((k) => set.add(k));
-      return set;
-    }, new Set<string>())
-  );
+  rows.reduce<Set<string>>((set, r) => {
+    Object.keys(r).forEach((k) => set.add(k));
+    return set;
+  }, new Set<string>())
+);
 
   const esc = (v: any) => {
     const s = String(v ?? '');
@@ -247,7 +247,7 @@ function Tooltip({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed z-[100] pointer-events-none" style={{ left: x + 12, top: y + 12, maxWidth: 260 }}>
+    <div className="fixed z-[100px]ointer-events-none" style={{ left: x + 12, top: y + 12, maxWidth: 260 }}>
       <div className="rounded-2xl bg-white shadow-lg ring-1 ring-card-border px-3 py-2">
         {title && <div className="text-xs font-black text-foreground mb-0.5">{title}</div>}
         {lines.map((t, i) => (
@@ -272,7 +272,7 @@ function SegLegend({
   rightLabel?: (s: DonutSeg) => React.ReactNode;
 }) {
   return (
-    <div className="max-h-[170px] overflow-auto pr-2 space-y-2 w-full">
+    <div className="max-h-170px overflow-auto pr-2 space-y-2 w-full">
       {segments.map((s) => {
         const active = activeLabel === s.label;
         return (
@@ -326,7 +326,7 @@ function DonutChart({
 
   return (
     <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="rotate-[-90deg]">
+      <svg width={size} height={size} className="-rotate-90">
         <circle cx={size / 2} cy={size / 2} r={radius} fill="transparent" stroke="rgba(0,0,0,0.08)" strokeWidth={strokeWidth} />
         {segments.map((s, idx) => {
           const segLen = (s.value / total) * circumference;
@@ -410,7 +410,7 @@ function MiniLineChart({
 
   return (
     <div className="rounded-2xl bg-white/70 ring-1 ring-card-border p-3">
-      <svg viewBox={`0 0 ${w} ${h}`} className="h-[90px] w-full">
+      <svg viewBox={`0 0 ${w} ${h}`} className="h-22.5 w-full">
         <path d={area} fill={buildPaletteColor(accentVar, 22)} stroke="none" />
         <path d={d} fill="none" stroke={buildPaletteColor(accentVar, 82)} strokeWidth="3" strokeLinejoin="round" />
 
@@ -490,8 +490,8 @@ function Drawer({
   if (!open) return null;
   return (
     <>
-      <div className="fixed inset-0 z-[90] bg-black/35 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed right-0 top-0 z-[95] h-screen w-full sm:w-[420px] bg-white shadow-2xl ring-1 ring-card-border">
+      <div className="fixed inset-0 z-90 bg-black/35 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed right-0 top-0 z-95 h-screen w-full sm:w-105 bg-white shadow-2xl ring-1 ring-card-border">
         <div className="flex items-center justify-between p-4 border-b border-card-border">
           <div className="min-w-0">
             <p className="text-xs font-black text-text-muted uppercase tracking-widest">Details</p>
@@ -1146,7 +1146,7 @@ export default function DashboardPage() {
 
   // -------------------- Render --------------------
   return (
-    <div ref={pageRef} className="min-h-screen bg-background text-foreground lg:flex">
+    <div ref={pageRef} className="h-screen overflow-hidden bg-background text-foreground lg:flex">
       <Tooltip open={tip.open} x={tip.x} y={tip.y} title={tip.title} lines={tip.lines} />
 
       <Drawer open={drawerOpen} onClose={closeDrawer} title={drawerTitle}>
@@ -1270,7 +1270,7 @@ export default function DashboardPage() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <Tabs
                 value={range}
-                onChange={(v) => setRange(v as any)}
+                onChange={(v) => setRange(v as 'today' | '7d')}
                 items={[
                   { value: 'today', label: 'Today Mix', icon: <MdToday className="h-4 w-4" /> },
                   { value: '7d', label: 'All-time Mix', icon: <MdDateRange className="h-4 w-4" /> },

@@ -317,7 +317,7 @@ export default function InventoryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="h-screen overflow-hidden bg-background text-foreground">
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div className="absolute inset-0 bg-[radial-gradient(70%_50%_at_50%_0%,rgba(0,0,0,0.05),transparent)]" />
         <div className="absolute inset-0 bg-[radial-gradient(50%_40%_at_0%_30%,rgba(0,0,0,0.04),transparent)]" />
@@ -326,13 +326,13 @@ export default function InventoryPage() {
 
       <div
         className={cn(
-          'grid min-h-screen transition-[grid-template-columns] duration-200',
+          'grid h-screen transition-[grid-template-columns] duration-200',
           collapsed ? 'grid-cols-[82px_1fr]' : 'grid-cols-[220px_1fr]'
         )}
       >
         <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} activeNav={activeNav} />
 
-        <main className="min-w-0 space-y-5 p-5 md:p-7">
+        <main className="min-w-0 h-screen overflow-y-auto space-y-5 p-5 md:p-7">
           <header className="sticky top-0 z-20 -mx-5 md:-mx-7 px-5 md:px-7 pb-3 pt-4 bg-background/70 backdrop-blur">
             <div className={cn(SURFACE, 'px-4 py-3')}>
               <div className="flex flex-wrap items-center justify-between gap-3">

@@ -546,16 +546,16 @@ export default function MenuPage() {
   const totalVisibleCount = useMemo(() => menuItems.filter((i) => (i.status || '').toLowerCase() !== 'archived').length, [menuItems]);
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: BG, color: TEXT }}>
+    <div className="h-screen overflow-hidden" style={{ backgroundColor: BG, color: TEXT }}>
       <div
         className={[
-          'grid min-h-screen transition-[grid-template-columns] duration-200',
+          'grid h-screen transition-[grid-template-columns] duration-200',
           collapsed ? 'grid-cols-[82px_1fr]' : 'grid-cols-[220px_1fr]',
         ].join(' ')}
       >
         <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} activeNav={activeNav} />
 
-        <main className="space-y-5 p-6">
+        <main className="h-screen overflow-y-auto space-y-5 p-6">
           <header className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <button
