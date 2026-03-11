@@ -582,7 +582,7 @@ export default function StaffPage() {
                   {iconMap[item.name]}
                 </span>
                 {!isCollapsed && (
-                  <span className={cn('text-xs font-semibold', isActive ? 'text-foreground' : 'text-text-muted')}>
+                  <span className={cn('text-xs font-extrabold', isActive ? 'text-foreground' : 'text-text-muted')}>
                     {item.name}
                   </span>
                 )}
@@ -611,7 +611,7 @@ export default function StaffPage() {
             >
               <MdLogout className="h-5 w-5" />
             </span>
-            {!isCollapsed && <span className="text-xs font-semibold text-text-muted">Logout</span>}
+            {!isCollapsed && <span className="text-xs font-extrabold text-text-muted">Logout</span>}
           </button>
         </div>
       </aside>

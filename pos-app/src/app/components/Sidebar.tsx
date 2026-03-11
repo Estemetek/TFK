@@ -163,7 +163,7 @@ export function Sidebar({
               </span>
               {!collapsed && (
                 <span
-                  className={`text-xs font-semibold ${
+                  className={`text-xs font-extrabold ${
                     isActive ? 'text-foreground' : 'text-text-muted'
                   }`}
                 >
@@ -193,7 +193,7 @@ export function Sidebar({
             <MdLogout className="h-5 w-5" />
           </span>
           {!collapsed && (
-            <span className="text-xs font-semibold text-text-muted">Logout</span>
+            <span className="text-xs font-extrabold text-text-muted">Logout</span>
           )}
         </button>
       </div>

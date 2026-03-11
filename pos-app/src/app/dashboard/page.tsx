@@ -558,7 +558,7 @@ function AppSidebar({
               <span className={cn('grid h-10 w-10 place-items-center rounded-full shadow-inner transition', isActive ? 'bg-primary text-white' : 'bg-white text-text-muted')}>
                 {iconMap[item.name]}
               </span>
-              {!isCollapsed && <span className={cn('text-xs font-black', isActive ? 'text-foreground' : 'text-text-muted')}>{item.name}</span>}
+              {!isCollapsed && <span className={cn('text-xs font-extrabold', isActive ? 'text-foreground' : 'text-text-muted')}>{item.name}</span>}
             </button>
           );
         })}
@@ -576,7 +576,7 @@ function AppSidebar({
           <span className="grid h-10 w-10 place-items-center rounded-full bg-white text-text-muted shadow-inner">
             <MdLogout className="h-5 w-5" />
           </span>
-          {!isCollapsed && <span className="text-xs font-black text-text-muted">Logout</span>}
+          {!isCollapsed && <span className="text-xs font-extrabold text-text-muted">Logout</span>}
         </button>
       </div>
     </aside>
