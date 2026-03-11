@@ -562,6 +562,12 @@ export default function ReportsPage() {
   const [eodPage, setEodPage] = useState(1);
   const EOD_PAGE_SIZE = 10;
 
+  const [receiptsPage, setReceiptsPage] = useState(1);
+  const RECEIPTS_PAGE_SIZE = 10;
+
+  const [purchasesPage, setPurchasesPage] = useState(1);
+  const PURCHASES_PAGE_SIZE = 10;
+
   useEffect(() => {
     if (tab === 'Receipts') fetchReceipts();
     if (tab === 'Purchase Transactions') fetchPurchases();
@@ -582,6 +588,14 @@ export default function ReportsPage() {
   useEffect(() => {
     setEodPage(1);
   }, [eodQuery, eodDate]);
+
+  useEffect(() => {
+    setReceiptsPage(1);
+  }, [receiptQuery, paymentFilter, dateFilter]);
+
+  useEffect(() => {
+    setPurchasesPage(1);
+  }, [purchaseQuery, purchaseDateFilter, purchaseMin, purchaseMax]);
 
   useEffect(() => {
     const channel = supabase
@@ -775,6 +789,12 @@ export default function ReportsPage() {
     const totalItems = purchasesView.reduce((sum, p) => sum + Number((p.items || []).length), 0);
     return { count: purchasesView.length, totalCost, totalItems };
   }, [purchasesView]);
+
+  const receiptsTotalPages = Math.max(1, Math.ceil(receiptsView.length / RECEIPTS_PAGE_SIZE));
+  const receiptsViewPage = receiptsView.slice((receiptsPage - 1) * RECEIPTS_PAGE_SIZE, receiptsPage * RECEIPTS_PAGE_SIZE);
+
+  const purchasesTotalPages = Math.max(1, Math.ceil(purchasesView.length / PURCHASES_PAGE_SIZE));
+  const purchasesViewPage = purchasesView.slice((purchasesPage - 1) * PURCHASES_PAGE_SIZE, purchasesPage * PURCHASES_PAGE_SIZE);
 
   const eodRowsView = useMemo(() => {
     const q = eodQuery.trim().toLowerCase();
@@ -1073,7 +1093,7 @@ export default function ReportsPage() {
                   </div>
 
                   <div className="divide-y divide-black/5">
-                    {purchasesView.map((purchase: any) => {
+                    {purchasesViewPage.map((purchase: any) => {
                       const items = Array.isArray(purchase.items) ? purchase.items : [];
                       const preview = items
                         .slice(0, 2)
@@ -1132,6 +1152,32 @@ export default function ReportsPage() {
                         </div>
                       );
                     })}
+                  </div>
+                  <div className="flex items-center justify-between border-t border-black/5 px-5 py-3 bg-[#FAFAFA]">
+                    <span className="text-[11px] font-bold text-[#6D6D6D]">
+                      Showing {Math.min((purchasesPage - 1) * PURCHASES_PAGE_SIZE + 1, purchasesView.length)}–{Math.min(purchasesPage * PURCHASES_PAGE_SIZE, purchasesView.length)} of {purchasesView.length}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        disabled={purchasesPage === 1}
+                        onClick={() => setPurchasesPage((p) => p - 1)}
+                        className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
+                        type="button"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-[11px] font-extrabold text-[#1E1E1E]">
+                        {purchasesPage} / {purchasesTotalPages}
+                      </span>
+                      <button
+                        disabled={purchasesPage === purchasesTotalPages}
+                        onClick={() => setPurchasesPage((p) => p + 1)}
+                        className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
+                        type="button"
+                      >
+                        Next
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
@@ -1234,7 +1280,7 @@ export default function ReportsPage() {
                   </div>
 
                   <div className="divide-y divide-black/5">
-                    {receiptsView.map((order: any) => {
+                    {receiptsViewPage.map((order: any) => {
                       const p = paymentMeta(order.paymentmethod);
                       const itemsQty = (order.items || []).reduce((sum: number, it: any) => sum + Number(it.quantity || 0), 0);
                       const topItems = (order.items || [])
@@ -1315,6 +1361,32 @@ export default function ReportsPage() {
                         </div>
                       );
                     })}
+                  </div>
+                  <div className="flex items-center justify-between border-t border-black/5 px-5 py-3 bg-[#FAFAFA]">
+                    <span className="text-[11px] font-bold text-[#6D6D6D]">
+                      Showing {Math.min((receiptsPage - 1) * RECEIPTS_PAGE_SIZE + 1, receiptsView.length)}–{Math.min(receiptsPage * RECEIPTS_PAGE_SIZE, receiptsView.length)} of {receiptsView.length}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        disabled={receiptsPage === 1}
+                        onClick={() => setReceiptsPage((p) => p - 1)}
+                        className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
+                        type="button"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-[11px] font-extrabold text-[#1E1E1E]">
+                        {receiptsPage} / {receiptsTotalPages}
+                      </span>
+                      <button
+                        disabled={receiptsPage === receiptsTotalPages}
+                        onClick={() => setReceiptsPage((p) => p + 1)}
+                        className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
+                        type="button"
+                      >
+                        Next
+                      </button>
+                    </div>
                   </div>
                 </>
               )}

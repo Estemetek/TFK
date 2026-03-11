@@ -323,8 +323,7 @@ export default function MenuPage() {
 
   useEffect(() => {
     async function runSyncAndFetch() {
-      await syncMenuAvailability();
-      await fetchAllData();
+      await Promise.all([syncMenuAvailability(), fetchAllData()]);
     }
     runSyncAndFetch();
   }, [fetchAllData]);
