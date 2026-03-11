@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { syncMenuAvailability } from '../lib/syncMenuAvailability';
 import { MdClose, MdDelete, MdAdd } from 'react-icons/md';
 
 export function RecipeModal({ menuItem, onClose, onRecipeChange }: { menuItem: any, onClose: () => void, onRecipeChange?: () => void }) {
@@ -45,17 +44,15 @@ export function RecipeModal({ menuItem, onClose, onRecipeChange }: { menuItem: a
     if (error) alert(error.message);
     else {
       setSelectedIngredientId(''); // Reset selection
-      await fetchData(); 
-      await syncMenuAvailability(); 
-      if (onRecipeChange) await onRecipeChange(); 
+      await fetchData();
+      if (onRecipeChange) await onRecipeChange();
     }
   }
 
   async function removeIngredient(id: number) {
     await supabase.from('MenuIngredient').delete().eq('menuIngredientID', id);
     await fetchData();
-    await syncMenuAvailability(); 
-    if (onRecipeChange) await onRecipeChange(); 
+    if (onRecipeChange) await onRecipeChange();
   }
 
   return (

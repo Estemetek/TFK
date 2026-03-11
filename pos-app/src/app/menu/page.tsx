@@ -1116,7 +1116,7 @@ export default function MenuPage() {
           }}
           onRecipeChange={async () => {
             await syncMenuAvailability();
-            fetchAllData();
+            await fetchAllData();
           }}
         />
       )}

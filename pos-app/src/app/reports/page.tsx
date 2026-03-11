@@ -559,6 +559,8 @@ export default function ReportsPage() {
   const [eodLoading, setEodLoading] = useState(false);
   const [eodDate, setEodDate] = useState<string>(toLocalDateInput(new Date()));
   const [eodQuery, setEodQuery] = useState('');
+  const [eodPage, setEodPage] = useState(1);
+  const EOD_PAGE_SIZE = 10;
 
   useEffect(() => {
     if (tab === 'Receipts') fetchReceipts();
@@ -574,6 +576,21 @@ export default function ReportsPage() {
     if (tab === 'Sales & EOD Report') {
       fetchEodAudit();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eodDate]);
+
+  useEffect(() => {
+    setEodPage(1);
+  }, [eodQuery, eodDate]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('eod-audit-realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'InventoryAudit' }, () => {
+        fetchEodAudit();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eodDate]);
 
@@ -654,7 +671,12 @@ export default function ReportsPage() {
 
       if (error) throw error;
 
-      setEodRows((data || []) as InventoryAuditRow[]);
+      const transformedData = (data || []).map((row: any) => ({
+        ...row,
+        Ingredient: Array.isArray(row.Ingredient) && row.Ingredient.length > 0 ? row.Ingredient[0] : null,
+      }));
+
+      setEodRows(transformedData as InventoryAuditRow[]);
     } catch (err: any) {
       console.error('Error fetching EOD audit:', err);
       alert(`Failed to fetch EOD audit: ${err.message || 'Unknown error'}`);
@@ -772,6 +794,9 @@ export default function ReportsPage() {
       return matchQuery;
     });
   }, [eodRows, eodQuery]);
+
+  const eodTotalPages = Math.max(1, Math.ceil(eodRowsView.length / EOD_PAGE_SIZE));
+  const eodRowsPage = eodRowsView.slice((eodPage - 1) * EOD_PAGE_SIZE, eodPage * EOD_PAGE_SIZE);
 
   const salesEodOrdersForDate = useMemo(() => {
     return (receipts || []).filter((order) => {
@@ -1405,8 +1430,9 @@ export default function ReportsPage() {
                           </div>
                         </div>
                       ) : (
-                        <div className="divide-y divide-black/5">
-                          {eodRowsView.map((row, index) => {
+                        <>
+                          <div className="divide-y divide-black/5">
+                            {eodRowsPage.map((row, index) => {
                             const system = Number(row.systemStock || 0);
                             const physical = Number(row.physicalStock || 0);
                             const used = system - physical;
@@ -1447,7 +1473,34 @@ export default function ReportsPage() {
                               </div>
                             );
                           })}
-                        </div>
+                          </div>
+                          <div className="flex items-center justify-between border-t border-black/5 px-5 py-3 bg-[#FAFAFA]">
+                            <span className="text-[11px] font-bold text-[#6D6D6D]">
+                              Showing {Math.min((eodPage - 1) * EOD_PAGE_SIZE + 1, eodRowsView.length)}–{Math.min(eodPage * EOD_PAGE_SIZE, eodRowsView.length)} of {eodRowsView.length}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                disabled={eodPage === 1}
+                                onClick={() => setEodPage((p) => p - 1)}
+                                className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
+                                type="button"
+                              >
+                                Previous
+                              </button>
+                              <span className="text-[11px] font-extrabold text-[#1E1E1E]">
+                                {eodPage} / {eodTotalPages}
+                              </span>
+                              <button
+                                disabled={eodPage === eodTotalPages}
+                                onClick={() => setEodPage((p) => p + 1)}
+                                className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
+                                type="button"
+                              >
+                                Next
+                              </button>
+                            </div>
+                          </div>
+                        </>
                       )}
                     </div>
 

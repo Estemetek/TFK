@@ -1,8 +1,7 @@
 import { supabase } from './supabaseClient';
 
-// Strict sync: menu item is unavailable if NO ingredients or ANY ingredient is out of stock or not enough for recipe
+// Sync: menu item is available if it has at least one ingredient linked to its recipe
 export async function syncMenuAvailability() {
-  // Fetch all menu items
   const { data: menuItems, error: menuError } = await supabase
     .from('MenuItem')
     .select('menuItemID');
@@ -12,32 +11,16 @@ export async function syncMenuAvailability() {
   }
 
   for (const menu of menuItems) {
-    // Get all recipe ingredients for this menu item
-    const { data: recipeIngredients, error: recipeError } = await supabase
+    const { count, error: recipeError } = await supabase
       .from('MenuIngredient')
-      .select('ingredientID, quantityRequired')
+      .select('menuIngredientID', { count: 'exact', head: true })
       .eq('menuItemID', menu.menuItemID);
 
-    let anyOutOfStock = false;
-    if (!recipeIngredients || recipeIngredients.length === 0) {
-      anyOutOfStock = true;
-    } else {
-      for (const recipeIng of recipeIngredients) {
-        const { data: ingredientData, error: ingError } = await supabase
-          .from('Ingredient')
-          .select('currentStock')
-          .eq('ingredientID', recipeIng.ingredientID)
-          .single();
-        // Check for required quantity
-        if (ingError || !ingredientData || ingredientData.currentStock < (recipeIng.quantityRequired ?? 1)) {
-          anyOutOfStock = true;
-          break;
-        }
-      }
-    }
+    const hasIngredients = !recipeError && (count ?? 0) > 0;
+
     await supabase
       .from('MenuItem')
-      .update({ isAvailable: !anyOutOfStock })
+      .update({ isAvailable: hasIngredients })
       .eq('menuItemID', menu.menuItemID);
   }
 }
