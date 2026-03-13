@@ -37,18 +37,27 @@ type NavItem = { name: string; path?: string };
 
 type ReportTab = 'Sales & EOD Report' | 'Receipts' | 'Purchase Transactions';
 
-type InventoryAuditRow = {
-  auditID?: number;
+type EODReportItem = {
+  auditItemID?: number;
+  sessionID?: number;
   ingredientID: number;
   systemStock: number;
   physicalStock: number;
   variance: number;
-  recordedBy?: string | null;
-  createdAt?: string;
   Ingredient?: {
     name: string;
     unit: string;
   } | null;
+};
+
+type EODReportRow = {
+  reportID: number;
+  reportDate: string;
+  totalSales: number;
+  totalOrders: number;
+  recordedBy: string;
+  createdAt: string;
+  EODReportItems: EODReportItem[]; // Relation to the items table
 };
 
 type OrderRow = {
@@ -555,7 +564,7 @@ export default function ReportsPage() {
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'cash' | 'gcash' | 'bank'>('all');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | '7d' | '30d'>('all');
 
-  const [eodRows, setEodRows] = useState<InventoryAuditRow[]>([]);
+  const [eodRows, setEodRows] = useState<EODReportItem[]>([]);
   const [eodLoading, setEodLoading] = useState(false);
   const [eodDate, setEodDate] = useState<string>(toLocalDateInput(new Date()));
   const [eodQuery, setEodQuery] = useState('');
@@ -599,13 +608,17 @@ export default function ReportsPage() {
 
   useEffect(() => {
     const channel = supabase
-      .channel('eod-audit-realtime')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'InventoryAudit' }, () => {
-        fetchEodAudit();
-      })
+      .channel('eod-report-realtime')
+      .on(
+        'postgres_changes', 
+        { event: '*', schema: 'public', table: 'AuditItem' }, 
+        () => {
+          fetchEodAudit();
+        }
+      )
       .subscribe();
+      
     return () => { supabase.removeChannel(channel); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eodDate]);
 
   const fetchPurchases = async () => {
@@ -664,36 +677,46 @@ export default function ReportsPage() {
     setEodLoading(true);
 
     try {
-      const start = new Date(`${eodDate}T00:00:00`);
-      const end = new Date(`${eodDate}T23:59:59.999`);
-
+      // We filter by the date part of the createdAt timestamp
       const { data, error } = await supabase
-        .from('InventoryAudit')
+        .from('AuditSession')
         .select(`
-          auditID,
-          ingredientID,
-          systemStock,
-          physicalStock,
-          variance,
+          sessionID,
           recordedBy,
+          notes,
           createdAt,
-          Ingredient(name, unit)
+          AuditItem (
+            auditItemID,
+            ingredientID,
+            systemStock,
+            physicalStock,
+            variance,
+            Ingredient (name, unit)
+          )
         `)
-        .gte('createdAt', start.toISOString())
-        .lte('createdAt', end.toISOString())
+        // Since your table uses "createdAt" instead of a plain "reportDate", 
+        // we filter for the full day range of the selected eodDate
+        .gte('createdAt', `${eodDate}T00:00:00`)
+        .lte('createdAt', `${eodDate}T23:59:59`)
         .order('createdAt', { ascending: false });
 
       if (error) throw error;
 
-      const transformedData = (data || []).map((row: any) => ({
-        ...row,
-        Ingredient: Array.isArray(row.Ingredient) && row.Ingredient.length > 0 ? row.Ingredient[0] : null,
-      }));
-
-      setEodRows(transformedData as InventoryAuditRow[]);
+      // Map the nested items from the first session found for that date
+      if (data && data.length > 0) {
+        const latestSession = data[0]; // Gets the most recent audit for that day
+        const transformedData = (latestSession.AuditItem || []).map((item: any) => ({
+          ...item,
+          // Handling the nested Ingredient object
+          Ingredient: Array.isArray(item.Ingredient) ? item.Ingredient[0] : item.Ingredient,
+        }));
+        setEodRows(transformedData);
+      } else {
+        setEodRows([]);
+      }
     } catch (err: any) {
       console.error('Error fetching EOD audit:', err);
-      alert(`Failed to fetch EOD audit: ${err.message || 'Unknown error'}`);
+      alert(`Failed to fetch EOD audit: ${err.message}`);
     } finally {
       setEodLoading(false);
     }
@@ -827,15 +850,16 @@ export default function ReportsPage() {
   }, [receipts, eodDate]);
 
   const salesEodSummary = useMemo(() => {
+    // Total Sales & Orders now come from the parent report record or your order fetch
     const totalSales = salesEodOrdersForDate.reduce((sum, order) => sum + Number(order.amount || 0), 0);
-    const totalChange = salesEodOrdersForDate.reduce((sum, order) => sum + Number(order.change || 0), 0);
     const totalOrders = salesEodOrdersForDate.length;
+    const totalChange = salesEodOrdersForDate.reduce((sum, order) => sum + Number(order.change || 0), 0);
 
     const totalItemsSold = salesEodOrdersForDate.reduce((sum, order) => {
       return sum + (order.items || []).reduce((itemSum: number, it: any) => itemSum + Number(it.quantity || 0), 0);
     }, 0);
 
-    const totalAuditedItems = eodRowsView.length;
+    const totalAuditedItems = eodRows.length;
     const totalSystemStock = eodRowsView.reduce((sum, row) => sum + Number(row.systemStock || 0), 0);
     const totalPhysicalStock = eodRowsView.reduce((sum, row) => sum + Number(row.physicalStock || 0), 0);
 
@@ -844,9 +868,9 @@ export default function ReportsPage() {
       return used > 0 ? sum + used : sum;
     }, 0);
 
-    const totalVariance = eodRowsView.reduce((sum, row) => sum + Number(row.variance || 0), 0);
-    const overages = eodRowsView.filter((row) => Number(row.variance || 0) > 0).length;
-    const shortages = eodRowsView.filter((row) => Number(row.variance || 0) < 0).length;
+    const totalVariance = eodRows.reduce((sum, row) => sum + Number(row.variance || 0), 0);
+    const overages = eodRows.filter((row) => Number(row.variance || 0) > 0).length;
+    const shortages = eodRows.filter((row) => Number(row.variance || 0) < 0).length;
 
     return {
       totalSales,
@@ -1512,7 +1536,7 @@ export default function ReportsPage() {
 
                             return (
                               <div
-                                key={`${row.auditID || row.ingredientID}-${index}`}
+                                key={`${row.auditItemID || row.ingredientID}-${index}`}
                                 className="grid grid-cols-[1.4fr_0.8fr_0.8fr_0.8fr_0.8fr] gap-3 px-5 py-4 text-[12px] font-bold hover:bg-[#FAFAFA]"
                               >
                                 <div className="min-w-0">

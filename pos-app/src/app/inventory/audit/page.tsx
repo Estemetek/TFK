@@ -11,14 +11,9 @@ import {
   MdInventory2,
   MdWarningAmber,
   MdRefresh,
+  MdLockClock,
+  MdInfoOutline
 } from "react-icons/md";
-
-type IngredientItem = {
-  ingredientID: number;
-  name: string;
-  currentStock: number;
-  unit: string;
-};
 
 const SURFACE =
   "rounded-2xl bg-white/70 shadow-sm ring-1 ring-card-border " +
@@ -50,6 +45,13 @@ const BTN_NEUTRAL =
 const CHIP_BASE =
   "inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-card-border";
 
+type IngredientItem = {
+  ingredientID: number;
+  name: string;
+  currentStock: number;
+  unit: string;
+};
+
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -67,9 +69,29 @@ export default function EODAuditPage() {
   const [auditCounts, setAuditCounts] = useState<Record<number, number>>({});
   const [query, setQuery] = useState("");
 
+  // For Lock and Confirmation before submission
+  const [hasSubmittedToday, setHasSubmittedToday] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+
   const fetchIngredients = async () => {
     setLoading(true);
 
+    // 1. Check if an audit already exists for today (Singapore Time)
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' });
+    const { data: existingSession } = await supabase
+      .from("AuditSession")
+      .select("sessionID")
+      .gte("createdAt", `${today}T00:00:00`)
+      .lte("createdAt", `${today}T23:59:59`)
+      .limit(1);
+
+    if (existingSession && existingSession.length > 0) {
+      setHasSubmittedToday(true);
+      setLoading(false);
+      return;
+    }
+
+    // 2. Fetch ingredients
     const { data, error } = await supabase
       .from("Ingredient")
       .select("ingredientID, name, currentStock, unit")
@@ -86,10 +108,9 @@ export default function EODAuditPage() {
 
     const initialCounts: Record<number, number> = {};
     rows.forEach((item) => {
-      initialCounts[item.ingredientID] = toWholeNumber(item.currentStock);
+      initialCounts[item.ingredientID] = Math.floor(item.currentStock);
     });
     setAuditCounts(initialCounts);
-
     setLoading(false);
   };
 
@@ -162,43 +183,72 @@ export default function EODAuditPage() {
     });
   }, [ingredients, auditCounts]);
 
+  // REVISED: Two-Step Submission Logic
   const handleSubmitAudit = async () => {
-    if (!ingredients.length) return;
-
     setIsSubmitting(true);
-
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
 
-      const auditRows = ingredients.map((item) => {
-        const system = toWholeNumber(item.currentStock);
-        let physical = toWholeNumber(auditCounts[item.ingredientID] ?? 0);
+      // STEP 1: Create the Batch Session Header
+      const { data: session, error: sessionError } = await supabase
+        .from("AuditSession")
+        .insert([{ 
+            recordedBy: user?.id, 
+            notes: "End of Day Manual Audit" 
+        }])
+        .select()
+        .single();
 
-        if (physical > system) physical = system;
+      if (sessionError) throw sessionError;
 
+      // STEP 2: Prepare the Detail Items linked to the SessionID
+      const auditItems = ingredients.map((item) => {
+        const system = Number(item.currentStock) || 0;
+        const physical = Number(auditCounts[item.ingredientID] ?? 0);
         return {
+          sessionID: session.sessionID,
           ingredientID: item.ingredientID,
           systemStock: system,
           physicalStock: physical,
           variance: physical - system,
-          recordedBy: user?.id ?? null,
         };
       });
 
-      const { error } = await supabase.from("InventoryAudit").insert(auditRows);
+      const { error: itemsError } = await supabase
+        .from("AuditItem")
+        .insert(auditItems);
 
-      if (error) throw error;
+      if (itemsError) throw itemsError;
 
-      alert("EOD Audit successfully submitted.");
+      alert("EOD Batch Audit successfully submitted and locked.");
       router.push("/inventory");
     } catch (err: any) {
       alert("Audit failed: " + err.message);
-    } finally {
       setIsSubmitting(false);
+      setShowConfirmModal(false);
     }
   };
+
+  // UI: Locked State View
+  if (!loading && hasSubmittedToday) {
+    return (
+      <div className="mx-auto max-w-2xl p-20 text-center">
+        <div className={cn(SURFACE, "p-10 flex flex-col items-center gap-4")}>
+          <div className="h-16 w-16 bg-amber-50 text-amber-600 rounded-full grid place-items-center">
+            <MdLockClock size={32} />
+          </div>
+          <h1 className="text-2xl font-bold">Audit Already Submitted</h1>
+          <p className="text-text-muted">
+            The End-of-Day inventory audit for today has already been recorded. 
+            Only one audit session is allowed per day to maintain data integrity.
+          </p>
+          <button onClick={() => router.push("/inventory")} className={BTN_PRIMARY}>
+            Back to Inventory
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -272,7 +322,7 @@ export default function EODAuditPage() {
                 </button>
 
                 <button
-                  onClick={handleSubmitAudit}
+                  onClick={() => setShowConfirmModal(true)}
                   disabled={isSubmitting || ingredients.length === 0}
                   className={BTN_PRIMARY}
                 >
@@ -309,7 +359,7 @@ export default function EODAuditPage() {
                 icon={<MdWarningAmber size={20} />}
               />
             </div>
-
+            
             <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="relative w-full md:max-w-sm">
                 <MdSearch
@@ -470,13 +520,14 @@ export default function EODAuditPage() {
           )}
         </section>
 
+        {/* FOOTER ACTION AREA */}
         <div className="sticky bottom-4 z-20">
           <div className={cn(SURFACE, "p-4")}>
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="text-sm font-semibold">Ready to finalize today’s audit?</p>
                 <p className="text-xs text-text-muted mt-1">
-                  This will save the physical counts for all ingredients in the audit sheet.
+                  Review your counts. This action will lock inventory for the rest of the day.
                 </p>
               </div>
 
@@ -485,7 +536,7 @@ export default function EODAuditPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={handleSubmitAudit}
+                  onClick={() => setShowConfirmModal(true)} // Changed this
                   disabled={isSubmitting || ingredients.length === 0}
                   className={BTN_PRIMARY}
                 >
@@ -497,6 +548,54 @@ export default function EODAuditPage() {
           </div>
         </div>
       </div>
+
+      {/* CONFIRMATION MODAL OVERLAY */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl ring-1 ring-black/5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 text-primary mb-4">
+              <div className="p-2 bg-primary/10 rounded-xl">
+                <MdInfoOutline size={24} />
+              </div>
+              <h2 className="text-xl font-bold text-foreground">Confirm Submission</h2>
+            </div>
+            
+            <p className="text-sm text-text-muted leading-relaxed">
+              You are about to submit the EOD Audit. This will <strong>lock</strong> inventory records for today and cannot be edited later.
+            </p>
+
+            <div className="mt-6 space-y-3 bg-black/5 p-4 rounded-2xl border border-black/5">
+              <div className="flex justify-between text-xs font-medium">
+                <span className="text-text-muted">Items Audited</span>
+                <span>{totals.totalItems}</span>
+              </div>
+              <div className="flex justify-between text-xs font-medium">
+                <span className="text-text-muted">Detected Variances</span>
+                <span className={totals.changedItems > 0 ? "text-amber-600" : ""}>
+                  {totals.changedItems}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-8 grid grid-cols-2 gap-3">
+              <button 
+                onClick={() => setShowConfirmModal(false)}
+                className={BTN_NEUTRAL}
+                disabled={isSubmitting}
+              >
+                Go Back
+              </button>
+              <button 
+                onClick={handleSubmitAudit} // The actual DB call happens here
+                className={BTN_PRIMARY}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Processing..." : "Confirm & Lock"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
