@@ -30,6 +30,7 @@ import {
   MdInfo,
   MdVisibility,
   MdDownload,
+  MdAttachMoney,
 } from 'react-icons/md';
 
 // -------------------- Types --------------------
@@ -61,6 +62,15 @@ function startOfDay(d = new Date()) {
   return x;
 }
 
+function startOfWeek(d: Date) {
+  const x = new Date(d);
+  const day = x.getDay(); // 0 = Sunday
+  const diff = day === 0 ? -6 : 1 - day; // Monday start
+  x.setDate(x.getDate() + diff);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
 function addDays(d: Date, days: number) {
   const x = new Date(d);
   x.setDate(x.getDate() + days);
@@ -83,6 +93,12 @@ function clampMin1(n: number) {
 function buildPaletteColor(accentVar: string, strengthPct: number) {
   const pct = Math.max(30, Math.min(90, strengthPct));
   return `color-mix(in oklab, var(${accentVar}) ${pct}%, white ${100 - pct}%)`;
+}
+
+function formatWeekLabel(start: Date, end: Date) {
+  const a = start.toLocaleDateString(undefined, { month: 'short', day: '2-digit' });
+  const b = end.toLocaleDateString(undefined, { month: 'short', day: '2-digit' });
+  return `${a} - ${b}`;
 }
 
 function genSegmentsFromMap(
@@ -115,11 +131,11 @@ function genSegmentsFromMap(
 
 function downloadCSV(filename: string, rows: Array<Record<string, any>>) {
   const headers = Array.from(
-  rows.reduce<Set<string>>((set, r) => {
-    Object.keys(r).forEach((k) => set.add(k));
-    return set;
-  }, new Set<string>())
-);
+    rows.reduce<Set<string>>((set, r) => {
+      Object.keys(r).forEach((k) => set.add(k));
+      return set;
+    }, new Set<string>())
+  );
 
   const esc = (v: any) => {
     const s = String(v ?? '');
@@ -142,17 +158,22 @@ function calcStockAlertRow(i: LowStockItem): StockAlertRow {
   const level = Math.max(1, safeNum(i.reorderLevel));
   const stock = safeNum(i.currentStock);
 
-  const ratio = stock / level; // 1.0 = exactly reorder level
-  const pct = Math.max(0, Math.min(160, ratio * 100)); // allow slight >100 for visual
+  const ratio = stock / level;
+  const pct = Math.max(0, Math.min(160, ratio * 100));
 
-  // Critical: <= level
-  // Warning: <= 125% of level
-  // Healthy: > 125% of level
   let kind: StockAlertKind = 'Healthy';
   if (stock <= level) kind = 'Critical';
   else if (stock <= level * 1.25) kind = 'Warning';
 
   return { ...i, kind, ratio, pct };
+}
+
+function getExpenseAmount(row: any) {
+  return safeNum(row?.amount ?? row?.expenseAmount ?? row?.totalAmount ?? row?.value ?? row?.cost ?? row?.price ?? 0);
+}
+
+function getExpenseDate(row: any) {
+  return row?.createdAt ?? row?.expenseDate ?? row?.dateCreated ?? row?.date ?? row?.transactionDate ?? null;
 }
 
 const iconMap: Record<string, React.ReactNode> = {
@@ -169,9 +190,7 @@ const StatusPill = ({ status }: { status: 'In Stock' | 'Out of stock' }) => (
   <span
     className={cn(
       'inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full ring-1',
-      status === 'In Stock'
-        ? 'bg-green-50 text-green-700 ring-green-200'
-        : 'bg-red-50 text-red-700 ring-red-200'
+      status === 'In Stock' ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-red-50 text-red-700 ring-red-200'
     )}
   >
     {status === 'In Stock' ? <MdCheckCircle className="h-3.5 w-3.5" /> : <MdCancel className="h-3.5 w-3.5" />}
@@ -247,7 +266,7 @@ function Tooltip({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed z-[100px]ointer-events-none" style={{ left: x + 12, top: y + 12, maxWidth: 260 }}>
+    <div className="fixed z-[9999] pointer-events-none" style={{ left: x + 12, top: y + 12, maxWidth: 260 }}>
       <div className="rounded-2xl bg-white shadow-lg ring-1 ring-card-border px-3 py-2">
         {title && <div className="text-xs font-black text-foreground mb-0.5">{title}</div>}
         {lines.map((t, i) => (
@@ -272,7 +291,7 @@ function SegLegend({
   rightLabel?: (s: DonutSeg) => React.ReactNode;
 }) {
   return (
-    <div className="max-h-170px overflow-auto pr-2 space-y-2 w-full">
+    <div className="max-h-[170px] overflow-auto pr-2 space-y-2 w-full">
       {segments.map((s) => {
         const active = activeLabel === s.label;
         return (
@@ -300,7 +319,6 @@ function SegLegend({
   );
 }
 
-/** SVG Donut chart with hover + click isolate (no libs) */
 function DonutChart({
   segments,
   size = 150,
@@ -373,77 +391,6 @@ function DonutChart({
   );
 }
 
-function MiniLineChart({
-  points,
-  height = 90,
-  accentVar = '--primary',
-  tooltipLabel,
-  yFormat,
-  onHoverIndex,
-}: {
-  points: number[];
-  height?: number;
-  accentVar?: string;
-  tooltipLabel?: (index: number) => string;
-  yFormat?: (v: number) => string;
-  onHoverIndex?: (i: number | null) => void;
-}) {
-  const w = 340;
-  const h = height;
-  const pad = 12;
-
-  const maxV = Math.max(...points, 1);
-  const minV = Math.min(...points, 0);
-
-  const scaleX = (i: number) => pad + (i * (w - pad * 2)) / Math.max(1, points.length - 1);
-  const scaleY = (v: number) => {
-    const denom = maxV - minV || 1;
-    const t = (v - minV) / denom;
-    return h - pad - t * (h - pad * 2);
-  };
-
-  const d = points
-    .map((v, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(i).toFixed(2)} ${scaleY(v).toFixed(2)}`)
-    .join(' ');
-
-  const area = `${d} L ${scaleX(points.length - 1).toFixed(2)} ${(h - pad).toFixed(2)} L ${scaleX(0).toFixed(2)} ${(h - pad).toFixed(2)} Z`;
-
-  return (
-    <div className="rounded-2xl bg-white/70 ring-1 ring-card-border p-3">
-      <svg viewBox={`0 0 ${w} ${h}`} className="h-22.5 w-full">
-        <path d={area} fill={buildPaletteColor(accentVar, 22)} stroke="none" />
-        <path d={d} fill="none" stroke={buildPaletteColor(accentVar, 82)} strokeWidth="3" strokeLinejoin="round" />
-
-        {points.map((v, i) => {
-          const cx = scaleX(i);
-          const cy = scaleY(v);
-          return (
-            <g key={i}>
-              <circle
-                cx={cx}
-                cy={cy}
-                r="10"
-                fill="transparent"
-                style={{ cursor: 'crosshair' }}
-                onMouseEnter={() => onHoverIndex?.(i)}
-                onMouseLeave={() => onHoverIndex?.(null)}
-              />
-              <circle cx={cx} cy={cy} r="3.5" fill={buildPaletteColor(accentVar, 86)} opacity="0.95" />
-            </g>
-          );
-        })}
-      </svg>
-
-      <div className="mt-2 flex items-center justify-between text-[10px] text-text-muted">
-        <span>7-day trend</span>
-        <span className="font-black text-foreground/80">
-          {yFormat ? yFormat(points.reduce((a, x) => a + x, 0)) : points.reduce((a, x) => a + x, 0)}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 function Tabs({
   value,
   onChange,
@@ -491,7 +438,7 @@ function Drawer({
   return (
     <>
       <div className="fixed inset-0 z-90 bg-black/35 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed right-0 top-0 z-95 h-screen w-full sm:w-105 bg-white shadow-2xl ring-1 ring-card-border">
+      <div className="fixed right-0 top-0 z-95 h-screen w-full sm:w-[420px] bg-white shadow-2xl ring-1 ring-card-border">
         <div className="flex items-center justify-between p-4 border-b border-card-border">
           <div className="min-w-0">
             <p className="text-xs font-black text-text-muted uppercase tracking-widest">Details</p>
@@ -512,7 +459,6 @@ function Drawer({
   );
 }
 
-// Sidebar extracted outside
 function AppSidebar({
   isMobile,
   collapsed,
@@ -583,7 +529,6 @@ function AppSidebar({
   );
 }
 
-/** Front-of-graphs: Stock Alert Level panel */
 function StockAlertMeter({
   total,
   critical,
@@ -611,11 +556,7 @@ function StockAlertMeter({
   );
 
   const barSeg = (pct: number, varName: string) => (
-    <div
-      style={{ width: `${pct}%`, background: buildPaletteColor(varName, 80) }}
-      className="h-full"
-      aria-hidden
-    />
+    <div style={{ width: `${pct}%`, background: buildPaletteColor(varName, 80) }} className="h-full" aria-hidden />
   );
 
   const meterRow = (r: StockAlertRow) => {
@@ -665,7 +606,7 @@ function StockAlertMeter({
   };
 
   return (
-    <div className="rounded-2xl bg-white/70 ring-1 ring-card-border p-4">
+    <div className="rounded-2xl bg-white/70 ring-1 ring-card-border p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-black text-text-muted uppercase tracking-widest flex items-center gap-2">
@@ -703,15 +644,151 @@ function StockAlertMeter({
       </div>
 
       <div className="mt-3 grid gap-2">
-        {topRows.length ? topRows.map(meterRow) : (
+        {topRows.length ? (
+          topRows.map(meterRow)
+        ) : (
           <div className="p-4 rounded-2xl bg-green-50/50 ring-1 ring-green-200 text-[10px] font-black uppercase tracking-widest text-green-700 text-center">
             Inventory Healthy
           </div>
         )}
       </div>
 
-      <div className="mt-3 text-[10px] text-text-muted">
-        Rule: Critical = stock ≤ reorder level, Warning = stock ≤ 125% of reorder level.
+      <div className="mt-3 text-[10px] text-text-muted">Rule: Critical = stock ≤ reorder level, Warning = stock ≤ 125% of reorder level.</div>
+    </div>
+  );
+}
+
+function SalesExpensesChart({
+  salesPoints,
+  expensePoints,
+  labels,
+  onHoverPoint,
+}: {
+  salesPoints: number[];
+  expensePoints: number[];
+  labels: string[];
+  onHoverPoint?: (payload: { index: number | null; x: number; y: number; kind: 'sales' | 'expenses' | null }) => void;
+}) {
+  const w = 720;
+  const h = 240;
+  const padX = 24;
+  const padY = 18;
+
+  const all = [...salesPoints, ...expensePoints];
+  const maxV = Math.max(...all, 1);
+  const minV = 0;
+
+  const innerW = w - padX * 2;
+  const innerH = h - padY * 2;
+
+  const scaleX = (i: number) => padX + (i * innerW) / Math.max(1, salesPoints.length - 1);
+  const scaleY = (v: number) => {
+    const denom = maxV - minV || 1;
+    const t = (v - minV) / denom;
+    return h - padY - t * innerH;
+  };
+
+  const makeLine = (points: number[]) =>
+    points
+      .map((v, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(i).toFixed(2)} ${scaleY(v).toFixed(2)}`)
+      .join(' ');
+
+  const makeArea = (points: number[]) => {
+    const line = makeLine(points);
+    return `${line} L ${scaleX(points.length - 1).toFixed(2)} ${(h - padY).toFixed(2)} L ${scaleX(0).toFixed(2)} ${(h - padY).toFixed(2)} Z`;
+  };
+
+  const salesLine = makeLine(salesPoints);
+  const salesArea = makeArea(salesPoints);
+  const expensesLine = makeLine(expensePoints);
+  const expensesArea = makeArea(expensePoints);
+
+  return (
+    <div className="rounded-2xl bg-white/75 ring-1 ring-card-border p-4 overflow-visible">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-black text-foreground">Sales and Expenses</p>
+          <p className="text-[10px] text-text-muted uppercase tracking-widest">4-week comparison</p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 text-[10px] font-black uppercase tracking-widest">
+          <span className="inline-flex items-center gap-2 rounded-full bg-white px-2.5 py-1 ring-1 ring-card-border">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: buildPaletteColor('--primary', 82) }} />
+            Sales
+          </span>
+          <span className="inline-flex items-center gap-2 rounded-full bg-white px-2.5 py-1 ring-1 ring-card-border">
+            <span className="h-2.5 w-2.5 rounded-full bg-black" />
+            Expenses
+          </span>
+        </div>
+      </div>
+
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-[250px] overflow-visible">
+        {[0, 0.25, 0.5, 0.75, 1].map((t, idx) => {
+          const y = padY + innerH * t;
+          return <line key={idx} x1={padX} x2={w - padX} y1={y} y2={y} stroke="rgba(0,0,0,0.08)" strokeDasharray="4 4" />;
+        })}
+
+        <path d={salesArea} fill={buildPaletteColor('--primary', 20)} />
+        <path d={expensesArea} fill="rgba(0,0,0,0.12)" />
+
+        <path
+          d={salesLine}
+          fill="none"
+          stroke={buildPaletteColor('--primary', 84)}
+          strokeWidth="3.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path d={expensesLine} fill="none" stroke="black" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+
+        {salesPoints.map((v, i) => {
+          const cx = scaleX(i);
+          const cy = scaleY(v);
+          return (
+            <g key={`sales-${i}`}>
+              <circle
+                cx={cx}
+                cy={cy}
+                r="12"
+                fill="transparent"
+                style={{ cursor: 'crosshair' }}
+                onMouseEnter={(e: any) => onHoverPoint?.({ index: i, x: e.clientX, y: e.clientY, kind: 'sales' })}
+                onMouseLeave={() => onHoverPoint?.({ index: null, x: 0, y: 0, kind: null })}
+              />
+              <circle cx={cx} cy={cy} r="4" fill={buildPaletteColor('--primary', 84)} />
+            </g>
+          );
+        })}
+
+        {expensePoints.map((v, i) => {
+          const cx = scaleX(i);
+          const cy = scaleY(v);
+          return (
+            <g key={`expenses-${i}`}>
+              <circle
+                cx={cx}
+                cy={cy}
+                r="12"
+                fill="transparent"
+                style={{ cursor: 'crosshair' }}
+                onMouseEnter={(e: any) => onHoverPoint?.({ index: i, x: e.clientX, y: e.clientY, kind: 'expenses' })}
+                onMouseLeave={() => onHoverPoint?.({ index: null, x: 0, y: 0, kind: null })}
+              />
+              <circle cx={cx} cy={cy} r="4" fill="black" />
+            </g>
+          );
+        })}
+      </svg>
+
+      <div className="mt-4 grid grid-cols-4 gap-2">
+        {labels.map((label, idx) => (
+          <div key={idx} className="text-center">
+            <p className="text-[10px] font-black text-text-muted uppercase tracking-widest">{label}</p>
+            <p className="mt-1 text-[10px] text-red-500">{fmtMoneyPhp(salesPoints[idx] ?? 0)}</p>
+            <p className="text-[10px] text-black">{fmtMoneyPhp(expensePoints[idx] ?? 0)}</p>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -736,28 +813,24 @@ export default function DashboardPage() {
   const [recentOrders, setRecentOrders] = useState<Dish[]>([]);
   const [lowStockIngredients, setLowStockIngredients] = useState<LowStockItem[]>([]);
 
-  // NEW: stock level visible in front (with graphs)
   const [stockTotal, setStockTotal] = useState(0);
   const [stockCritical, setStockCritical] = useState(0);
   const [stockWarning, setStockWarning] = useState(0);
   const [stockTopRows, setStockTopRows] = useState<StockAlertRow[]>([]);
 
-  // Charts UX
   const [range, setRange] = useState<'today' | '7d'>('today');
 
-  const [sales7d, setSales7d] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
-  const [orders7d, setOrders7d] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
+  const [salesWeekly, setSalesWeekly] = useState<number[]>([0, 0, 0, 0]);
+  const [expensesWeekly, setExpensesWeekly] = useState<number[]>([0, 0, 0, 0]);
 
-  // raw for export
-  const [sales7dLabels, setSales7dLabels] = useState<string[]>([]);
-  const [orders7dLabels, setOrders7dLabels] = useState<string[]>([]);
+  const [salesWeeklyLabels, setSalesWeeklyLabels] = useState<string[]>([]);
+  const [expensesWeeklyLabels, setExpensesWeeklyLabels] = useState<string[]>([]);
 
   const [mixMenuToday, setMixMenuToday] = useState<DonutSeg[]>([]);
   const [mixMenuAll, setMixMenuAll] = useState<DonutSeg[]>([]);
   const [mixPaymentsToday, setMixPaymentsToday] = useState<DonutSeg[]>([]);
   const [mixCategoryToday, setMixCategoryToday] = useState<DonutSeg[]>([]);
 
-  // Interactions
   const [activeDonut, setActiveDonut] = useState<{ key: string; label: string | null }>({ key: 'menu', label: null });
   const [lockedDonut, setLockedDonut] = useState<{ key: string; label: string | null }>({ key: 'menu', label: null });
 
@@ -769,10 +842,6 @@ export default function DashboardPage() {
     lines: [],
   });
 
-  const [hoverSalesIdx, setHoverSalesIdx] = useState<number | null>(null);
-  const [hoverOrdersIdx, setHoverOrdersIdx] = useState<number | null>(null);
-
-  // Drilldown drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTitle, setDrawerTitle] = useState('');
   const [drawerRows, setDrawerRows] = useState<Array<Record<string, any>>>([]);
@@ -798,15 +867,11 @@ export default function DashboardPage() {
   }, [mixMenuToday, mixMenuAll, range]);
 
   const donutPayments = useMemo(() => {
-    return mixPaymentsToday.length
-      ? mixPaymentsToday
-      : [{ label: 'No data', value: 1, color: 'rgba(0,0,0,0.12)', meta: { pct: 100 } }];
+    return mixPaymentsToday.length ? mixPaymentsToday : [{ label: 'No data', value: 1, color: 'rgba(0,0,0,0.12)', meta: { pct: 100 } }];
   }, [mixPaymentsToday]);
 
   const donutCategory = useMemo(() => {
-    return mixCategoryToday.length
-      ? mixCategoryToday
-      : [{ label: 'No data', value: 1, color: 'rgba(0,0,0,0.12)', meta: { pct: 100 } }];
+    return mixCategoryToday.length ? mixCategoryToday : [{ label: 'No data', value: 1, color: 'rgba(0,0,0,0.12)', meta: { pct: 100 } }];
   }, [mixCategoryToday]);
 
   const totalOrdersMenu = useMemo(() => donutMenu.reduce((a, s) => a + s.value, 0), [donutMenu]);
@@ -836,20 +901,51 @@ export default function DashboardPage() {
     setDrawerRows([]);
   };
 
+  const fetchExpenseRows = async (todayIso: string, startWeeklyIso: string) => {
+    const expenseSelect = '*';
+
+    const todayExpenseFromExpense = supabase.from('Expense').select(expenseSelect).gte('createdAt', todayIso);
+    const weeklyExpenseFromExpense = supabase.from('Expense').select(expenseSelect).gte('createdAt', startWeeklyIso);
+
+    const todayExpenseFromExpenses = supabase.from('Expenses').select(expenseSelect).gte('createdAt', todayIso);
+    const weeklyExpenseFromExpenses = supabase.from('Expenses').select(expenseSelect).gte('createdAt', startWeeklyIso);
+
+    let todayRows: any[] = [];
+    let weeklyRows: any[] = [];
+
+    const firstTry = await Promise.allSettled([todayExpenseFromExpense, weeklyExpenseFromExpense]);
+
+    const firstToday = firstTry[0].status === 'fulfilled' ? firstTry[0].value : null;
+    const firstWeekly = firstTry[1].status === 'fulfilled' ? firstTry[1].value : null;
+
+    const firstHasData = !firstToday?.error || !firstWeekly?.error;
+
+    if (firstHasData && (!firstToday?.error || !firstWeekly?.error)) {
+      todayRows = firstToday?.data || [];
+      weeklyRows = firstWeekly?.data || [];
+      return { todayRows, weeklyRows };
+    }
+
+    const secondTry = await Promise.allSettled([todayExpenseFromExpenses, weeklyExpenseFromExpenses]);
+
+    const secondToday = secondTry[0].status === 'fulfilled' ? secondTry[0].value : null;
+    const secondWeekly = secondTry[1].status === 'fulfilled' ? secondTry[1].value : null;
+
+    todayRows = secondToday?.data || [];
+    weeklyRows = secondWeekly?.data || [];
+
+    return { todayRows, weeklyRows };
+  };
+
   const fetchDashboardData = async () => {
     const today = startOfDay(new Date());
-    const start7d = startOfDay(addDays(today, -6)); // includes today (7 points)
+    const currentWeekStart = startOfWeek(today);
+    const start4Weeks = startOfWeek(addDays(currentWeekStart, -21));
 
     try {
-      const ordersTodayQ = supabase
-        .from('Order')
-        .select('orderID, amount, createdAt, paymentmethod')
-        .gte('createdAt', today.toISOString());
+      const ordersTodayQ = supabase.from('Order').select('orderID, amount, createdAt, paymentmethod').gte('createdAt', today.toISOString());
 
-      const orders7dQ = supabase
-        .from('Order')
-        .select('orderID, amount, createdAt')
-        .gte('createdAt', start7d.toISOString());
+      const ordersWeeklyQ = supabase.from('Order').select('orderID, amount, createdAt').gte('createdAt', start4Weeks.toISOString());
 
       const ingredientsQ = supabase.from('Ingredient').select('name, currentStock, reorderLevel, unit');
 
@@ -868,28 +964,44 @@ export default function DashboardPage() {
         .select('orderID, menuItemID, quantity, MenuItem(name, Category(categoryName)), Order(createdAt)')
         .gte('Order.createdAt', today.toISOString());
 
+      const expenseBundlePromise = fetchExpenseRows(today.toISOString(), start4Weeks.toISOString());
+
       const [
         { data: ordersToday, error: ordersTodayErr },
-        { data: orders7d, error: orders7dErr },
+        { data: ordersWeeklyData, error: ordersWeeklyErr },
         { data: ingredients, error: ingErr },
         { data: items, error: itemsErr },
         { data: recentTx, error: txErr },
         { data: oiAll, error: oiAllErr },
         { data: oiToday, error: oiTodayErr },
-      ] = await Promise.all([ordersTodayQ, orders7dQ, ingredientsQ, itemsQ, recentOrdersQ, orderItemsAllQ, orderItemsTodayQ]);
+        expenseBundle,
+      ] = await Promise.all([
+        ordersTodayQ,
+        ordersWeeklyQ,
+        ingredientsQ,
+        itemsQ,
+        recentOrdersQ,
+        orderItemsAllQ,
+        orderItemsTodayQ,
+        expenseBundlePromise,
+      ]);
 
       if (ordersTodayErr) console.error(ordersTodayErr);
-      if (orders7dErr) console.error(orders7dErr);
+      if (ordersWeeklyErr) console.error(ordersWeeklyErr);
       if (ingErr) console.error(ingErr);
       if (itemsErr) console.error(itemsErr);
       if (txErr) console.error(txErr);
       if (oiAllErr) console.error('OrderItem all query error:', oiAllErr);
       if (oiTodayErr) console.error('OrderItem today query error:', oiTodayErr);
 
+      const expenseTodayRows = expenseBundle.todayRows || [];
+      const expenseWeeklyRows = expenseBundle.weeklyRows || [];
+
       const dailyTotal = (ordersToday || []).reduce((acc: number, curr: any) => acc + safeNum(curr.amount), 0);
+      const dailyExpenseTotal = expenseTodayRows.reduce((acc: number, curr: any) => acc + getExpenseAmount(curr), 0);
       const ordersTodayCount = (ordersToday || []).length;
 
-      // --- STOCK LEVELS (visible in front with graphs) ---
+      // --- STOCK LEVELS ---
       const ingRows: LowStockItem[] =
         (ingredients || []).map((i: any) => ({
           name: i.name,
@@ -906,13 +1018,9 @@ export default function DashboardPage() {
       setStockCritical(criticalRows.length);
       setStockWarning(warningRows.length);
 
-      // Top rows shown beside charts: critical first (lowest ratio), then warning
-      const top = [...criticalRows, ...warningRows]
-        .sort((a, b) => a.ratio - b.ratio)
-        .slice(0, 4);
+      const top = [...criticalRows, ...warningRows].sort((a, b) => a.ratio - b.ratio).slice(0, 4);
       setStockTopRows(top);
 
-      // Keep your existing section data (critical list)
       const lowItems: LowStockItem[] = criticalRows.map((r) => ({
         name: r.name,
         currentStock: r.currentStock,
@@ -922,13 +1030,7 @@ export default function DashboardPage() {
 
       setLowStockIngredients(lowItems.slice(0, 4));
 
-      // Metrics (update Low Stock to reflect critical + warning in note)
-      const lowNote =
-        criticalRows.length > 0
-          ? 'Critical'
-          : warningRows.length > 0
-          ? 'Warning'
-          : 'All Good';
+      const lowNote = criticalRows.length > 0 ? 'Critical' : warningRows.length > 0 ? 'Warning' : 'All Good';
 
       setMetrics([
         {
@@ -939,11 +1041,18 @@ export default function DashboardPage() {
           accentVar: '--primary',
         },
         {
+          label: 'Daily Expenses',
+          value: fmtMoneyPhp(dailyExpenseTotal),
+          note: expenseTodayRows.length ? 'Tracked Today' : 'No expense rows',
+          icon: <MdAttachMoney />,
+          accentVar: '--accent-red',
+        },
+        {
           label: 'Stock Alerts',
           value: `${criticalRows.length} Critical`,
           note: warningRows.length ? `+${warningRows.length} Warn` : lowNote,
           icon: <MdWarning />,
-          accentVar: '--accent-red',
+          accentVar: '--accent-gold',
         },
         {
           label: 'Orders Today',
@@ -951,13 +1060,6 @@ export default function DashboardPage() {
           note: 'Live Traffic',
           icon: <MdInsights />,
           accentVar: '--accent-green',
-        },
-        {
-          label: 'System Status',
-          value: 'Live',
-          note: 'Connected',
-          icon: <span>●</span>,
-          accentVar: '--accent-gold',
         },
       ]);
 
@@ -981,35 +1083,46 @@ export default function DashboardPage() {
         }))
       );
 
-      // ---- 7-day arrays + labels ----
-      const dayLabels: string[] = [];
-      for (let i = 0; i < 7; i++) {
-        const d = addDays(start7d, i);
-        dayLabels.push(d.toLocaleDateString(undefined, { month: 'short', day: '2-digit' }));
+      // ---- Weekly Sales & Expenses (4 weeks) ----
+      const weekLabels: string[] = [];
+
+      for (let i = 0; i < 4; i++) {
+        const ws = addDays(start4Weeks, i * 7);
+        const we = addDays(ws, 6);
+        weekLabels.push(formatWeekLabel(ws, we));
       }
 
-      const idxByDay = (d: Date) => {
-        const s = startOfDay(d).getTime();
-        const base = startOfDay(start7d).getTime();
-        return Math.round((s - base) / (24 * 60 * 60 * 1000));
+      const idxByWeek = (d: Date) => {
+        const s = startOfWeek(d).getTime();
+        const base = start4Weeks.getTime();
+        return Math.round((s - base) / (7 * 24 * 60 * 60 * 1000));
       };
 
-      const salesArr = new Array(7).fill(0);
-      const ordersArr = new Array(7).fill(0);
+      const salesArr = new Array(4).fill(0);
+      const expenseArr = new Array(4).fill(0);
 
-      for (const o of orders7d || []) {
+      for (const o of ordersWeeklyData || []) {
         const created = new Date((o as any).createdAt);
-        const i = idxByDay(created);
-        if (i >= 0 && i < 7) {
+        const i = idxByWeek(created);
+        if (i >= 0 && i < 4) {
           salesArr[i] += safeNum((o as any).amount);
-          ordersArr[i] += 1;
         }
       }
 
-      setSales7d(salesArr);
-      setOrders7d(ordersArr);
-      setSales7dLabels(dayLabels);
-      setOrders7dLabels(dayLabels);
+      for (const e of expenseWeeklyRows) {
+        const rawDate = getExpenseDate(e);
+        if (!rawDate) continue;
+        const created = new Date(rawDate);
+        const i = idxByWeek(created);
+        if (i >= 0 && i < 4) {
+          expenseArr[i] += getExpenseAmount(e);
+        }
+      }
+
+      setSalesWeekly(salesArr);
+      setExpensesWeekly(expenseArr);
+      setSalesWeeklyLabels(weekLabels);
+      setExpensesWeeklyLabels(weekLabels);
 
       // ---- Payment method mix (today) ----
       const pm = new Map<string, number>();
@@ -1028,7 +1141,9 @@ export default function DashboardPage() {
           mapMenuToday.set(name, (mapMenuToday.get(name) || 0) + qty);
         }
         setMixMenuToday(genSegmentsFromMap(Array.from(mapMenuToday.entries()).map(([label, value]) => ({ label, value })), '--primary', 6));
-      } else setMixMenuToday([]);
+      } else {
+        setMixMenuToday([]);
+      }
 
       const mapMenuAll = new Map<string, number>();
       if (!oiAllErr && Array.isArray(oiAll)) {
@@ -1038,7 +1153,9 @@ export default function DashboardPage() {
           mapMenuAll.set(name, (mapMenuAll.get(name) || 0) + qty);
         }
         setMixMenuAll(genSegmentsFromMap(Array.from(mapMenuAll.entries()).map(([label, value]) => ({ label, value })), '--primary', 6));
-      } else setMixMenuAll([]);
+      } else {
+        setMixMenuAll([]);
+      }
 
       // ---- Category mix (today) ----
       const mapCatToday = new Map<string, number>();
@@ -1049,7 +1166,9 @@ export default function DashboardPage() {
           mapCatToday.set(cat, (mapCatToday.get(cat) || 0) + qty);
         }
         setMixCategoryToday(genSegmentsFromMap(Array.from(mapCatToday.entries()).map(([label, value]) => ({ label, value })), '--accent-green', 6));
-      } else setMixCategoryToday([]);
+      } else {
+        setMixCategoryToday([]);
+      }
 
       setActiveDonut({ key: 'menu', label: null });
       setLockedDonut({ key: 'menu', label: null });
@@ -1101,7 +1220,7 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
-  // -------------------- Tooltip tracking (mouse) --------------------
+  // -------------------- Tooltip tracking --------------------
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (tip.open) setTip((t) => ({ ...t, x: e.clientX, y: e.clientY }));
@@ -1123,8 +1242,23 @@ export default function DashboardPage() {
   }
 
   // -------------------- Drilldown data builders --------------------
-  const exportSales7d = () => downloadCSV('sales_7d.csv', sales7d.map((v, i) => ({ day: sales7dLabels[i] ?? `Day ${i + 1}`, sales_php: v })));
-  const exportOrders7d = () => downloadCSV('orders_7d.csv', orders7d.map((v, i) => ({ day: orders7dLabels[i] ?? `Day ${i + 1}`, orders: v })));
+  const exportSalesWeekly = () =>
+    downloadCSV(
+      'sales_per_week.csv',
+      salesWeekly.map((v, i) => ({
+        week: salesWeeklyLabels[i] ?? `Week ${i + 1}`,
+        sales_php: v,
+      }))
+    );
+
+  const exportExpensesWeekly = () =>
+    downloadCSV(
+      'expenses_per_week.csv',
+      expensesWeekly.map((v, i) => ({
+        week: expensesWeeklyLabels[i] ?? `Week ${i + 1}`,
+        expenses_php: v,
+      }))
+    );
 
   const drilldownFromSegments = (title: string, segments: DonutSeg[]) => {
     openDrawer(
@@ -1134,7 +1268,6 @@ export default function DashboardPage() {
   };
 
   const viewAllStockLevels = () => {
-    // show the same summary rows you see in the meter, plus counts
     openDrawer('Stock Levels (Summary)', [
       { item: 'Total ingredients', value: stockTotal },
       { item: 'Critical', value: stockCritical },
@@ -1223,7 +1356,6 @@ export default function DashboardPage() {
       </div>
 
       <main className="flex-1 p-4 md:p-8 space-y-6 overflow-x-hidden">
-        {/* Hero Header */}
         <header className="relative overflow-hidden rounded-2xl ring-1 ring-card-border bg-white/70 backdrop-blur shadow-sm">
           <div className="absolute inset-0 opacity-60 bg-linear-to-br from-primary/10 via-white to-surface-dark/10" />
           <div className="relative flex flex-col gap-3 p-4 md:p-5">
@@ -1294,7 +1426,7 @@ export default function DashboardPage() {
                 <button
                   onClick={() =>
                     openDrawer('How graphs work', [
-                      { item: 'Line Charts', detail: 'Hover points to see values. Export available.' },
+                      { item: 'Sales & Expenses', detail: 'Hover chart points to see exact weekly amounts. Export CSV is available.' },
                       { item: 'Donut Charts', detail: 'Hover legend or segments. Click to lock selection.' },
                       { item: 'Stock Alert Level', detail: 'Critical/Warning/Healthy shown beside the graphs.' },
                       { item: 'Details', detail: 'Click “View details” to open breakdown, export CSV.' },
@@ -1311,7 +1443,6 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {/* METRICS */}
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {metrics.map((m) => (
             <div key={m.label} className="relative overflow-hidden bg-card/70 backdrop-blur p-5 rounded-2xl ring-1 ring-card-border shadow-sm">
@@ -1342,59 +1473,93 @@ export default function DashboardPage() {
           ))}
         </section>
 
-        {/* CHARTS ROW (STOCK ALERT LEVEL VISIBLE IN FRONT WITH GRAPHS) */}
         <section className="grid gap-6 xl:grid-cols-12">
-          {/* Sales / Orders trends */}
           <div className="xl:col-span-5 bg-card/70 backdrop-blur rounded-2xl ring-1 ring-card-border shadow-sm p-5">
             <div className="flex items-center justify-between gap-2 mb-3">
               <div className="min-w-0">
                 <p className="text-xs font-black text-text-muted uppercase tracking-widest flex items-center gap-2">
-                  <MdTrendingUp /> Trends
+                  <MdTrendingUp /> Sales & Expenses Per Week
                 </p>
-                <p className="text-[10px] text-text-muted mt-1">Hover points to see exact values</p>
+                <p className="text-[10px] text-text-muted mt-1">Enhanced weekly financial graph</p>
               </div>
 
               <div className="flex items-center gap-2">
-                <button onClick={exportSales7d} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white ring-1 ring-card-border hover:bg-slate-50 text-xs font-black" type="button" title="Export Sales CSV">
+                <button
+                  onClick={exportSalesWeekly}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white ring-1 ring-card-border hover:bg-slate-50 text-xs font-black"
+                  type="button"
+                  title="Export Sales CSV"
+                >
                   <MdDownload className="h-4 w-4" />
                   Sales CSV
                 </button>
-                <button onClick={exportOrders7d} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white ring-1 ring-card-border hover:bg-slate-50 text-xs font-black" type="button" title="Export Orders CSV">
+                <button
+                  onClick={exportExpensesWeekly}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white ring-1 ring-card-border hover:bg-slate-50 text-xs font-black"
+                  type="button"
+                  title="Export Expenses CSV"
+                >
                   <MdDownload className="h-4 w-4" />
-                  Orders CSV
+                  Expenses CSV
                 </button>
               </div>
             </div>
 
-            <div
-              onMouseMove={(e) => {
-                if (hoverSalesIdx !== null) {
-                  const label = sales7dLabels[hoverSalesIdx] ?? `Day ${hoverSalesIdx + 1}`;
-                  const val = sales7d[hoverSalesIdx] ?? 0;
-                  setTip({ open: true, x: e.clientX, y: e.clientY, title: 'Sales', lines: [`${label}`, `${fmtMoneyPhp(val)}`] });
-                } else if (hoverOrdersIdx !== null) {
-                  const label = orders7dLabels[hoverOrdersIdx] ?? `Day ${hoverOrdersIdx + 1}`;
-                  const val = orders7d[hoverOrdersIdx] ?? 0;
-                  setTip({ open: true, x: e.clientX, y: e.clientY, title: 'Orders', lines: [`${label}`, `${val} orders`] });
-                } else {
-                  setTip((t) => ({ ...t, open: false }));
-                }
-              }}
-              onMouseLeave={() => setTip((t) => ({ ...t, open: false }))}
-              className="space-y-4"
-            >
-              <MiniLineChart points={sales7d} accentVar="--primary" onHoverIndex={(i) => setHoverSalesIdx(i)} tooltipLabel={(i) => sales7dLabels[i] ?? `Day ${i + 1}`} yFormat={(v) => fmtMoneyPhp(v)} />
-              <MiniLineChart points={orders7d} accentVar="--accent-green" onHoverIndex={(i) => setHoverOrdersIdx(i)} tooltipLabel={(i) => orders7dLabels[i] ?? `Day ${i + 1}`} yFormat={(v) => `${v} orders`} />
+            <div className="space-y-4">
+              <SalesExpensesChart
+                salesPoints={salesWeekly}
+                expensePoints={expensesWeekly}
+                labels={salesWeeklyLabels}
+                onHoverPoint={({ index, x, y, kind }) => {
+                  if (index === null || !kind) {
+                    setTip((t) => ({ ...t, open: false }));
+                    return;
+                  }
+
+                  const label = salesWeeklyLabels[index] ?? `Week ${index + 1}`;
+                  const salesVal = salesWeekly[index] ?? 0;
+                  const expensesVal = expensesWeekly[index] ?? 0;
+
+                  if (kind === 'sales') {
+                    setTip({
+                      open: true,
+                      x,
+                      y,
+                      title: 'Sales',
+                      lines: [label, `Sales: ${fmtMoneyPhp(salesVal)}`, `Expenses: ${fmtMoneyPhp(expensesVal)}`],
+                    });
+                  } else {
+                    setTip({
+                      open: true,
+                      x,
+                      y,
+                      title: 'Expenses',
+                      lines: [label, `Expenses: ${fmtMoneyPhp(expensesVal)}`, `Sales: ${fmtMoneyPhp(salesVal)}`],
+                    });
+                  }
+                }}
+              />
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl bg-white/75 ring-1 ring-card-border p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-text-muted">4-Week Sales Total</p>
+                  <p className="mt-1 text-xl font-black text-red-900">{fmtMoneyPhp(salesWeekly.reduce((a, b) => a + b, 0))}</p>
+                </div>
+                <div className="rounded-2xl bg-white/75 ring-1 ring-card-border p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-text-muted">4-Week Expenses Total</p>
+                  <p className="mt-1 text-xl font-black text-black">{fmtMoneyPhp(expensesWeekly.reduce((a, b) => a + b, 0))}</p>
+                </div>
+              </div>
 
               <div className="pt-3 border-t border-card-border flex items-center justify-between">
                 <button
                   onClick={() =>
                     openDrawer(
-                      '7-day Sales & Orders',
-                      sales7d.map((v, i) => ({
-                        day: sales7dLabels[i] ?? `Day ${i + 1}`,
+                      'Sales & Expenses Per Week',
+                      salesWeekly.map((v, i) => ({
+                        week: salesWeeklyLabels[i] ?? `Week ${i + 1}`,
                         sales_php: v,
-                        orders: orders7d[i] ?? 0,
+                        expenses_php: expensesWeekly[i] ?? 0,
                       }))
                     )
                   }
@@ -1407,13 +1572,12 @@ export default function DashboardPage() {
 
                 <div className="text-[10px] text-text-muted font-bold uppercase tracking-widest flex items-center gap-1">
                   <MdInfo className="h-4 w-4" />
-                  Based on Order.createdAt
+                  Sales from Order • Expenses from Expense/Expenses
                 </div>
               </div>
             </div>
           </div>
 
-          {/* NEW: Stock Alert Level beside graphs */}
           <div className="xl:col-span-3">
             <StockAlertMeter
               total={stockTotal}
@@ -1421,7 +1585,6 @@ export default function DashboardPage() {
               warning={stockWarning}
               topRows={stockTopRows}
               onViewAll={() => {
-                // show a full table-like drilldown in drawer
                 openDrawer(
                   'Stock Levels (Critical + Warning)',
                   stockTopRows.length
@@ -1448,7 +1611,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Donut: Menu Mix */}
           <div className="xl:col-span-4 bg-card/70 backdrop-blur rounded-2xl ring-1 ring-card-border shadow-sm p-5">
             <div className="flex items-start justify-between mb-4">
               <div className="min-w-0">
@@ -1488,7 +1650,11 @@ export default function DashboardPage() {
             </div>
 
             <div className="mt-3 pt-3 border-t border-card-border flex items-center justify-between">
-              <button onClick={() => drilldownFromSegments('Orders Mix (Menu)', donutMenu)} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white ring-1 ring-card-border hover:bg-slate-50 text-xs font-black" type="button">
+              <button
+                onClick={() => drilldownFromSegments('Orders Mix (Menu)', donutMenu)}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white ring-1 ring-card-border hover:bg-slate-50 text-xs font-black"
+                type="button"
+              >
                 <MdVisibility className="h-4 w-4" />
                 View details
               </button>
@@ -1506,7 +1672,6 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* Donut Stack: Payments + Category */}
         <section className="grid gap-6 xl:grid-cols-12">
           <div className="xl:col-span-6 bg-card/70 backdrop-blur rounded-2xl ring-1 ring-card-border shadow-sm p-5">
             <div className="flex items-start justify-between mb-4">
@@ -1542,7 +1707,11 @@ export default function DashboardPage() {
             </div>
 
             <div className="mt-3 pt-3 border-t border-card-border flex items-center justify-between">
-              <button onClick={() => drilldownFromSegments('Payments Mix (Today)', donutPayments)} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white ring-1 ring-card-border hover:bg-slate-50 text-xs font-black" type="button">
+              <button
+                onClick={() => drilldownFromSegments('Payments Mix (Today)', donutPayments)}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white ring-1 ring-card-border hover:bg-slate-50 text-xs font-black"
+                type="button"
+              >
                 <MdVisibility className="h-4 w-4" />
                 Details
               </button>
@@ -1591,7 +1760,11 @@ export default function DashboardPage() {
             </div>
 
             <div className="mt-3 pt-3 border-t border-card-border flex items-center justify-between">
-              <button onClick={() => drilldownFromSegments('Category Mix (Today)', donutCategory)} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white ring-1 ring-card-border hover:bg-slate-50 text-xs font-black" type="button">
+              <button
+                onClick={() => drilldownFromSegments('Category Mix (Today)', donutCategory)}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white ring-1 ring-card-border hover:bg-slate-50 text-xs font-black"
+                type="button"
+              >
                 <MdVisibility className="h-4 w-4" />
                 Details
               </button>
@@ -1607,7 +1780,6 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* LISTS ROW */}
         <section className="grid gap-6 xl:grid-cols-12">
           <div className="xl:col-span-6 space-y-4">
             <div className="flex items-center justify-between">
@@ -1644,7 +1816,6 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* STOCK ALERTS */}
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-black text-xs text-red-500 uppercase tracking-widest flex items-center gap-2">
@@ -1680,15 +1851,15 @@ export default function DashboardPage() {
               <ul className="space-y-2 text-xs text-foreground/80">
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
-                  Stock Alert Level is now shown beside the graphs for fast scanning.
+                  Stock Alert Level stays visible beside the main graph for fast scanning.
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
-                  Graphs: hover points/segments for insights, click donuts to lock selection.
+                  The trends panel is now an enhanced Sales and Expenses per week comparison chart.
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
-                  Export: CSV buttons are available on charts and in details drawer.
+                  Export buttons remain available for charts and detail drawers.
                 </li>
               </ul>
 
