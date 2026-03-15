@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
-import { logout } from '../lib/auth';
+
 import { Sidebar } from '../components/Sidebar';
 import {
   MdGridView,
@@ -329,10 +329,6 @@ export default function MenuPage() {
     runSyncAndFetch();
   }, [fetchAllData]);
 
-  const handleLogout = async () => {
-    await logout();
-  };
-
   const categoryCounts = useMemo(() => {
     const map = new Map<number, number>();
     for (const item of menuItems) {
@@ -571,13 +567,7 @@ export default function MenuPage() {
               </div>
             </div>
 
-            <button
-              onClick={handleLogout}
-              className="rounded-xl bg-white px-4 py-2 text-xs font-extrabold shadow hover:bg-black/5 transition"
-              type="button"
-            >
-              Logout
-            </button>
+
           </header>
 
           {/* Categories */}
