@@ -266,7 +266,7 @@ function Tooltip({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed z-[9999] pointer-events-none" style={{ left: x + 12, top: y + 12, maxWidth: 260 }}>
+    <div className="fixed z-9999 pointer-events-none" style={{ left: x + 12, top: y + 12, maxWidth: 260 }}>
       <div className="rounded-2xl bg-white shadow-lg ring-1 ring-card-border px-3 py-2">
         {title && <div className="text-xs font-black text-foreground mb-0.5">{title}</div>}
         {lines.map((t, i) => (
@@ -291,7 +291,7 @@ function SegLegend({
   rightLabel?: (s: DonutSeg) => React.ReactNode;
 }) {
   return (
-    <div className="max-h-[170px] overflow-auto pr-2 space-y-2 w-full">
+    <div className="max-h-170px overflow-auto pr-2 space-y-2 w-full">
       {segments.map((s) => {
         const active = activeLabel === s.label;
         return (
@@ -438,7 +438,7 @@ function Drawer({
   return (
     <>
       <div className="fixed inset-0 z-90 bg-black/35 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed right-0 top-0 z-95 h-screen w-full sm:w-[420px] bg-white shadow-2xl ring-1 ring-card-border">
+      <div className="fixed right-0 top-0 z-95 h-screen w-full sm:w-420px bg-white shadow-2xl ring-1 ring-card-border">
         <div className="flex items-center justify-between p-4 border-b border-card-border">
           <div className="min-w-0">
             <p className="text-xs font-black text-text-muted uppercase tracking-widest">Details</p>
@@ -723,7 +723,7 @@ function SalesExpensesChart({
         </div>
       </div>
 
-      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-[250px] overflow-visible">
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-250px overflow-visible">
         {[0, 0.25, 0.5, 0.75, 1].map((t, idx) => {
           const y = padY + innerH * t;
           return <line key={idx} x1={padX} x2={w - padX} y1={y} y2={y} stroke="rgba(0,0,0,0.08)" strokeDasharray="4 4" />;

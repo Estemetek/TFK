@@ -410,7 +410,7 @@ export default function EODAuditPage() {
               <div className="hidden md:grid grid-cols-[1.3fr_0.7fr_0.9fr_0.8fr_0.8fr] gap-4 border-b bg-white/80 px-5 py-4 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
                 <div>Ingredient</div>
                 <div className="text-center">System Stock</div>
-                <div>Physical Count</div>
+                <div>Physical Stocks Left</div>
                 <div className="text-right">Used Today</div>
                 <div className="text-right">Variance</div>
               </div>
@@ -551,7 +551,7 @@ export default function EODAuditPage() {
 
       {/* CONFIRMATION MODAL OVERLAY */}
       {showConfirmModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl ring-1 ring-black/5 animate-in zoom-in-95 duration-200">
             <div className="flex items-center gap-3 text-primary mb-4">
               <div className="p-2 bg-primary/10 rounded-xl">

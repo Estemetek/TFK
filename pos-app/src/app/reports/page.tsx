@@ -35,7 +35,7 @@ import {
 
 type NavItem = { name: string; path?: string };
 
-type ReportTab = 'Sales & EOD Report' | 'Receipts' | 'Purchase Transactions';
+type ReportTab = 'Inventory Audit' | 'Sales Income' | 'Purchase Expenses';
 
 type EODReportItem = {
   auditItemID?: number;
@@ -546,13 +546,13 @@ export default function ReportsPage() {
   const [collapsed, setCollapsed] = useState(false);
   const activeNav = 'Reports';
 
-  const [tab, setTab] = useState<ReportTab>('Receipts');
+  const [tab, setTab] = useState<ReportTab>('Sales Income');
 
   const [purchases, setPurchases] = useState<any[]>([]);
   const [purchasesLoading, setPurchasesLoading] = useState(false);
 
   const [purchaseQuery, setPurchaseQuery] = useState('');
-  const [purchaseDateFilter, setPurchaseDateFilter] = useState<'all' | 'today' | '7d' | '30d'>('all');
+  const [purchaseDateFilter, setPurchaseDateFilter] = useState<'all' | 'today' | '7d' | '30d'>('7d');
   const [purchaseMin, setPurchaseMin] = useState('');
   const [purchaseMax, setPurchaseMax] = useState('');
 
@@ -562,7 +562,7 @@ export default function ReportsPage() {
 
   const [receiptQuery, setReceiptQuery] = useState('');
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'cash' | 'gcash' | 'bank'>('all');
-  const [dateFilter, setDateFilter] = useState<'all' | 'today' | '7d' | '30d'>('all');
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | '7d' | '30d'>('7d');
 
   const [eodRows, setEodRows] = useState<EODReportItem[]>([]);
   const [eodLoading, setEodLoading] = useState(false);
@@ -578,9 +578,9 @@ export default function ReportsPage() {
   const PURCHASES_PAGE_SIZE = 10;
 
   useEffect(() => {
-    if (tab === 'Receipts') fetchReceipts();
-    if (tab === 'Purchase Transactions') fetchPurchases();
-    if (tab === 'Sales & EOD Report') {
+    if (tab === 'Sales Income') fetchReceipts();
+    if (tab === 'Purchase Expenses') fetchPurchases();
+    if (tab === 'Inventory Audit') {
       fetchReceipts();
       fetchEodAudit();
     }
@@ -588,7 +588,7 @@ export default function ReportsPage() {
   }, [tab]);
 
   useEffect(() => {
-    if (tab === 'Sales & EOD Report') {
+    if (tab === 'Inventory Audit') {
       fetchEodAudit();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -995,19 +995,19 @@ export default function ReportsPage() {
 
           <section className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <Tab active={tab === 'Sales & EOD Report'} onClick={() => setTab('Sales & EOD Report')}>
-                Sales &amp; EOD Report
+              <Tab active={tab === 'Inventory Audit'} onClick={() => setTab('Inventory Audit')}>
+                Inventory Audit
               </Tab>
-              <Tab active={tab === 'Receipts'} onClick={() => setTab('Receipts')}>
-                Receipts
+              <Tab active={tab === 'Sales Income'} onClick={() => setTab('Sales Income')}>
+                Sales Income
               </Tab>
-              <Tab active={tab === 'Purchase Transactions'} onClick={() => setTab('Purchase Transactions')}>
-                Purchase Transactions
+              <Tab active={tab === 'Purchase Expenses'} onClick={() => setTab('Purchase Expenses')}>
+                Purchase Expenses
               </Tab>
             </div>
           </section>
 
-          {tab === 'Purchase Transactions' && (
+          {tab === 'Purchase Expenses' && (
             <section className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_20px_rgba(0,0,0,0.06)] ring-1 ring-black/5">
               <div className="rounded-t-2xl bg-[#B80F24] px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1015,7 +1015,7 @@ export default function ReportsPage() {
                     <MdReceipt className="h-5 w-5" />
                   </span>
                   <div>
-                    <div className="text-[14px] font-extrabold text-white">Purchase Transactions</div>
+                    <div className="text-[14px] font-extrabold text-white">Purchase Expenses</div>
                     <div className="text-[10px] font-bold text-white/80">Review purchases and item breakdown</div>
                   </div>
                 </div>
@@ -1208,7 +1208,7 @@ export default function ReportsPage() {
             </section>
           )}
 
-          {tab === 'Receipts' && (
+          {tab === 'Sales Income' && (
             <section className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_20px_rgba(0,0,0,0.06)] ring-1 ring-black/5">
               <div className="rounded-t-2xl bg-[#B80F24] px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1216,14 +1216,14 @@ export default function ReportsPage() {
                     <MdReceiptLong className="h-5 w-5" />
                   </span>
                   <div>
-                    <div className="text-[14px] font-extrabold text-white">Order Receipts</div>
+                    <div className="text-[14px] font-extrabold text-white">Sales Income</div>
                     <div className="text-[10px] font-bold text-white/80">Click a row to open the official receipt</div>
                   </div>
                 </div>
 
                 <div className="hidden md:flex items-center gap-3">
                   <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/15">
-                    <div className="text-[10px] font-extrabold text-white/80">Receipts</div>
+                    <div className="text-[10px] font-extrabold text-white/80">Records</div>
                     <div className="text-[12px] font-extrabold text-white">{receiptsTotals.count}</div>
                   </div>
                   <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/15">
@@ -1417,12 +1417,12 @@ export default function ReportsPage() {
             </section>
           )}
 
-          {tab === 'Sales & EOD Report' && (
+          {tab === 'Inventory Audit' && (
             <section className="space-y-4">
               <div className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_20px_rgba(0,0,0,0.06)] ring-1 ring-black/5">
                 <div className="flex flex-col gap-4 bg-[#7E0012] px-6 py-5 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <div className="text-[16px] font-extrabold text-white">Sales & EOD Report</div>
+                    <div className="text-[16px] font-extrabold text-white">Inventory Audit</div>
                     <div className="mt-1 text-[11px] font-bold text-white/85">
                       Connected daily summary from Orders and InventoryAudit
                     </div>
@@ -1748,7 +1748,7 @@ export default function ReportsPage() {
             </section>
           )}
 
-          {tab !== 'Sales & EOD Report' && tab !== 'Receipts' && tab !== 'Purchase Transactions' && (
+          {tab !== 'Inventory Audit' && tab !== 'Sales Income' && tab !== 'Purchase Expenses' && (
             <>
               <section className="grid gap-4 lg:grid-cols-2">
                 <div className="rounded-2xl bg-[#E7E7E7] p-4 shadow-[0_10px_20px_rgba(0,0,0,0.06)]">

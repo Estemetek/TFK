@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Sidebar } from '../components/Sidebar';
 import { supabase } from '../lib/supabaseClient';
+import { syncMenuAvailability } from '../lib/syncMenuAvailability';
 import {
   MdAdd,
   MdRemove,
@@ -440,6 +441,7 @@ export default function OrderPage() {
   // Fetch
   useEffect(() => {
     async function loadStoreData() {
+      await syncMenuAvailability();
       try {
         const { data: catData } = await supabase.from('Category').select('categoryID, categoryName');
         const { data: menuData, error: menuError } = await supabase
@@ -686,44 +688,6 @@ export default function OrderPage() {
       setIsSubmitting(false);
     }
   };
-
-  useEffect(() => {
-    async function syncMenuAvailability() {
-      // Fetch all menu items
-      const { data: menuData } = await supabase.from('MenuItem').select('menuItemID');
-      if (!menuData) return;
-
-      for (const menu of menuData) {
-        // Get all ingredients for this menu item
-        const { data: recipeIngredients } = await supabase
-          .from('MenuIngredient')
-          .select('ingredientID, quantityRequired')
-          .eq('menuItemID', menu.menuItemID);
-
-        let anyOutOfStock = false;
-        if (!recipeIngredients || recipeIngredients.length === 0) {
-          anyOutOfStock = true;
-        } else {
-          for (const recipeIng of recipeIngredients) {
-            const { data: ingredientData } = await supabase
-              .from('Ingredient')
-              .select('currentStock')
-              .eq('ingredientID', recipeIng.ingredientID)
-              .single();
-            if (!ingredientData || ingredientData.currentStock < (recipeIng.quantityRequired ?? 1)) {
-              anyOutOfStock = true;
-              break;
-            }
-          }
-        }
-        await supabase
-          .from('MenuItem')
-          .update({ isAvailable: !anyOutOfStock })
-          .eq('menuItemID', menu.menuItemID);
-      }
-    }
-    syncMenuAvailability();
-  }, []);
 
   if (loading) {
     return (

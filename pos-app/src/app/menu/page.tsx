@@ -48,7 +48,7 @@ type MenuItem = {
   UsersAccount?: { username: string };
 };
 
-type MenuType = 'Normal Menu' | 'Special Deals' | 'New Year Special' | 'Desserts and Drinks';
+type MenuType = 'Normal Menu';
 
 const PRIMARY = '#b80f24';
 const PRIMARY_DARK = '#6d0f2a';
@@ -256,7 +256,7 @@ export default function MenuPage() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [selectedCatID, setSelectedCatID] = useState<number | 'all'>('all');
 
-  const menuTypes: MenuType[] = ['Normal Menu', 'Special Deals', 'New Year Special', 'Desserts and Drinks'];
+  const menuTypes: MenuType[] = ['Normal Menu'];
   const [selectedMenuType, setSelectedMenuType] = useState<MenuType>('Normal Menu');
 
   const [loading, setLoading] = useState(true);
@@ -323,7 +323,8 @@ export default function MenuPage() {
 
   useEffect(() => {
     async function runSyncAndFetch() {
-      await Promise.all([syncMenuAvailability(), fetchAllData()]);
+      await syncMenuAvailability();
+      await fetchAllData();
     }
     runSyncAndFetch();
   }, [fetchAllData]);

@@ -1,27 +1,27 @@
 import { supabase } from './supabaseClient';
 
-// Sync: menu item is available if it has at least one ingredient linked to its recipe
+// Sync: a menu item is available if it has at least one ingredient linked to its recipe.
+// Stock levels are checked at checkout time, not here.
 export async function syncMenuAvailability() {
   const { data: menuItems, error: menuError } = await supabase
     .from('MenuItem')
     .select('menuItemID');
-  if (menuError) {
-    console.error('Error fetching menu items:', menuError);
-    return;
-  }
+  if (menuError || !menuItems) return;
+
+  const { data: recipeRows, error: recipeError } = await supabase
+    .from('MenuIngredient')
+    .select('menuItemID');
+  if (recipeError) return;
+
+  // Build a set of menuItemIDs that have at least one ingredient linked
+  const withRecipe = new Set(recipeRows.map((r) => r.menuItemID));
 
   await Promise.all(
     menuItems.map(async (menu) => {
-      const { count, error: recipeError } = await supabase
-        .from('MenuIngredient')
-        .select('menuIngredientID', { count: 'exact', head: true })
-        .eq('menuItemID', menu.menuItemID);
-
-      const hasIngredients = !recipeError && (count ?? 0) > 0;
-
+      const isAvailable = withRecipe.has(menu.menuItemID);
       await supabase
         .from('MenuItem')
-        .update({ isAvailable: hasIngredients })
+        .update({ isAvailable })
         .eq('menuItemID', menu.menuItemID);
     })
   );
