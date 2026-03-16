@@ -184,35 +184,15 @@ export default function InventoryPage() {
     for (const menu of menuItems) {
       const { data: recipeIngredients } = await supabase
         .from('MenuIngredient')
-        .select('ingredientID, quantityRequired')
+        .select('ingredientID')
         .eq('menuItemID', menu.menuItemID);
 
-      let anyOutOfStock = false;
-
-      if (!recipeIngredients || recipeIngredients.length === 0) {
-        anyOutOfStock = true;
-      } else {
-        for (const recipeIng of recipeIngredients) {
-          const { data: ingredientData, error: ingError } = await supabase
-            .from('Ingredient')
-            .select('currentStock')
-            .eq('ingredientID', recipeIng.ingredientID)
-            .single();
-
-          if (
-            ingError ||
-            !ingredientData ||
-            wholeNumber(ingredientData.currentStock) < wholeNumber(recipeIng.quantityRequired ?? 1)
-          ) {
-            anyOutOfStock = true;
-            break;
-          }
-        }
-      }
+      // Menu item is available only if it has at least one ingredient linked
+      const isAvailable = recipeIngredients && recipeIngredients.length > 0;
 
       await supabase
         .from('MenuItem')
-        .update({ isAvailable: !anyOutOfStock })
+        .update({ isAvailable })
         .eq('menuItemID', menu.menuItemID);
     }
   };

@@ -558,34 +558,6 @@ export default function OrderPage() {
   const handleCheckout = async () => {
     if (cart.length === 0) return;
 
-    // Check ingredient stock before placing order
-    for (const item of cart) {
-      const { data: recipeIngredients } = await supabase
-        .from('MenuIngredient')
-        .select('ingredientID, quantityRequired')
-        .eq('menuItemID', item.menuItemID);
-
-      if (!recipeIngredients || recipeIngredients.length === 0) {
-        alert(`"${item.name}" has no ingredients and cannot be ordered.`);
-        return;
-      }
-
-      for (const recipeIng of recipeIngredients) {
-        const { data: ingredientData } = await supabase
-          .from('Ingredient')
-          .select('currentStock')
-          .eq('ingredientID', recipeIng.ingredientID)
-          .single();
-
-        if (!ingredientData || ingredientData.currentStock < recipeIng.quantityRequired * item.quantity) {
-          alert(
-            `Not enough stock for "${item.name}". Required: ${recipeIng.quantityRequired * item.quantity}, Available: ${ingredientData?.currentStock ?? 0}`
-          );
-          return;
-        }
-      }
-    }
-
     if (paymentMethod === 'cash' && amountPaid < cartTotal) {
       alert('Insufficient payment amount!');
       return;
@@ -625,51 +597,6 @@ export default function OrderPage() {
 
       const { error: itemErr } = await supabase.from('OrderItem').insert(orderItems);
       if (itemErr) throw itemErr;
-
-      // --- Deduct inventory for recipes with multiple ingredients ---
-      for (const item of cart) {
-        // 1. Get all ingredients for this menu item (recipe)
-        const { data: recipeIngredients, error: recipeErr } = await supabase
-          .from('MenuIngredient')
-          .select('ingredientID, quantityRequired')
-          .eq('menuItemID', item.menuItemID);
-
-        if (recipeErr || !recipeIngredients) continue;
-
-        let anyOutOfStock = false;
-
-        for (const recipeIng of recipeIngredients) {
-          // 2. Deduct stock for each ingredient
-          const { data: ingredientData, error: ingredientErr } = await supabase
-            .from('Ingredient')
-            .select('currentStock')
-            .eq('ingredientID', recipeIng.ingredientID)
-            .single();
-
-          if (ingredientErr || !ingredientData) continue;
-
-          const deductionQty = recipeIng.quantityRequired * item.quantity;
-          const newStock = Math.max(0, ingredientData.currentStock - deductionQty);
-
-          await supabase
-            .from('Ingredient')
-            .update({
-              currentStock: newStock,
-              isAvailable: newStock === 0 ? false : true,
-            })
-            .eq('ingredientID', recipeIng.ingredientID);
-
-          if (newStock === 0) anyOutOfStock = true;
-        }
-
-        // 3. If any ingredient is out of stock, mark menu item as unavailable
-        await supabase
-          .from('MenuItem')
-          .update({
-            isAvailable: anyOutOfStock ? false : true,
-          })
-          .eq('menuItemID', item.menuItemID);
-      }
 
       alert(
         `Order Successful! ${

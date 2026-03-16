@@ -63,7 +63,7 @@ export function RecipeModal({ menuItem, onClose, onRecipeChange }: { menuItem: a
           <button onClick={onClose}><MdClose size={24} /></button>
         </div>
 
-        {/* Simplified Add Section: No Quantity Input */}
+        {/* Add Section with Stock Display */}
         <div className="grid grid-cols-4 gap-2 mb-6 bg-gray-50 p-3 rounded-lg">
           <select
             className="border p-2 rounded-lg text-sm col-span-3"
@@ -71,11 +71,27 @@ export function RecipeModal({ menuItem, onClose, onRecipeChange }: { menuItem: a
             onChange={(e) => setSelectedIngredientId(e.target.value)}
           >
             <option value="">Select Ingredient to link to dish...</option>
-            {availableIngredients.map(ing => (
-              <option key={ing.ingredientID} value={ing.ingredientID}>
-                {ing.name} ({ing.unit})
-              </option>
-            ))}
+            {availableIngredients.map(ing => {
+              const isOutOfStock = ing.currentStock === 0;
+              const isLowStock = ing.currentStock <= ing.reorderLevel && ing.currentStock > 0;
+              let stockLabel = `${ing.name} (${ing.unit})`;
+              if (isOutOfStock) {
+                stockLabel += ` - OUT OF STOCK`;
+              } else if (isLowStock) {
+                stockLabel += ` - LOW STOCK (${ing.currentStock}/${ing.reorderLevel})`;
+              } else {
+                stockLabel += ` [${ing.currentStock}]`;
+              }
+              return (
+                <option 
+                  key={ing.ingredientID} 
+                  value={ing.ingredientID}
+                  disabled={isOutOfStock}
+                >
+                  {stockLabel}
+                </option>
+              );
+            })}
           </select>
           
           <button

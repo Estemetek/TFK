@@ -6,7 +6,6 @@ export function RecipeModal({ menuItem, onClose }: { menuItem: any, onClose: () 
   const [availableIngredients, setAvailableIngredients] = useState<any[]>([]);
   const [recipeItems, setRecipeItems] = useState<any[]>([]);
   const [selectedIngredientId, setSelectedIngredientId] = useState('');
-  const [quantity, setQuantity] = useState(0);
 
   useEffect(() => {
     fetchData();
@@ -22,7 +21,6 @@ export function RecipeModal({ menuItem, onClose }: { menuItem: any, onClose: () 
       .from('MenuIngredient')
       .select(`
         menuIngredientID,
-        quantityRequired,
         Ingredient (name, unit)
       `)
       .eq('menuItemID', menuItem.menuItemID);
@@ -30,17 +28,16 @@ export function RecipeModal({ menuItem, onClose }: { menuItem: any, onClose: () 
   }
 
   async function addIngredient() {
-    if (!selectedIngredientId || quantity <= 0) return;
+    if (!selectedIngredientId) return;
 
     const { error } = await supabase.from('MenuIngredient').insert([{
       menuItemID: menuItem.menuItemID,
-      ingredientID: parseInt(selectedIngredientId),
-      quantityRequired: quantity
+      ingredientID: parseInt(selectedIngredientId)
     }]);
 
     if (error) alert(error.message);
     else {
-      setQuantity(0);
+      setSelectedIngredientId('');
       fetchData(); // Refresh list
     }
   }
@@ -66,17 +63,28 @@ export function RecipeModal({ menuItem, onClose }: { menuItem: any, onClose: () 
             onChange={(e) => setSelectedIngredientId(e.target.value)}
           >
             <option value="">Select Ingredient...</option>
-            {availableIngredients.map(ing => (
-              <option key={ing.ingredientID} value={ing.ingredientID}>{ing.name} ({ing.unit})</option>
-            ))}
+            {availableIngredients.map(ing => {
+              const isOutOfStock = ing.currentStock === 0;
+              const isLowStock = ing.currentStock <= ing.reorderLevel && ing.currentStock > 0;
+              let stockLabel = `${ing.name} (${ing.unit})`;
+              if (isOutOfStock) {
+                stockLabel += ` - OUT OF STOCK`;
+              } else if (isLowStock) {
+                stockLabel += ` - LOW STOCK (${ing.currentStock}/${ing.reorderLevel})`;
+              } else {
+                stockLabel += ` [${ing.currentStock}]`;
+              }
+              return (
+                <option 
+                  key={ing.ingredientID} 
+                  value={ing.ingredientID}
+                  disabled={isOutOfStock}
+                >
+                  {stockLabel}
+                </option>
+              );
+            })}
           </select>
-          <input 
-            type="number" 
-            placeholder="Qty" 
-            className="border p-2 rounded-lg text-sm"
-            value={quantity}
-            onChange={(e) => setQuantity(parseFloat(e.target.value))}
-          />
           <button 
             onClick={addIngredient}
             className="bg-primary text-white rounded-lg flex items-center justify-center gap-2 font-bold"
@@ -91,7 +99,7 @@ export function RecipeModal({ menuItem, onClose }: { menuItem: any, onClose: () 
           {recipeItems.map((item) => (
             <div key={item.menuIngredientID} className="flex justify-between items-center border-b py-2 text-sm">
               <span>
-                <span className="font-bold">{item.Ingredient?.name}</span>: {item.quantityRequired} {item.Ingredient?.unit}
+                <span className="font-bold">{item.Ingredient?.name}</span> ({item.Ingredient?.unit})
               </span>
               <button onClick={() => removeIngredient(item.menuIngredientID)} className="text-primary hover:bg-red-50 p-1 rounded">
                 <MdDelete size={18} />
