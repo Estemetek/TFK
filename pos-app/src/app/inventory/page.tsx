@@ -146,10 +146,6 @@ export default function InventoryPage() {
     [inventoryItems]
   );
 
-  const totalValueEstimate = useMemo(() => {
-    return inventoryItems.reduce((sum, i) => sum + wholeNumber(i.currentStock) * Number(i.costPerUnit || 0), 0);
-  }, [inventoryItems]);
-
   const filteredSorted = useMemo(() => {
     const q = query.trim().toLowerCase();
     let arr = inventoryItems;
@@ -464,11 +460,6 @@ export default function InventoryPage() {
               value={lowStockItems.length}
               subtitle="Needs attention based on reorder level"
               accent="danger"
-            />
-            <StatCard
-              title="Inventory Value (Est.)"
-              value={`₱${totalValueEstimate.toFixed(2)}`}
-              subtitle="Based on current stock × unit cost"
             />
           </section>
 
