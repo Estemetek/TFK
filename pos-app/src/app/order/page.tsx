@@ -44,6 +44,46 @@ const VAT_RATE = 0.12;
 const SENIOR_DISCOUNT_RATE = 0.2;
 const money = (n: number) => `₱${Number(n || 0).toFixed(2)}`;
 
+function SuccessModal({
+  show,
+  onDone,
+}: {
+  show: boolean;
+  paymentMethod: PayMethod;
+  cartTotal: number;
+  changeDue: number;
+  onDone: () => void;
+}) {
+  if (!show) return null;
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
+      <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-2xl flex flex-col items-center text-center">
+
+        <div
+          className="h-20 w-20 rounded-full flex items-center justify-center mb-5 shadow-lg"
+          style={{ backgroundColor: '#16a34a' }}
+        >
+          <svg className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+
+        <h2 className="text-2xl font-black text-gray-900">Order Placed!</h2>
+        <p className="text-sm font-bold text-gray-400 mt-1">Transaction completed successfully.</p>
+
+        <button
+          onClick={onDone}
+          className="mt-6 w-full rounded-2xl py-4 text-sm font-black text-white shadow-lg transition hover:brightness-95"
+          style={{ backgroundColor: '#16a34a' }}
+        >
+          DONE
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Toast ----------
 function Toast({
   show,
@@ -130,6 +170,9 @@ function CartPanel({
   amountPaid: number;
   changeDue: number;
 }) {
+
+  const [showConfirmPrompt, setShowConfirmPrompt] = useState(false);
+
   return (
     <div className="h-full min-h-0 w-full bg-white overflow-hidden grid grid-rows-[auto_minmax(260px,1fr)_auto]">
       {/* HEADER */}
@@ -441,7 +484,7 @@ function CartPanel({
           </div>
 
           <button
-            onClick={handleCheckout}
+            onClick={() => setShowConfirmPrompt(true)} // Triggers the confirmation prompt first
             disabled={
               cart.length === 0 ||
               isSubmitting ||
@@ -467,12 +510,56 @@ function CartPanel({
           </button>
         </div>
       </div>
+
+      {/* CONFIRMATION MODAL OVERLAY */}
+      {showConfirmPrompt && (
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
+            <div className="text-center">
+              <div 
+                className="mx-auto h-16 w-16 rounded-full flex items-center justify-center mb-4"
+                style={{ backgroundColor: `${BRAND}15` }}
+              >
+                <MdReceipt className="text-3xl" style={{ color: BRAND }} />
+              </div>
+              <h3 className="text-lg font-black text-gray-900">Finalize Order?</h3>
+              <p className="text-sm font-bold text-gray-500 mt-2">
+                Please confirm the total amount of <span className="text-gray-900">{money(cartTotal)}</span> via {paymentMethod.toUpperCase()}.
+              </p>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              <button
+                onClick={() => {
+                  setShowConfirmPrompt(false);
+                  handleCheckout(); // Actually execute the logic here
+                }}
+                className="w-full rounded-2xl py-4 text-sm font-black text-white shadow-lg transition hover:brightness-95"
+                style={{ backgroundColor: BRAND }}
+              >
+                YES, PROCEED
+              </button>
+              
+              <button
+                onClick={() => setShowConfirmPrompt(false)}
+                className="w-full rounded-2xl py-3 text-sm font-black text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition"
+              >
+                GO BACK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // -------------------- PAGE --------------------
 export default function OrderPage() {
+  // for success prompt
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [lastOrderChange, setLastOrderChange] = useState<number>(0);
+
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('sidebarCollapsed') === 'true';
@@ -718,11 +805,8 @@ export default function OrderPage() {
       const { error: itemErr } = await supabase.from('OrderItem').insert(orderItems);
       if (itemErr) throw itemErr;
 
-      alert(
-        `Order Successful! ${
-          paymentMethod === 'cash' ? `Change: ${money(finalChange)}` : 'Payment confirmed'
-        }`
-      );
+      setLastOrderChange(finalChange);
+      setShowSuccessModal(true);
 
       clearCart();
       setShowCartMobile(false);
@@ -750,6 +834,18 @@ export default function OrderPage() {
         show={toast.show}
         text={toast.text}
         onClose={() => setToast({ show: false, text: '' })}
+      />
+
+      <SuccessModal
+        show={showSuccessModal}
+        paymentMethod={paymentMethod}
+        cartTotal={cartTotal}
+        changeDue={lastOrderChange}
+        onDone={() => {
+          setShowSuccessModal(false);
+          clearCart();
+          setShowCartMobile(false);
+        }}
       />
 
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} activeNav={activeNav} />

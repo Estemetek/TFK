@@ -377,6 +377,27 @@ function LineAreaChart() {
 /* ----------------------------- Receipt Modal ----------------------------- */
 
 function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => void; onVoid: () => void }) {
+  const [showVoidConfirm, setShowVoidConfirm] = useState(false);
+  const [showVoidSuccess, setShowVoidSuccess] = useState(false);
+  const [isVoiding, setIsVoiding] = useState(false);
+
+  const handleConfirmVoid = async () => {
+    setIsVoiding(true);
+    try {
+      await supabase
+        .from('Order')
+        .update({ status: 'voided' })
+        .eq('orderID', order.orderID);
+      onVoid(); // refresh the receipts list in parent
+      setShowVoidConfirm(false);
+      setShowVoidSuccess(true); // show success instead of closing immediately
+    } catch (err) {
+      console.error('Void error:', err);
+    } finally {
+      setIsVoiding(false);
+    }
+  };
+
   const pm = paymentMeta(order?.paymentmethod);
 
   const subtotal = Number(order?.amount || 0);
@@ -520,12 +541,7 @@ function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => v
                 BTN_SUBTLE,
                 'flex-1 border-[#B80F24] text-[#B80F24] hover:bg-[#B80F24] hover:text-black hover:border-[#B80F24]'
               )}
-              onClick={async () => {
-                if (!window.confirm('Are you sure you want to void this receipt?')) return;
-                await supabase.from('Order').update({ status: 'voided' }).eq('orderID', order.orderID);
-                onVoid();
-                onClose();
-              }}
+              onClick={() => setShowVoidConfirm(true)}
               type="button"
             >
               <MdCancel className="h-4 w-4" />
@@ -533,6 +549,88 @@ function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => v
             </button>
           </div>
         </div>
+
+        {/* VOID CONFIRMATION PROMPT */}
+        {showVoidConfirm && (
+          <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 p-6 rounded-2xl">
+            <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+              <div className="text-center">
+                <div className="mx-auto h-16 w-16 rounded-full bg-red-50 flex items-center justify-center mb-4">
+                  <MdCancel className="text-3xl text-red-600" />
+                </div>
+                <h3 className="text-lg font-extrabold text-gray-900">Void this Receipt?</h3>
+                <p className="text-sm font-bold text-gray-500 mt-2">
+                  Order <span className="text-gray-900 font-extrabold">#{order?.orderID}</span> will be
+                  marked as voided. This cannot be undone.
+                </p>
+              </div>
+
+              <div className="mt-6 space-y-3">
+                  <button
+                    onClick={handleConfirmVoid}
+                    disabled={isVoiding}
+                    className={classNames(BTN_PRIMARY, 'w-full')}
+                    type="button"
+                  >
+                    <MdCancel className="h-6 w-6" />
+                    {isVoiding ? 'VOIDING...' : 'YES, VOID IT'}
+                  </button>
+                <button
+                  onClick={() => setShowVoidConfirm(false)}
+                  className="w-full rounded-2xl py-3 text-sm font-extrabold text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition"
+                >
+                  GO BACK
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* VOID SUCCESS MODAL */}
+        {showVoidSuccess && (
+          <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 p-6 rounded-2xl">
+            <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-2xl flex flex-col items-center text-center">
+              <div className="h-20 w-20 rounded-full bg-gray-100 flex items-center justify-center mb-5 shadow-inner">
+                <MdCancel className="text-4xl text-gray-500" />
+              </div>
+
+              <h2 className="text-2xl font-extrabold text-gray-900">Receipt Voided</h2>
+              <p className="text-sm font-bold text-gray-400 mt-1">
+                This transaction has been marked as void.
+              </p>
+
+              <div className="mt-6 w-full rounded-2xl bg-gray-50 border border-gray-100 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-extrabold text-gray-400 uppercase tracking-widest">
+                    Order ID
+                  </span>
+                  <span className="text-sm font-extrabold text-gray-900">#{order?.orderID}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-extrabold text-gray-400 uppercase tracking-widest">
+                    Amount
+                  </span>
+                  <span className="text-sm font-extrabold text-gray-900">{fmtMoneyPhp(order?.amount)}</span>
+                </div>
+                <div className="flex items-center justify-between border-t pt-3">
+                  <span className="text-[11px] font-extrabold text-gray-400 uppercase tracking-widest">
+                    Status
+                  </span>
+                  <StatusChip status="Voided" />
+                </div>
+              </div>
+
+              <div className="mt-6 w-full">
+                <button
+                  onClick={onClose} // close the whole receipt modal after acknowledging
+                  className={classNames(BTN_SUBTLE, 'w-full')}
+                >
+                  DONE
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
