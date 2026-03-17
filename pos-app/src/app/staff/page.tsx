@@ -37,6 +37,7 @@ type Staff = {
   address: string;
   dob: string;
   avatarInitials: string;
+  isActive: boolean;
 };
 
 function cn(...classes: Array<string | false | null | undefined>) {
@@ -283,7 +284,7 @@ export default function StaffPage() {
       const [usersRes, rolesRes] = await Promise.all([
         supabase
           .from('UsersAccount')
-          .select('userID, roleID, email, firstName, lastName, phone, dob, address')
+          .select('userID, roleID, email, firstName, lastName, phone, dob, address, isActive')
           .order('firstName', { ascending: true }),
         supabase.from('Role').select('roleID, roleName'),
       ]);
@@ -315,6 +316,7 @@ export default function StaffPage() {
             dob: r.dob ?? '',
             address: r.address ?? '',
             avatarInitials: initials || 'NA',
+            isActive: r.isActive ?? true,
           } as Staff;
         }) ?? [];
 
@@ -329,6 +331,92 @@ export default function StaffPage() {
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
+
+  const handleDeleteStaff = async (staffToDelete: Staff) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to deactivate ${staffToDelete.name}? They will not be able to access the system.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setLoading(true);
+
+      const { error } = await supabase
+        .from('UsersAccount')
+        .update({ isActive: false })
+        .eq('userID', staffToDelete.id);
+
+      if (error) {
+        console.error('Error deactivating staff:', error);
+        alert('Failed to deactivate user. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      // Update local state
+      setStaffList(staffList.filter((s) => s.id !== staffToDelete.id));
+      if (selectedStaff?.id === staffToDelete.id) {
+        setSelectedStaff(null);
+        setView('staff');
+      }
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(staffToDelete.id);
+        return next;
+      });
+
+      alert(`${staffToDelete.name} has been deactivated.`);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error:', err);
+      alert('An error occurred while deactivating the user.');
+      setLoading(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to deactivate ${selectedIds.size} user(s)? They will not be able to access the system.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setLoading(true);
+
+      // Deactivate all selected users
+      const idsToDeactivate = Array.from(selectedIds);
+      const { error } = await supabase
+        .from('UsersAccount')
+        .update({ isActive: false })
+        .in('userID', idsToDeactivate);
+
+      if (error) {
+        console.error('Error deactivating users:', error);
+        alert('Failed to deactivate users. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      // Update local state
+      setStaffList(staffList.filter((s) => !selectedIds.has(s.id)));
+      if (selectedStaff && selectedIds.has(selectedStaff.id)) {
+        setSelectedStaff(null);
+        setView('staff');
+      }
+      setSelectedIds(new Set());
+
+      alert(`${selectedIds.size} user(s) have been deactivated.`);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error:', err);
+      alert('An error occurred while deactivating users.');
+      setLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -456,7 +544,7 @@ export default function StaffPage() {
       const [usersRes, rolesRes] = await Promise.all([
         supabase
           .from('UsersAccount')
-          .select('userID, roleID, email, firstName, lastName, phone, dob, address')
+          .select('userID, roleID, email, firstName, lastName, phone, dob, address, isActive')
           .order('firstName', { ascending: true }),
         supabase.from('Role').select('roleID, roleName'),
       ]);
@@ -478,6 +566,7 @@ export default function StaffPage() {
           address: r.address ?? '',
           avatarInitials:
             `${(r.firstName?.[0] ?? '')}${(r.lastName?.[0] ?? '')}`.toUpperCase() || 'NA',
+          isActive: r.isActive ?? true,
         })) ?? [];
 
       setStaffList(mapped);
@@ -753,15 +842,12 @@ export default function StaffPage() {
 
                 <section className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-card-border">
                   <p className="mb-3 text-[12px] font-extrabold text-[#1E1E1E]">Quick Actions</p>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    <button className="rounded-xl bg-white px-4 py-3 text-[12px] font-extrabold text-[#1E1E1E] ring-1 ring-black/5 transition hover:bg-[#F7F7F7]">
-                      Reset password
-                    </button>
-                    <button className="rounded-xl bg-white px-4 py-3 text-[12px] font-extrabold text-[#1E1E1E] ring-1 ring-black/5 transition hover:bg-[#F7F7F7]">
-                      Disable account
-                    </button>
-                    <button className="rounded-xl bg-white px-4 py-3 text-[12px] font-extrabold text-[#B80F24] ring-1 ring-[#B80F24]/20 transition hover:bg-[#B80F24]/5">
-                      Audit activity
+                  <div className="grid gap-2">
+                    <button
+                      onClick={() => handleDeleteStaff(selectedStaff)}
+                      className="rounded-xl bg-white px-4 py-3 text-[12px] font-extrabold text-[#B80F24] shadow-sm ring-1 ring-[#B80F24]/25 transition hover:bg-[#B80F24]/5"
+                    >
+                      Delete profile
                     </button>
                   </div>
                 </section>
@@ -820,7 +906,7 @@ export default function StaffPage() {
 
                   <button
                     disabled={selectedIds.size === 0}
-                    onClick={() => alert('Bulk delete action here')}
+                    onClick={handleBulkDelete}
                     className={cn(
                       'rounded-xl px-4 py-2.5 text-[12px] font-extrabold shadow-sm ring-1 transition',
                       selectedIds.size === 0
@@ -922,11 +1008,7 @@ export default function StaffPage() {
                               <MdVisibility className="h-4 w-4" />
                             </ActionIcon>
 
-                            <ActionIcon label="Edit" variant="soft" onClick={() => openEditModal(s)}>
-                              <MdEdit className="h-4 w-4" />
-                            </ActionIcon>
-
-                            <ActionIcon label="Delete" variant="danger" onClick={() => alert('Delete action here')}>
+                            <ActionIcon label="Delete" variant="danger" onClick={() => handleDeleteStaff(s)}>
                               <MdDelete className="h-4 w-4" />
                             </ActionIcon>
                           </div>
@@ -962,10 +1044,7 @@ export default function StaffPage() {
                               <ActionIcon label="View details" variant="soft" onClick={() => goDetails(s)}>
                                 <MdVisibility className="h-4 w-4" />
                               </ActionIcon>
-                              <ActionIcon label="Edit" variant="soft" onClick={() => openEditModal(s)}>
-                                <MdEdit className="h-4 w-4" />
-                              </ActionIcon>
-                              <ActionIcon label="Delete" variant="danger" onClick={() => alert('Delete action here')}>
+                              <ActionIcon label="Delete" variant="danger" onClick={() => handleDeleteStaff(s)}>
                                 <MdDelete className="h-4 w-4" />
                               </ActionIcon>
                             </div>
