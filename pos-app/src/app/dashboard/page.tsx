@@ -36,7 +36,17 @@ import {
 
 // -------------------- Types --------------------
 type UserRole = 'Manager' | 'Staff';
-type Metric = { label: string; value: string; note: string; icon: React.ReactNode; accentVar?: string };
+type Metric = {
+  label: string;
+  value: string;
+  note: string;
+  icon: React.ReactNode;
+  accentVar?: string;
+  detailsTitle?: string;
+  detailsRows?: Array<Record<string, any>>;
+  sparkValues?: number[];
+  valueClassName?: string;
+};
 type Dish = { id: string; name: string; subtitle: string; status: 'In Stock' | 'Out of stock'; price: string };
 type NavItem = { name: string; path?: string };
 
@@ -459,8 +469,6 @@ function Drawer({
     </>
   );
 }
-
-
 
 function StockAlertMeter({
   total,
@@ -942,7 +950,6 @@ export default function DashboardPage() {
 
       const dailyTotal = (ordersToday || []).reduce((acc: number, curr: any) => acc + safeNum(curr.amount), 0);
       const dailyExpenseTotal = expenseTodayRows.reduce((acc: number, curr: any) => acc + getExpenseAmount(curr), 0);
-      const ordersTodayCount = (ordersToday || []).length;
 
       // --- STOCK LEVELS ---
       const ingRows: LowStockItem[] =
@@ -972,59 +979,6 @@ export default function DashboardPage() {
       }));
 
       setLowStockIngredients(lowItems.slice(0, 4));
-
-      const lowNote = criticalRows.length > 0 ? 'Critical' : warningRows.length > 0 ? 'Warning' : 'All Good';
-
-      setMetrics([
-        {
-          label: 'Daily Sales',
-          value: fmtMoneyPhp(dailyTotal),
-          note: 'Current Today',
-          icon: <span className="font-black">₱</span>,
-          accentVar: '--primary',
-        },
-        {
-          label: 'Daily Expenses',
-          value: fmtMoneyPhp(dailyExpenseTotal),
-          note: expenseTodayRows.length ? 'Tracked Today' : 'No expense rows',
-          icon: <MdAttachMoney />,
-          accentVar: '--accent-red',
-        },
-        {
-          label: 'Stock Alerts',
-          value: `${criticalRows.length} Critical`,
-          note: warningRows.length ? `+${warningRows.length} Warn` : lowNote,
-          icon: <MdWarning />,
-          accentVar: '--accent-gold',
-        },
-        {
-          label: 'Orders Today',
-          value: ordersTodayCount.toString(),
-          note: 'Live Traffic',
-          icon: <MdInsights />,
-          accentVar: '--accent-green',
-        },
-      ]);
-
-      setPopularDishes(
-        (items || []).map((i: any) => ({
-          id: String(i.menuItemID),
-          name: i.name,
-          subtitle: (i.Category as any)?.categoryName || 'Menu Item',
-          status: i.isAvailable ? 'In Stock' : 'Out of stock',
-          price: `₱${safeNum(i.price).toFixed(2)}`,
-        }))
-      );
-
-      setRecentOrders(
-        (recentTx || []).map((t: any) => ({
-          id: String(t.orderID),
-          name: `Order #${t.orderID}`,
-          subtitle: t.paymentmethod || 'Walk-in',
-          status: 'In Stock',
-          price: `₱${safeNum(t.amount).toFixed(2)}`,
-        }))
-      );
 
       // ---- Weekly Sales & Expenses (4 weeks) ----
       const weekLabels: string[] = [];
@@ -1062,10 +1016,75 @@ export default function DashboardPage() {
         }
       }
 
+      const weeklyNetProfitArr = salesArr.map((sales, i) => sales - (expenseArr[i] || 0));
+      const weeklySalesTotal = salesArr.reduce((a, b) => a + b, 0);
+      const weeklyExpensesTotal = expenseArr.reduce((a, b) => a + b, 0);
+      const weeklyNetProfitTotal = weeklyNetProfitArr.reduce((a, b) => a + b, 0);
+
       setSalesWeekly(salesArr);
       setExpensesWeekly(expenseArr);
       setSalesWeeklyLabels(weekLabels);
       setExpensesWeeklyLabels(weekLabels);
+
+      setMetrics([
+        {
+          label: 'Daily Sales',
+          value: fmtMoneyPhp(dailyTotal),
+          note: 'Current Today',
+          icon: <span className="font-black">₱</span>,
+          accentVar: '--primary',
+        },
+        {
+          label: 'Daily Expenses',
+          value: fmtMoneyPhp(dailyExpenseTotal),
+          note: expenseTodayRows.length ? 'Tracked Today' : 'No expense rows',
+          icon: <MdAttachMoney />,
+          accentVar: '--accent-red',
+        },
+        {
+          label: 'Stock Alerts',
+          value: `${criticalRows.length} Critical`,
+          note: warningRows.length ? `+${warningRows.length} Warn` : criticalRows.length > 0 ? 'Critical' : warningRows.length > 0 ? 'Warning' : 'All Good',
+          icon: <MdWarning />,
+          accentVar: '--accent-gold',
+        },
+        {
+          label: 'Weekly Net Profit',
+          value: fmtMoneyPhp(weeklyNetProfitTotal),
+          note: weeklyNetProfitTotal < 0 ? 'Net Loss (Last 4 Weeks)' : 'Sales - Expenses (Last 4 Weeks)',
+          icon: <MdInsights />,
+          accentVar: weeklyNetProfitTotal < 0 ? '--accent-red' : '--accent-green',
+          valueClassName: weeklyNetProfitTotal < 0 ? 'text-red-600' : 'text-green-700',
+          detailsTitle: 'Weekly Net Profit',
+          detailsRows: weekLabels.map((label, i) => ({
+            week: label,
+            sales_php: salesArr[i] ?? 0,
+            expenses_php: expenseArr[i] ?? 0,
+            net_profit_php: weeklyNetProfitArr[i] ?? 0,
+          })),
+          sparkValues: weeklyNetProfitArr.map((v) => Math.abs(v)),
+        },
+      ]);
+
+      setPopularDishes(
+        (items || []).map((i: any) => ({
+          id: String(i.menuItemID),
+          name: i.name,
+          subtitle: (i.Category as any)?.categoryName || 'Menu Item',
+          status: i.isAvailable ? 'In Stock' : 'Out of stock',
+          price: `₱${safeNum(i.price).toFixed(2)}`,
+        }))
+      );
+
+      setRecentOrders(
+        (recentTx || []).map((t: any) => ({
+          id: String(t.orderID),
+          name: `Order #${t.orderID}`,
+          subtitle: t.paymentmethod || 'Walk-in',
+          status: 'In Stock',
+          price: `₱${safeNum(t.amount).toFixed(2)}`,
+        }))
+      );
 
       // ---- Payment method mix (today) ----
       const pm = new Map<string, number>();
@@ -1227,24 +1246,6 @@ export default function DashboardPage() {
 
       <Drawer open={drawerOpen} onClose={closeDrawer} title={drawerTitle}>
         <div className="flex items-center justify-between gap-2 mb-3">
-          <button
-            onClick={() => downloadCSV(`${drawerTitle.replace(/\s+/g, '_').toLowerCase()}.csv`, drawerRows)}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white ring-1 ring-card-border hover:bg-slate-50 text-xs font-black"
-            type="button"
-          >
-            <MdDownload className="h-4 w-4" />
-            Export CSV
-          </button>
-
-          <button
-            onClick={() => setDrawerRows([])}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white ring-1 ring-card-border hover:bg-slate-50 text-xs font-black"
-            type="button"
-            title="Clear"
-          >
-            <MdClose className="h-4 w-4" />
-            Clear
-          </button>
         </div>
 
         {drawerRows.length ? (
@@ -1333,24 +1334,11 @@ export default function DashboardPage() {
                 value={range}
                 onChange={(v) => setRange(v as 'today' | '7d')}
                 items={[
-                  { value: 'today', label: 'Today Mix', icon: <MdToday className="h-4 w-4" /> },
-                  { value: '7d', label: 'All-time Mix', icon: <MdDateRange className="h-4 w-4" /> },
+                  { value: 'today', label: 'Today Mix', icon: <MdToday className="h-4 w-4" /> }
                 ]}
               />
 
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    setLockedDonut({ key: 'menu', label: null });
-                    setActiveDonut({ key: 'menu', label: null });
-                  }}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/80 ring-1 ring-card-border hover:bg-slate-50 text-xs font-black"
-                  type="button"
-                  title="Clear selection"
-                >
-                  <MdClose className="h-4 w-4" />
-                  Clear selection
-                </button>
 
                 <button
                   onClick={() =>
@@ -1361,7 +1349,7 @@ export default function DashboardPage() {
                       { item: 'Details', detail: 'Click “View details” to open breakdown, export CSV.' },
                     ])
                   }
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/80 ring-1 ring-card-border hover:bg-slate-50 text-xs font-black"
+                  className="inline-flex items-center gap-2 px-11 py-2 rounded-xl bg-white/80 ring-1 ring-card-border hover:bg-slate-50 text-xs font-black"
                   type="button"
                 >
                   <MdInfo className="h-4 w-4" />
@@ -1373,33 +1361,55 @@ export default function DashboardPage() {
         </header>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {metrics.map((m) => (
-            <div key={m.label} className="relative overflow-hidden bg-card/70 backdrop-blur p-5 rounded-2xl ring-1 ring-card-border shadow-sm">
-              <div className="absolute inset-0 opacity-60 bg-linear-to-br from-white via-white to-surface-dark/10" />
-              <div className="relative">
-                <div className="flex justify-between text-text-muted text-[10px] font-black uppercase tracking-widest mb-2">
-                  {m.label}
-                  <div className="text-primary">{m.icon}</div>
-                </div>
-                <div className="text-3xl font-black">{m.value}</div>
-                <div className="text-[10px] opacity-60 mt-1">{m.note}</div>
+          {metrics.map((m) => {
+            const spark = m.sparkValues?.length ? m.sparkValues : [30, 60, 45, 80, 50, 90, 70];
+            const maxSpark = Math.max(...spark, 1);
 
-                <div className="mt-4 flex h-12 items-end gap-1">
-                  {[30, 60, 45, 80, 50, 90, 70].map((v, idx) => (
-                    <div
-                      key={idx}
-                      className="w-2.5 rounded-md"
-                      style={{
-                        height: `${Math.max(12, v)}%`,
-                        background: buildPaletteColor(m.accentVar || '--primary', 78),
-                        opacity: 0.95,
-                      }}
-                    />
-                  ))}
+            return (
+              <div key={m.label} className="relative overflow-hidden bg-card/70 backdrop-blur p-5 rounded-2xl ring-1 ring-card-border shadow-sm">
+                <div className="absolute inset-0 opacity-60 bg-linear-to-br from-white via-white to-surface-dark/10" />
+                <div className="relative">
+                  <div className="flex justify-between text-text-muted text-[10px] font-black uppercase tracking-widest mb-2">
+                    {m.label}
+                    <div className="text-primary">{m.icon}</div>
+                  </div>
+
+                  <div className={cn('text-3xl font-black', m.valueClassName)}>{m.value}</div>
+                  <div className="text-[10px] opacity-60 mt-1">{m.note}</div>
+
+                  <div className="mt-4 flex h-12 items-end gap-1">
+                    {spark.map((v, idx) => {
+                      const heightPct = maxSpark > 0 ? (Math.abs(v) / maxSpark) * 100 : 12;
+                      return (
+                        <div
+                          key={idx}
+                          className="w-2.5 rounded-md"
+                          style={{
+                            height: `${Math.max(12, heightPct)}%`,
+                            background: buildPaletteColor(m.accentVar || '--primary', 78),
+                            opacity: 0.95,
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  {m.detailsRows?.length ? (
+                    <div className="mt-4 pt-3 border-t border-card-border">
+                      <button
+                        onClick={() => openDrawer(m.detailsTitle || m.label, m.detailsRows || [])}
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white ring-1 ring-card-border hover:bg-slate-50 text-xs font-black"
+                        type="button"
+                      >
+                        <MdVisibility className="h-4 w-4" />
+                        View details
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </section>
 
         <section className="grid gap-6 xl:grid-cols-12">
@@ -1413,24 +1423,6 @@ export default function DashboardPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                <button
-                  onClick={exportSalesWeekly}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white ring-1 ring-card-border hover:bg-slate-50 text-xs font-black"
-                  type="button"
-                  title="Export Sales CSV"
-                >
-                  <MdDownload className="h-4 w-4" />
-                  Sales CSV
-                </button>
-                <button
-                  onClick={exportExpensesWeekly}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white ring-1 ring-card-border hover:bg-slate-50 text-xs font-black"
-                  type="button"
-                  title="Export Expenses CSV"
-                >
-                  <MdDownload className="h-4 w-4" />
-                  Expenses CSV
-                </button>
               </div>
             </div>
 
@@ -1788,7 +1780,7 @@ export default function DashboardPage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
-                  Export buttons remain available for charts and detail drawers.
+                  Weekly Net Profit replaces Orders Today in the summary cards and includes a detail drawer.
                 </li>
               </ul>
 

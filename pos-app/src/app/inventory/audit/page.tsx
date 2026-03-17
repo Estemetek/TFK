@@ -77,7 +77,7 @@ export default function EODAuditPage() {
     setLoading(true);
 
     // 1. Check if an audit already exists for today (Singapore Time)
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' });
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
     const { data: existingSession } = await supabase
       .from("AuditSession")
       .select("sessionID")
@@ -187,15 +187,19 @@ export default function EODAuditPage() {
   const handleSubmitAudit = async () => {
     setIsSubmitting(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
       // STEP 1: Create the Batch Session Header
       const { data: session, error: sessionError } = await supabase
         .from("AuditSession")
-        .insert([{ 
-            recordedBy: user?.id, 
-            notes: "End of Day Manual Audit" 
-        }])
+        .insert([
+          {
+            recordedBy: user?.id,
+            notes: "End of Day Manual Audit",
+          },
+        ])
         .select()
         .single();
 
@@ -239,7 +243,7 @@ export default function EODAuditPage() {
           </div>
           <h1 className="text-2xl font-bold">Audit Already Submitted</h1>
           <p className="text-text-muted">
-            The End-of-Day inventory audit for today has already been recorded. 
+            The End-of-Day inventory audit for today has already been recorded.
             Only one audit session is allowed per day to maintain data integrity.
           </p>
           <button onClick={() => router.push("/inventory")} className={BTN_PRIMARY}>
@@ -332,7 +336,7 @@ export default function EODAuditPage() {
               </div>
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-4">
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
               <StatCard
                 title="Ingredients"
                 value={totals.totalItems}
@@ -352,14 +356,8 @@ export default function EODAuditPage() {
                 subtitle="Based on system minus physical"
                 icon={<MdChecklist size={20} />}
               />
-              <StatCard
-                title="Overages"
-                value={totals.overages}
-                subtitle="Physical count higher than system"
-                icon={<MdWarningAmber size={20} />}
-              />
             </div>
-            
+
             <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="relative w-full md:max-w-sm">
                 <MdSearch
@@ -521,32 +519,14 @@ export default function EODAuditPage() {
         </section>
 
         {/* FOOTER ACTION AREA */}
-        <div className="sticky bottom-4 z-20">
-          <div className={cn(SURFACE, "p-4")}>
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-sm font-semibold">Ready to finalize today’s audit?</p>
-                <p className="text-xs text-text-muted mt-1">
-                  Review your counts. This action will lock inventory for the rest of the day.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button onClick={() => router.push("/inventory")} className={BTN_NEUTRAL}>
+            <div className="flex justify-end mt-4">
+                <button
+                  onClick={() => router.push("/inventory")}
+                  className={cn(BTN_NEUTRAL, "w-full")}
+                >
                   Cancel
                 </button>
-                <button
-                  onClick={() => setShowConfirmModal(true)} // Changed this
-                  disabled={isSubmitting || ingredients.length === 0}
-                  className={BTN_PRIMARY}
-                >
-                  <MdSave size={18} />
-                  {isSubmitting ? "Submitting..." : "Submit EOD Audit"}
-                </button>
-              </div>
             </div>
-          </div>
-        </div>
       </div>
 
       {/* CONFIRMATION MODAL OVERLAY */}
@@ -559,7 +539,7 @@ export default function EODAuditPage() {
               </div>
               <h2 className="text-xl font-bold text-foreground">Confirm Submission</h2>
             </div>
-            
+
             <p className="text-sm text-text-muted leading-relaxed">
               You are about to submit the EOD Audit. This will <strong>lock</strong> inventory records for today and cannot be edited later.
             </p>
@@ -578,15 +558,15 @@ export default function EODAuditPage() {
             </div>
 
             <div className="mt-8 grid grid-cols-2 gap-3">
-              <button 
+              <button
                 onClick={() => setShowConfirmModal(false)}
                 className={BTN_NEUTRAL}
                 disabled={isSubmitting}
               >
                 Go Back
               </button>
-              <button 
-                onClick={handleSubmitAudit} // The actual DB call happens here
+              <button
+                onClick={handleSubmitAudit}
                 className={BTN_PRIMARY}
                 disabled={isSubmitting}
               >

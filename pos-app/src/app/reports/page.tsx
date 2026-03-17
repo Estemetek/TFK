@@ -12,9 +12,7 @@ import {
   MdInventory2,
   MdAssessment,
   MdShoppingCart,
-  MdLogout,
   MdSearch,
-  MdArrowDropDown,
   MdReceiptLong,
   MdPayments,
   MdCalendarMonth,
@@ -36,7 +34,7 @@ import {
 
 type NavItem = { name: string; path?: string };
 
-type ReportTab = 'Inventory Audit' | 'Sales Income' | 'Purchase Expenses';
+type ReportTab = 'Inventory Audit' | 'Sales Income' | 'Purchase Expenses' | 'Net Profit';
 
 type EODReportItem = {
   auditItemID?: number;
@@ -58,7 +56,7 @@ type EODReportRow = {
   totalOrders: number;
   recordedBy: string;
   createdAt: string;
-  EODReportItems: EODReportItem[]; // Relation to the items table
+  EODReportItems: EODReportItem[];
 };
 
 type OrderRow = {
@@ -269,7 +267,7 @@ const Tab = ({
   </button>
 );
 
-/* ----------------------------- Donut + Line (unchanged) ----------------------------- */
+/* ----------------------------- Donut + Line ----------------------------- */
 
 function Donut({ totalLabel, totalValue }: { totalLabel: string; totalValue: string }) {
   const r = 62;
@@ -510,7 +508,7 @@ function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => v
               onClick={handleDownloadPDF}
               className={classNames(
                 BTN_SUBTLE,
-                'flex-1 border-[#B80F24] text-[#B80F24] hover:bg-[#B80F24] hover:text-white hover:border-[#B80F24]'
+                'flex-1 border-[#B80F24] text-[#B80F24] hover:bg-[#B80F24] hover:text-black hover:border-[#B80F24]'
               )}
               type="button"
             >
@@ -520,7 +518,7 @@ function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => v
             <button
               className={classNames(
                 BTN_SUBTLE,
-                'flex-1 border-[#B80F24] text-[#B80F24] hover:bg-[#B80F24] hover:text-white hover:border-[#B80F24]'
+                'flex-1 border-[#B80F24] text-[#B80F24] hover:bg-[#B80F24] hover:text-black hover:border-[#B80F24]'
               )}
               onClick={async () => {
                 if (!window.confirm('Are you sure you want to void this receipt?')) return;
@@ -552,7 +550,6 @@ export default function ReportsPage() {
   });
   const activeNav = 'Reports';
 
-  // Persist collapse state to localStorage
   useEffect(() => {
     localStorage.setItem('sidebarCollapsed', String(collapsed));
   }, [collapsed]);
@@ -575,6 +572,11 @@ export default function ReportsPage() {
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'cash' | 'gcash' | 'bank'>('all');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | '7d' | '30d'>('7d');
 
+  const [netProfitQuery, setNetProfitQuery] = useState('');
+  const [netProfitDateFilter, setNetProfitDateFilter] = useState<'all' | 'today' | '7d' | '30d'>('7d');
+  const [netProfitPage, setNetProfitPage] = useState(1);
+  const NET_PROFIT_PAGE_SIZE = 10;
+
   const [eodRows, setEodRows] = useState<EODReportItem[]>([]);
   const [eodLoading, setEodLoading] = useState(false);
   const [eodDate, setEodDate] = useState<string>(toLocalDateInput(new Date()));
@@ -589,8 +591,15 @@ export default function ReportsPage() {
   const PURCHASES_PAGE_SIZE = 10;
 
   useEffect(() => {
-    if (tab === 'Sales Income') fetchReceipts();
+    if (tab === 'Sales Income') {
+      fetchReceipts();
+      fetchPurchases();
+    }
     if (tab === 'Purchase Expenses') fetchPurchases();
+    if (tab === 'Net Profit') {
+      fetchReceipts();
+      fetchPurchases();
+    }
     if (tab === 'Inventory Audit') {
       fetchReceipts();
       fetchEodAudit();
@@ -618,18 +627,24 @@ export default function ReportsPage() {
   }, [purchaseQuery, purchaseDateFilter, purchaseMin, purchaseMax]);
 
   useEffect(() => {
+    setNetProfitPage(1);
+  }, [netProfitQuery, netProfitDateFilter]);
+
+  useEffect(() => {
     const channel = supabase
       .channel('eod-report-realtime')
       .on(
-        'postgres_changes', 
-        { event: '*', schema: 'public', table: 'AuditItem' }, 
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'AuditItem' },
         () => {
           fetchEodAudit();
         }
       )
       .subscribe();
-      
-    return () => { supabase.removeChannel(channel); };
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [eodDate]);
 
   const fetchPurchases = async () => {
@@ -688,7 +703,6 @@ export default function ReportsPage() {
     setEodLoading(true);
 
     try {
-      // We filter by the date part of the createdAt timestamp
       const { data, error } = await supabase
         .from('AuditSession')
         .select(`
@@ -705,20 +719,16 @@ export default function ReportsPage() {
             Ingredient (name, unit)
           )
         `)
-        // Since your table uses "createdAt" instead of a plain "reportDate", 
-        // we filter for the full day range of the selected eodDate
         .gte('createdAt', `${eodDate}T00:00:00`)
         .lte('createdAt', `${eodDate}T23:59:59`)
         .order('createdAt', { ascending: false });
 
       if (error) throw error;
 
-      // Map the nested items from the first session found for that date
       if (data && data.length > 0) {
-        const latestSession = data[0]; // Gets the most recent audit for that day
+        const latestSession = data[0];
         const transformedData = (latestSession.AuditItem || []).map((item: any) => ({
           ...item,
-          // Handling the nested Ingredient object
           Ingredient: Array.isArray(item.Ingredient) ? item.Ingredient[0] : item.Ingredient,
         }));
         setEodRows(transformedData);
@@ -777,6 +787,37 @@ export default function ReportsPage() {
       .reduce((sum, r) => sum + Number(r.change || 0), 0);
     return { count: receiptsView.length, totalSales, totalChange };
   }, [receiptsView]);
+
+  const salesExpensesForSelectedDateRange = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const daysAgo = (d: number) => new Date(now.getTime() - d * 24 * 60 * 60 * 1000);
+
+    return (purchases || []).filter((p) => {
+      const created = new Date(p.createdAt || '');
+
+      const matchDate =
+        dateFilter === 'all'
+          ? true
+          : dateFilter === 'today'
+          ? created >= startOfToday
+          : dateFilter === '7d'
+          ? created >= daysAgo(7)
+          : created >= daysAgo(30);
+
+      return matchDate;
+    });
+  }, [purchases, dateFilter]);
+
+  const salesNetProfitSummary = useMemo(() => {
+    const totalExpenses = salesExpensesForSelectedDateRange.reduce((sum, p) => sum + Number(p.totalCost || 0), 0);
+    const netProfit = receiptsTotals.totalSales - totalExpenses;
+
+    return {
+      totalExpenses,
+      netProfit,
+    };
+  }, [salesExpensesForSelectedDateRange, receiptsTotals.totalSales]);
 
   const purchasesView = useMemo(() => {
     const q = purchaseQuery.trim().toLowerCase();
@@ -861,7 +902,6 @@ export default function ReportsPage() {
   }, [receipts, eodDate]);
 
   const salesEodSummary = useMemo(() => {
-    // Total Sales & Orders now come from the parent report record or your order fetch
     const totalSales = salesEodOrdersForDate.reduce((sum, order) => sum + Number(order.amount || 0), 0);
     const totalOrders = salesEodOrdersForDate.length;
     const totalChange = salesEodOrdersForDate.reduce((sum, order) => sum + Number(order.change || 0), 0);
@@ -896,7 +936,103 @@ export default function ReportsPage() {
       overages,
       shortages,
     };
-  }, [salesEodOrdersForDate, eodRowsView]);
+  }, [salesEodOrdersForDate, eodRowsView, eodRows]);
+
+  const netProfitView = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const daysAgo = (d: number) => new Date(now.getTime() - d * 24 * 60 * 60 * 1000);
+    const q = netProfitQuery.trim().toLowerCase();
+
+    const salesRows = (receipts || [])
+      .filter((r) => r.status !== 'voided')
+      .filter((r) => {
+        const created = new Date(r.createdAt || '');
+        return netProfitDateFilter === 'all'
+          ? true
+          : netProfitDateFilter === 'today'
+          ? created >= startOfToday
+          : netProfitDateFilter === '7d'
+          ? created >= daysAgo(7)
+          : created >= daysAgo(30);
+      })
+      .map((r) => ({
+        kind: 'sale' as const,
+        id: r.orderID,
+        createdAt: r.createdAt || '',
+        label: `Order #${r.orderID}`,
+        details:
+          (r.items || [])
+            .slice(0, 2)
+            .map((it: any) => it?.MenuItem?.name)
+            .filter(Boolean)
+            .join(', ') || 'Sales transaction',
+        amount: Number(r.amount || 0),
+      }));
+
+    const expenseRows = (purchases || [])
+      .filter((p) => {
+        const created = new Date(p.createdAt || '');
+        return netProfitDateFilter === 'all'
+          ? true
+          : netProfitDateFilter === 'today'
+          ? created >= startOfToday
+          : netProfitDateFilter === '7d'
+          ? created >= daysAgo(7)
+          : created >= daysAgo(30);
+      })
+      .map((p) => ({
+        kind: 'expense' as const,
+        id: p.purchaseID,
+        createdAt: p.createdAt || '',
+        label: `Purchase #${p.purchaseID}`,
+        details:
+          (p.items || [])
+            .slice(0, 2)
+            .map((it: any) => it?.Ingredient?.name)
+            .filter(Boolean)
+            .join(', ') || 'Purchase expense',
+        amount: Number(p.totalCost || 0),
+      }));
+
+    const combined = [...salesRows, ...expenseRows]
+      .filter((row) => {
+        if (!q) return true;
+        return (
+          row.label.toLowerCase().includes(q) ||
+          row.details.toLowerCase().includes(q) ||
+          formatDateTime(row.createdAt).toLowerCase().includes(q) ||
+          String(row.id).includes(q)
+        );
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return combined;
+  }, [receipts, purchases, netProfitDateFilter, netProfitQuery]);
+
+  const netProfitSummary = useMemo(() => {
+    const totalSales = netProfitView
+      .filter((row) => row.kind === 'sale')
+      .reduce((sum, row) => sum + row.amount, 0);
+
+    const totalExpenses = netProfitView
+      .filter((row) => row.kind === 'expense')
+      .reduce((sum, row) => sum + row.amount, 0);
+
+    return {
+      totalSales,
+      totalExpenses,
+      netProfit: totalSales - totalExpenses,
+      salesCount: netProfitView.filter((row) => row.kind === 'sale').length,
+      expenseCount: netProfitView.filter((row) => row.kind === 'expense').length,
+    };
+  }, [netProfitView]);
+
+  const netProfitTotalPages = Math.max(1, Math.ceil(netProfitView.length / NET_PROFIT_PAGE_SIZE));
+  const netProfitViewPage = netProfitView.slice(
+    (netProfitPage - 1) * NET_PROFIT_PAGE_SIZE,
+    netProfitPage * NET_PROFIT_PAGE_SIZE
+  );
 
   const leftCard = useMemo(() => {
     return { title: 'Daily Sales Report', label: 'Total', value: '0' };
@@ -913,569 +1049,776 @@ export default function ReportsPage() {
       </div>
 
       <main className="flex-1 h-screen overflow-y-auto space-y-4 p-4 md:p-6">
-          <header className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <button
-                aria-label="Toggle sidebar"
-                onClick={() => setCollapsed((c) => !c)}
-                className="grid h-8 w-8 place-items-center rounded-full bg-[#E7E7E7] text-[#1E1E1E] shadow transition hover:bg-black/0.03 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#B80F24]/15"
-                title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                type="button"
-              >
-                {collapsed ? '›' : '‹'}
-              </button>
-              <p className="text-[13px] font-extrabold text-[#1E1E1E]">Reports</p>
-            </div>
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              aria-label="Toggle sidebar"
+              onClick={() => setCollapsed((c) => !c)}
+              className="grid h-8 w-8 place-items-center rounded-full bg-[#E7E7E7] text-[#1E1E1E] shadow transition hover:bg-black/0.03 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#B80F24]/15"
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              type="button"
+            >
+              {collapsed ? '›' : '‹'}
+            </button>
+            <p className="text-[13px] font-extrabold text-[#1E1E1E]">Reports</p>
+          </div>
+        </header>
 
-            <div className="flex items-center gap-3">
-              <span className="text-[14px]">🔔</span>
-              <button
-                onClick={() => router.push('/profile')}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[12px] font-extrabold text-[#B80F24] shadow transition hover:bg-black/0.02 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#B80F24]/15"
-                aria-label="Open profile"
-                type="button"
-              >
-                AC
-              </button>
-            </div>
-          </header>
+        <section className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Tab active={tab === 'Inventory Audit'} onClick={() => setTab('Inventory Audit')}>
+              Inventory Audit
+            </Tab>
+            <Tab active={tab === 'Sales Income'} onClick={() => setTab('Sales Income')}>
+              Sales Income
+            </Tab>
+            <Tab active={tab === 'Purchase Expenses'} onClick={() => setTab('Purchase Expenses')}>
+              Purchase Expenses
+            </Tab>
+            <Tab active={tab === 'Net Profit'} onClick={() => setTab('Net Profit')}>
+              Net Profit
+            </Tab>
+          </div>
+        </section>
 
-          <section className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Tab active={tab === 'Inventory Audit'} onClick={() => setTab('Inventory Audit')}>
-                Inventory Audit
-              </Tab>
-              <Tab active={tab === 'Sales Income'} onClick={() => setTab('Sales Income')}>
-                Sales Income
-              </Tab>
-              <Tab active={tab === 'Purchase Expenses'} onClick={() => setTab('Purchase Expenses')}>
-                Purchase Expenses
-              </Tab>
-            </div>
-          </section>
-
-          {tab === 'Purchase Expenses' && (
-            <section className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_20px_rgba(0,0,0,0.06)] ring-1 ring-black/5">
-              <div className="rounded-t-2xl bg-[#B80F24] px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/15 text-white ring-1 ring-white/15">
-                    <MdReceipt className="h-5 w-5" />
-                  </span>
-                  <div>
-                    <div className="text-[14px] font-extrabold text-white">Purchase Expenses</div>
-                    <div className="text-[10px] font-bold text-white/80">Review purchases and item breakdown</div>
-                  </div>
-                </div>
-
-                <div className="hidden md:flex items-center gap-3">
-                  <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/15">
-                    <div className="text-[10px] font-extrabold text-white/80">Purchases</div>
-                    <div className="text-[12px] font-extrabold text-white">{purchasesTotals.count}</div>
-                  </div>
-                  <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/15">
-                    <div className="text-[10px] font-extrabold text-white/80">Total Cost</div>
-                    <div className="text-[12px] font-extrabold text-white">{fmtMoneyPhp(purchasesTotals.totalCost)}</div>
-                  </div>
+        {tab === 'Purchase Expenses' && (
+          <section className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_20px_rgba(0,0,0,0.06)] ring-1 ring-black/5">
+            <div className="rounded-t-2xl bg-[#B80F24] px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/15 text-white ring-1 ring-white/15">
+                  <MdReceipt className="h-5 w-5" />
+                </span>
+                <div>
+                  <div className="text-[14px] font-extrabold text-white">Purchase Expenses</div>
+                  <div className="text-[10px] font-bold text-white/80">Review purchases and item breakdown</div>
                 </div>
               </div>
 
-              <div className="bg-[#F7F7F7] px-6 py-4 border-b border-black/5">
-                <div className="grid gap-3 md:grid-cols-[1fr_160px_140px_140px_auto] items-end">
-                  <div className="relative">
-                    <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6D6D6D]" size={18} />
-                    <input
-                      value={purchaseQuery}
-                      onChange={(e) => setPurchaseQuery(e.target.value)}
-                      placeholder="Search by Purchase ID, date/time, cost, or ingredient..."
-                      className={classNames(INPUT, 'pl-10')}
-                    />
-                  </div>
-
-                  <div className="relative">
-                    <div className="mb-1 flex items-center gap-2 text-[10px] font-extrabold text-[#6D6D6D]">
-                      <MdCalendarMonth className="h-4 w-4" />
-                      Date
-                    </div>
-                    <select value={purchaseDateFilter} onChange={(e) => setPurchaseDateFilter(e.target.value as any)} className={SELECT}>
-                      <option value="all">All time</option>
-                      <option value="today">Today</option>
-                      <option value="7d">Last 7 days</option>
-                      <option value="30d">Last 30 days</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <div className="mb-1 flex items-center gap-2 text-[10px] font-extrabold text-[#6D6D6D]">
-                      <MdFilterList className="h-4 w-4" />
-                      Min Cost
-                    </div>
-                    <input
-                      value={purchaseMin}
-                      onChange={(e) => setPurchaseMin(e.target.value)}
-                      inputMode="decimal"
-                      placeholder="0"
-                      className={INPUT}
-                    />
-                  </div>
-
-                  <div>
-                    <div className="mb-1 flex items-center gap-2 text-[10px] font-extrabold text-[#6D6D6D]">
-                      <MdFilterList className="h-4 w-4" />
-                      Max Cost
-                    </div>
-                    <input
-                      value={purchaseMax}
-                      onChange={(e) => setPurchaseMax(e.target.value)}
-                      inputMode="decimal"
-                      placeholder="9999"
-                      className={INPUT}
-                    />
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      setPurchaseQuery('');
-                      setPurchaseDateFilter('all');
-                      setPurchaseMin('');
-                      setPurchaseMax('');
-                    }}
-                    className={BTN_SUBTLE}
-                    type="button"
-                  >
-                    Clear
-                  </button>
+              <div className="hidden md:flex items-center gap-3">
+                <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/15">
+                  <div className="text-[10px] font-extrabold text-white/80">Purchases</div>
+                  <div className="text-[12px] font-extrabold text-white">{purchasesTotals.count}</div>
+                </div>
+                <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/15">
+                  <div className="text-[10px] font-extrabold text-white/80">Total Cost</div>
+                  <div className="text-[12px] font-extrabold text-white">{fmtMoneyPhp(purchasesTotals.totalCost)}</div>
                 </div>
               </div>
+            </div>
 
-              {purchasesLoading ? (
-                <div className="px-6 py-14 text-center text-[12px] font-bold text-[#6D6D6D]">Loading purchase transactions...</div>
-              ) : purchasesView.length === 0 ? (
-                <div className="px-6 py-14 text-center">
-                  <div className="text-[13px] font-extrabold text-[#1E1E1E]">No purchase transactions found</div>
-                  <div className="mt-1 text-[11px] font-bold text-[#6D6D6D]">Try adjusting search, date, or cost filters.</div>
+            <div className="bg-[#F7F7F7] px-6 py-4 border-b border-black/5">
+              <div className="grid gap-3 md:grid-cols-[1fr_160px_140px_140px_auto] items-end">
+                <div className="relative">
+                  <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6D6D6D]" size={18} />
+                  <input
+                    value={purchaseQuery}
+                    onChange={(e) => setPurchaseQuery(e.target.value)}
+                    placeholder="Search by Purchase ID, date/time, cost, or ingredient..."
+                    className={classNames(INPUT, 'pl-10')}
+                  />
                 </div>
-              ) : (
-                <>
-                  <div className="hidden md:grid grid-cols-[160px_1.1fr_160px_1.6fr] gap-3 px-6 py-3 text-[10px] font-extrabold text-[#6D6D6D] bg-white">
-                    <div>Purchase</div>
-                    <div>Date</div>
-                    <div className="text-center">Total Cost</div>
-                    <div className="text-center">Items</div>
+
+                <div className="relative">
+                  <div className="mb-1 flex items-center gap-2 text-[10px] font-extrabold text-[#6D6D6D]">
+                    <MdCalendarMonth className="h-4 w-4" />
+                    Date
                   </div>
+                  <select value={purchaseDateFilter} onChange={(e) => setPurchaseDateFilter(e.target.value as any)} className={SELECT}>
+                    <option value="all">All time</option>
+                    <option value="today">Today</option>
+                    <option value="7d">Last 7 days</option>
+                    <option value="30d">Last 30 days</option>
+                  </select>
+                </div>
 
-                  <div className="divide-y divide-black/5">
-                    {purchasesViewPage.map((purchase: any) => {
-                      const items = Array.isArray(purchase.items) ? purchase.items : [];
-                      const preview = items
-                        .slice(0, 2)
-                        .map((it: any) => it?.Ingredient?.name)
-                        .filter(Boolean)
-                        .join(', ');
+                <div>
+                  <div className="mb-1 flex items-center gap-2 text-[10px] font-extrabold text-[#6D6D6D]">
+                    <MdFilterList className="h-4 w-4" />
+                    Min Cost
+                  </div>
+                  <input
+                    value={purchaseMin}
+                    onChange={(e) => setPurchaseMin(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="0"
+                    className={INPUT}
+                  />
+                </div>
 
-                      return (
-                        <div key={purchase.purchaseID} className="px-6 py-4 bg-white hover:bg-[#FAFAFA] transition">
-                          <div className="hidden md:grid grid-cols-[160px_1.1fr_160px_1.6fr] gap-3 items-start">
-                            <div>
-                              <div className="text-[10px] font-extrabold text-[#B80F24]">Purchase ID</div>
-                              <div className="text-[13px] font-extrabold text-[#1E1E1E]">#{purchase.purchaseID}</div>
-                              <div className="mt-2">
-                                <StatusChip status={purchase.status || 'Completed'} />
-                              </div>
+                <div>
+                  <div className="mb-1 flex items-center gap-2 text-[10px] font-extrabold text-[#6D6D6D]">
+                    <MdFilterList className="h-4 w-4" />
+                    Max Cost
+                  </div>
+                  <input
+                    value={purchaseMax}
+                    onChange={(e) => setPurchaseMax(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="9999"
+                    className={INPUT}
+                  />
+                </div>
+
+                <button
+                  onClick={() => {
+                    setPurchaseQuery('');
+                    setPurchaseDateFilter('all');
+                    setPurchaseMin('');
+                    setPurchaseMax('');
+                  }}
+                  className={BTN_SUBTLE}
+                  type="button"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            {purchasesLoading ? (
+              <div className="px-6 py-14 text-center text-[12px] font-bold text-[#6D6D6D]">Loading purchase transactions...</div>
+            ) : purchasesView.length === 0 ? (
+              <div className="px-6 py-14 text-center">
+                <div className="text-[13px] font-extrabold text-[#1E1E1E]">No purchase transactions found</div>
+                <div className="mt-1 text-[11px] font-bold text-[#6D6D6D]">Try adjusting search, date, or cost filters.</div>
+              </div>
+            ) : (
+              <>
+                <div className="hidden md:grid grid-cols-[160px_1.1fr_160px_1.6fr] gap-3 px-6 py-3 text-[10px] font-extrabold text-[#6D6D6D] bg-white">
+                  <div>Purchase</div>
+                  <div>Date</div>
+                  <div className="text-center">Total Cost</div>
+                  <div className="text-center">Items</div>
+                </div>
+
+                <div className="divide-y divide-black/5">
+                  {purchasesViewPage.map((purchase: any) => {
+                    const items = Array.isArray(purchase.items) ? purchase.items : [];
+                    const preview = items
+                      .slice(0, 2)
+                      .map((it: any) => it?.Ingredient?.name)
+                      .filter(Boolean)
+                      .join(', ');
+
+                    return (
+                      <div key={purchase.purchaseID} className="px-6 py-4 bg-white hover:bg-[#FAFAFA] transition">
+                        <div className="hidden md:grid grid-cols-[160px_1.1fr_160px_1.6fr] gap-3 items-start">
+                          <div>
+                            <div className="text-[10px] font-extrabold text-[#B80F24]">Purchase ID</div>
+                            <div className="text-[13px] font-extrabold text-[#1E1E1E]">#{purchase.purchaseID}</div>
+                            <div className="mt-2">
+                              <StatusChip status={purchase.status || 'Completed'} />
                             </div>
+                          </div>
 
-                            <div className="min-w-0">
-                              <div className="text-[10px] font-extrabold text-[#B80F24]">Date &amp; Time</div>
-                              <div className="text-[11px] font-bold text-[#6D6D6D] truncate">{formatDateTime(purchase.createdAt)}</div>
-                              <div className="mt-1 flex items-center gap-2">
-                                <span className="text-[10px] font-extrabold text-[#6D6D6D]">
-                                  {items.length} item{items.length !== 1 ? 's' : ''}
-                                </span>
-                                <span className="h-1 w-1 rounded-full bg-black/20" />
-                                <span className="text-[10px] font-bold text-black/40 truncate">
-                                  {preview || 'No items'}
-                                  {items.length > 2 ? '…' : ''}
-                                </span>
-                              </div>
+                          <div className="min-w-0">
+                            <div className="text-[10px] font-extrabold text-[#B80F24]">Date &amp; Time</div>
+                            <div className="text-[11px] font-bold text-[#6D6D6D] truncate">{formatDateTime(purchase.createdAt)}</div>
+                            <div className="mt-1 flex items-center gap-2">
+                              <span className="text-[10px] font-extrabold text-[#6D6D6D]">
+                                {items.length} item{items.length !== 1 ? 's' : ''}
+                              </span>
+                              <span className="h-1 w-1 rounded-full bg-black/20" />
+                              <span className="text-[10px] font-bold text-black/40 truncate">
+                                {preview || 'No items'}
+                                {items.length > 2 ? '…' : ''}
+                              </span>
                             </div>
+                          </div>
 
-                            <div className="flex flex-col items-center text-center">
-                              <div className="text-[10px] font-extrabold text-[#B80F24]">Total Cost</div>
-                              <div className="text-[13px] font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(purchase.totalCost || 0)}</div>
-                            </div>
+                          <div className="flex flex-col items-center text-center">
+                            <div className="text-[10px] font-extrabold text-[#B80F24]">Total Cost</div>
+                            <div className="text-[13px] font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(purchase.totalCost || 0)}</div>
+                          </div>
 
-                            <div className="text-[11px] font-normal text-[#1E1E1E] text-center">
-                              {items.length > 0 ? (
-                                <ul className="list-disc list-inside w-fit mx-auto">
-                                  {items.map((item: any, i: number) => (
-                                    <li key={i} className="mb-1">
-                                      <span className="font-extrabold">{item.Ingredient?.name || 'Unknown'}</span>
-                                      {item.quantity ? ` × ${item.quantity}` : ''}
-                                      {item.Ingredient?.unit ? ` ${item.Ingredient.unit}` : ''}
-                                      {item.cost ? ` @ ${fmtMoneyPhp(item.cost)}` : ''}
-                                    </li>
-                                  ))}
-                                </ul>
-                              ) : (
-                                <span className="text-gray-500">No items</span>
-                              )}
-                            </div>
+                          <div className="text-[11px] font-normal text-[#1E1E1E] text-center">
+                            {items.length > 0 ? (
+                              <ul className="list-disc list-inside w-fit mx-auto">
+                                {items.map((item: any, i: number) => (
+                                  <li key={i} className="mb-1">
+                                    <span className="font-extrabold">{item.Ingredient?.name || 'Unknown'}</span>
+                                    {item.quantity ? ` × ${item.quantity}` : ''}
+                                    {item.Ingredient?.unit ? ` ${item.Ingredient.unit}` : ''}
+                                    {item.cost ? ` @ ${fmtMoneyPhp(item.cost)}` : ''}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <span className="text-gray-500">No items</span>
+                            )}
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                  <div className="flex items-center justify-between border-t border-black/5 px-5 py-3 bg-[#FAFAFA]">
-                    <span className="text-[11px] font-bold text-[#6D6D6D]">
-                      Showing {Math.min((purchasesPage - 1) * PURCHASES_PAGE_SIZE + 1, purchasesView.length)}–{Math.min(purchasesPage * PURCHASES_PAGE_SIZE, purchasesView.length)} of {purchasesView.length}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        disabled={purchasesPage === 1}
-                        onClick={() => setPurchasesPage((p) => p - 1)}
-                        className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
-                        type="button"
-                      >
-                        Previous
-                      </button>
-                      <span className="text-[11px] font-extrabold text-[#1E1E1E]">
-                        {purchasesPage} / {purchasesTotalPages}
-                      </span>
-                      <button
-                        disabled={purchasesPage === purchasesTotalPages}
-                        onClick={() => setPurchasesPage((p) => p + 1)}
-                        className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
-                        type="button"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </section>
-          )}
-
-          {tab === 'Sales Income' && (
-            <section className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_20px_rgba(0,0,0,0.06)] ring-1 ring-black/5">
-              <div className="rounded-t-2xl bg-[#B80F24] px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/15 text-white ring-1 ring-white/15">
-                    <MdReceiptLong className="h-5 w-5" />
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-between border-t border-black/5 px-5 py-3 bg-[#FAFAFA]">
+                  <span className="text-[11px] font-bold text-[#6D6D6D]">
+                    Showing {Math.min((purchasesPage - 1) * PURCHASES_PAGE_SIZE + 1, purchasesView.length)}–{Math.min(purchasesPage * PURCHASES_PAGE_SIZE, purchasesView.length)} of {purchasesView.length}
                   </span>
-                  <div>
-                    <div className="text-[14px] font-extrabold text-white">Sales Income</div>
-                    <div className="text-[10px] font-bold text-white/80">Click a row to open the official receipt</div>
-                  </div>
-                </div>
-
-                <div className="hidden md:flex items-center gap-3">
-                  <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/15">
-                    <div className="text-[10px] font-extrabold text-white/80">Records</div>
-                    <div className="text-[12px] font-extrabold text-white">{receiptsTotals.count}</div>
-                  </div>
-                  <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/15">
-                    <div className="text-[10px] font-extrabold text-white/80">Total Sales</div>
-                    <div className="text-[12px] font-extrabold text-white">{fmtMoneyPhp(receiptsTotals.totalSales)}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-[#F7F7F7] px-6 py-4 border-b border-black/5">
-                <div className="grid gap-3 md:grid-cols-[1fr_160px_160px_auto] items-end">
-                  <div className="relative">
-                    <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6D6D6D]" size={18} />
-                    <input
-                      value={receiptQuery}
-                      onChange={(e) => setReceiptQuery(e.target.value)}
-                      placeholder="Search by Order ID, date/time, or item name..."
-                      className={classNames(INPUT, 'pl-10')}
-                    />
-                  </div>
-
-                  <div className="relative">
-                    <div className="mb-1 flex items-center gap-2 text-[10px] font-extrabold text-[#6D6D6D]">
-                      <MdPayments className="h-4 w-4" />
-                      Payment
-                    </div>
-                    <select value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value as any)} className={SELECT}>
-                      <option value="all">All</option>
-                      <option value="cash">Cash</option>
-                      <option value="gcash">GCash</option>
-                      <option value="bank">Bank</option>
-                    </select>
-                  </div>
-
-                  <div className="relative">
-                    <div className="mb-1 flex items-center gap-2 text-[10px] font-extrabold text-[#6D6D6D]">
-                      <MdCalendarMonth className="h-4 w-4" />
-                      Date
-                    </div>
-                    <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value as any)} className={SELECT}>
-                      <option value="all">All time</option>
-                      <option value="today">Today</option>
-                      <option value="7d">Last 7 days</option>
-                      <option value="30d">Last 30 days</option>
-                    </select>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      setReceiptQuery('');
-                      setPaymentFilter('all');
-                      setDateFilter('all');
-                    }}
-                    className={BTN_SUBTLE}
-                    type="button"
-                  >
-                    Clear
-                  </button>
-                </div>
-              </div>
-
-              {receiptsLoading ? (
-                <div className="px-6 py-14 text-center text-[12px] font-bold text-[#6D6D6D]">Loading receipts...</div>
-              ) : receiptsView.length === 0 ? (
-                <div className="px-6 py-14 text-center">
-                  <div className="text-[13px] font-extrabold text-[#1E1E1E]">No receipts found</div>
-                  <div className="mt-1 text-[11px] font-bold text-[#6D6D6D]">Try adjusting search, payment, or date filters.</div>
-                </div>
-              ) : (
-                <>
-                  <div className="hidden md:grid grid-cols-[140px_1.4fr_120px_160px_160px_120px] gap-3 px-6 py-3 text-[10px] font-extrabold text-[#6D6D6D] bg-white">
-                    <div>Order</div>
-                    <div>Date & Items</div>
-                    <div>Status</div>
-                    <div>Payment</div>
-                    <div className="text-right">Total</div>
-                    <div className="text-right">Change</div>
-                  </div>
-
-                  <div className="divide-y divide-black/5">
-                    {receiptsViewPage.map((order: any) => {
-                      const p = paymentMeta(order.paymentmethod);
-                      const itemsQty = (order.items || []).reduce((sum: number, it: any) => sum + Number(it.quantity || 0), 0);
-                      const topItems = (order.items || [])
-                        .slice(0, 2)
-                        .map((it: any) => it.MenuItem?.name)
-                        .filter(Boolean)
-                        .join(', ');
-
-                      return (
-                        <div
-                          key={order.orderID}
-                          onClick={() => setSelectedOrder(order)}
-                          className="group cursor-pointer px-6 py-4 bg-white transition hover:bg-[#FAFAFA]"
-                        >
-                          <div className="hidden md:grid grid-cols-[140px_1.4fr_120px_160px_160px_120px] gap-3 items-center">
-                            <div>
-                              <div className="text-[10px] font-extrabold text-[#B80F24]">Order ID</div>
-                              <div className="text-[13px] font-extrabold text-[#1E1E1E]">#{order.orderID}</div>
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-[10px] font-extrabold text-[#B80F24]">Date &amp; Time</div>
-                              <div className="text-[11px] font-bold text-[#6D6D6D] truncate">{formatDateTime(order.createdAt)}</div>
-                              <div className="mt-1 flex items-center gap-2">
-                                <span className="text-[10px] font-extrabold text-[#6D6D6D]">
-                                  {itemsQty} item{itemsQty !== 1 ? 's' : ''}
-                                </span>
-                                <span className="h-1 w-1 rounded-full bg-black/20" />
-                                <span className="text-[10px] font-bold text-black/40 truncate">
-                                  {topItems || 'No items'}
-                                  {(order.items || []).length > 2 ? '…' : ''}
-                                </span>
-                              </div>
-                            </div>
-                            <div>
-                              <StatusChip status={order.status === 'voided' ? 'Voided' : 'Completed'} />
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <Chip label={`${p.emoji} ${p.label}`} tone={p.tone} />
-                            </div>
-                            <div className="text-right">
-                              <div className="text-[10px] font-extrabold text-[#B80F24]">Total</div>
-                              <div className="text-[13px] font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(order.amount)}</div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-[10px] font-extrabold text-[#B80F24]">Change</div>
-                              <div className="text-[13px] font-extrabold text-green-600">{fmtMoneyPhp(order.change)}</div>
-                            </div>
-                          </div>
-
-                          <div className="md:hidden">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <div className="text-[10px] font-extrabold text-[#B80F24]">Order #{order.orderID}</div>
-                                <div className="mt-1 text-[11px] font-bold text-[#6D6D6D]">{formatDateTime(order.createdAt)}</div>
-                                <div className="mt-2 flex items-center gap-2">
-                                  <StatusChip status={order.status === 'voided' ? 'Voided' : 'Completed'} />
-                                  <span className="text-[10px] font-extrabold text-[#6D6D6D]">
-                                    {itemsQty} item{itemsQty !== 1 ? 's' : ''}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div className="text-right">
-                                <div className="text-[10px] font-extrabold text-[#B80F24]">Total</div>
-                                <div className="text-[13px] font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(order.amount)}</div>
-                                <div className="mt-2 text-[10px] font-extrabold text-[#B80F24]">Change</div>
-                                <div className="text-[12px] font-extrabold text-green-600">{fmtMoneyPhp(order.change)}</div>
-                              </div>
-                            </div>
-
-                            <div className="mt-3">
-                              <button className={classNames(BTN_PRIMARY, 'w-full')} onClick={() => setSelectedOrder(order)} type="button">
-                                <MdVisibility className="h-4 w-4" />
-                                View Receipt
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="flex items-center justify-between border-t border-black/5 px-5 py-3 bg-[#FAFAFA]">
-                    <span className="text-[11px] font-bold text-[#6D6D6D]">
-                      Showing {Math.min((receiptsPage - 1) * RECEIPTS_PAGE_SIZE + 1, receiptsView.length)}–{Math.min(receiptsPage * RECEIPTS_PAGE_SIZE, receiptsView.length)} of {receiptsView.length}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        disabled={receiptsPage === 1}
-                        onClick={() => setReceiptsPage((p) => p - 1)}
-                        className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
-                        type="button"
-                      >
-                        Previous
-                      </button>
-                      <span className="text-[11px] font-extrabold text-[#1E1E1E]">
-                        {receiptsPage} / {receiptsTotalPages}
-                      </span>
-                      <button
-                        disabled={receiptsPage === receiptsTotalPages}
-                        onClick={() => setReceiptsPage((p) => p + 1)}
-                        className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
-                        type="button"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </section>
-          )}
-
-          {tab === 'Inventory Audit' && (
-            <section className="space-y-4">
-              <div className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_20px_rgba(0,0,0,0.06)] ring-1 ring-black/5">
-                <div className="flex flex-col gap-4 bg-[#7E0012] px-6 py-5 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <div className="text-[16px] font-extrabold text-white">Inventory Audit</div>
-                    <div className="mt-1 text-[11px] font-bold text-white/85">
-                      Connected daily summary from Orders and InventoryAudit
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-[220px_auto] md:items-end">
-                    <div>
-                      <div className="mb-1 text-[10px] font-extrabold text-white/85">Select Date</div>
-                      <input
-                        type="date"
-                        value={eodDate}
-                        onChange={(e) => setEodDate(e.target.value)}
-                        className="w-full rounded-xl border border-white/20 bg-white px-3 py-2 text-[12px] font-extrabold text-[#1E1E1E] shadow-sm focus:outline-none focus:ring-4 focus:ring-white/20"
-                      />
-                    </div>
-
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={fetchEodAudit}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2 text-[11px] font-extrabold text-[#7E0012] shadow hover:bg-[#F7F7F7]"
+                      disabled={purchasesPage === 1}
+                      onClick={() => setPurchasesPage((p) => p - 1)}
+                      className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
                       type="button"
                     >
-                      <MdChecklist className="h-4 w-4" />
-                      Refresh EOD
+                      Previous
+                    </button>
+                    <span className="text-[11px] font-extrabold text-[#1E1E1E]">
+                      {purchasesPage} / {purchasesTotalPages}
+                    </span>
+                    <button
+                      disabled={purchasesPage === purchasesTotalPages}
+                      onClick={() => setPurchasesPage((p) => p + 1)}
+                      className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
+                      type="button"
+                    >
+                      Next
                     </button>
                   </div>
                 </div>
+              </>
+            )}
+          </section>
+        )}
 
-                <div className="bg-[#F7F7F7] px-6 py-4 border-b border-black/5">
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                    <SummaryCard
-                      title="Total Sales"
-                      value={fmtMoneyPhp(salesEodSummary.totalSales)}
-                      subtitle={`${salesEodSummary.totalOrders} completed order(s)`}
-                      icon={<MdTrendingUp className="h-5 w-5" />}
-                    />
-                    <SummaryCard
-                      title="Items Sold"
-                      value={String(salesEodSummary.totalItemsSold)}
-                      subtitle="Total item quantity from orders"
-                      icon={<MdReceiptLong className="h-5 w-5" />}
-                    />
-                    <SummaryCard
-                      title="Audited Items"
-                      value={String(salesEodSummary.totalAuditedItems)}
-                      subtitle="Rows from InventoryAudit"
-                      icon={<MdChecklist className="h-5 w-5" />}
-                    />
-                    <SummaryCard
-                      title="Total Used"
-                      value={fmtQty(salesEodSummary.totalUsed)}
-                      subtitle="System minus physical"
-                      icon={<MdInventory2 className="h-5 w-5" />}
-                    />
-                    <SummaryCard
-                      title="Variance"
-                      value={fmtQty(salesEodSummary.totalVariance)}
-                      subtitle={`${salesEodSummary.overages} overage(s), ${salesEodSummary.shortages} shortage(s)`}
-                      icon={<MdWarningAmber className="h-5 w-5" />}
-                      danger={salesEodSummary.totalVariance !== 0}
-                    />
+        {tab === 'Net Profit' && (
+          <section className="space-y-4">
+            <div className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_20px_rgba(0,0,0,0.06)] ring-1 ring-black/5">
+              <div className="rounded-t-2xl bg-[#B80F24] px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/15 text-white ring-1 ring-white/15">
+                    <MdTrendingUp className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <div className="text-[14px] font-extrabold text-white">Net Profit</div>
+                    <div className="text-[10px] font-bold text-white/80">Sales income minus purchase expenses</div>
                   </div>
                 </div>
 
-                <div className="px-6 py-5">
-                  <div className="mb-4 grid gap-3 md:grid-cols-[1fr_220px]">
-                    <div className="relative">
-                      <MdSearch className="absolute left-3 top-5 -translate-y-1/2 text-[#6D6D6D]" size={18} />
-                      <input
-                        value={eodQuery}
-                        onChange={(e) => setEodQuery(e.target.value)}
-                        placeholder="Search ingredient, unit, stock, or variance..."
-                        className={classNames(INPUT, 'pl-10')}
-                      />
-                    </div>
+                <div className="hidden md:flex items-center gap-3">
+                  <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/15">
+                    <div className="text-[10px] font-extrabold text-white/80">Sales</div>
+                    <div className="text-[12px] font-extrabold text-white">{fmtMoneyPhp(netProfitSummary.totalSales)}</div>
+                  </div>
+                  <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/15">
+                    <div className="text-[10px] font-extrabold text-white/80">Expenses</div>
+                    <div className="text-[12px] font-extrabold text-white">{fmtMoneyPhp(netProfitSummary.totalExpenses)}</div>
+                  </div>
+                  <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/15">
+                    <div className="text-[10px] font-extrabold text-white/80">Net Profit</div>
+                    <div className="text-[12px] font-extrabold text-white">{fmtMoneyPhp(netProfitSummary.netProfit)}</div>
+                  </div>
+                </div>
+              </div>
 
-                    <div className="rounded-xl bg-[#F7F7F7] px-4 py-3 ring-1 ring-black/5">
-                      <div className="text-[10px] font-extrabold text-[#6D6D6D]">Report Date</div>
-                      <div className="mt-1 text-[13px] font-extrabold text-[#1E1E1E]">
-                        {formatDateOnly(`${eodDate}T00:00:00`)}
-                      </div>
-                    </div>
+              <div className="bg-[#F7F7F7] px-6 py-4 border-b border-black/5">
+                <div className="grid gap-3 md:grid-cols-[1fr_180px_auto] items-end">
+                  <div className="relative">
+                    <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6D6D6D]" size={18} />
+                    <input
+                      value={netProfitQuery}
+                      onChange={(e) => setNetProfitQuery(e.target.value)}
+                      placeholder="Search by transaction ID, date, or details..."
+                      className={classNames(INPUT, 'pl-10')}
+                    />
                   </div>
 
-                  <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-                    <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-black/10 shadow-sm">
-                      <div className="grid grid-cols-[1.4fr_0.8fr_0.8fr_0.8fr_0.8fr] gap-3 bg-[#FAFAFA] px-5 py-4 text-[10px] font-extrabold uppercase tracking-wide text-[#6D6D6D] border-b border-black/5">
-                        <div>Ingredient</div>
-                        <div className="text-right">System</div>
-                        <div className="text-right">Physical</div>
-                        <div className="text-right">Used</div>
-                        <div className="text-right">Variance</div>
-                      </div>
+                  <div className="relative">
+                    <div className="mb-1 flex items-center gap-2 text-[10px] font-extrabold text-[#6D6D6D]">
+                      <MdCalendarMonth className="h-4 w-4" />
+                      Date
+                    </div>
+                    <select
+                      value={netProfitDateFilter}
+                      onChange={(e) => setNetProfitDateFilter(e.target.value as any)}
+                      className={SELECT}
+                    >
+                      <option value="all">All time</option>
+                      <option value="today">Today</option>
+                      <option value="7d">Last 7 days</option>
+                      <option value="30d">Last 30 days</option>
+                    </select>
+                  </div>
 
-                      {eodLoading ? (
-                        <div className="px-6 py-14 text-center text-[12px] font-bold text-[#6D6D6D]">Loading EOD audit data...</div>
-                      ) : eodRowsView.length === 0 ? (
-                        <div className="px-6 py-14 text-center">
-                          <div className="text-[13px] font-extrabold text-[#1E1E1E]">No EOD audit data found</div>
-                          <div className="mt-1 text-[11px] font-bold text-[#6D6D6D]">
-                            No InventoryAudit records were found for this selected date.
+                  <button
+                    onClick={() => {
+                      setNetProfitQuery('');
+                      setNetProfitDateFilter('all');
+                    }}
+                    className={BTN_SUBTLE}
+                    type="button"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-[#F7F7F7] px-6 py-4 border-b border-black/5">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <SummaryCard
+                    title="Gross Sales"
+                    value={fmtMoneyPhp(netProfitSummary.totalSales)}
+                    subtitle={`${netProfitSummary.salesCount} sale record(s)`}
+                    icon={<MdReceiptLong className="h-5 w-5" />}
+                  />
+                  <SummaryCard
+                    title="Purchase Expenses"
+                    value={fmtMoneyPhp(netProfitSummary.totalExpenses)}
+                    subtitle={`${netProfitSummary.expenseCount} expense record(s)`}
+                    icon={<MdReceipt className="h-5 w-5" />}
+                  />
+                  <SummaryCard
+                    title="Net Profit"
+                    value={fmtMoneyPhp(netProfitSummary.netProfit)}
+                    subtitle="Sales minus expenses"
+                    icon={<MdTrendingUp className="h-5 w-5" />}
+                    danger={netProfitSummary.netProfit < 0}
+                  />
+                  <SummaryCard
+                    title="Margin Status"
+                    value={netProfitSummary.netProfit >= 0 ? 'Positive' : 'Negative'}
+                    subtitle="Based on current filtered records"
+                    icon={<MdAssessment className="h-5 w-5" />}
+                    danger={netProfitSummary.netProfit < 0}
+                  />
+                </div>
+              </div>
+
+              {receiptsLoading || purchasesLoading ? (
+                <div className="px-6 py-14 text-center text-[12px] font-bold text-[#6D6D6D]">Loading net profit data...</div>
+              ) : netProfitView.length === 0 ? (
+                <div className="px-6 py-14 text-center">
+                  <div className="text-[13px] font-extrabold text-[#1E1E1E]">No net profit records found</div>
+                  <div className="mt-1 text-[11px] font-bold text-[#6D6D6D]">Try adjusting search or date filters.</div>
+                </div>
+              ) : (
+                <>
+                  <div className="hidden md:grid grid-cols-[140px_140px_1.3fr_160px_160px] gap-3 px-6 py-3 text-[10px] font-extrabold text-[#6D6D6D] bg-white">
+                    <div>Type</div>
+                    <div>ID</div>
+                    <div>Details</div>
+                    <div>Date</div>
+                    <div className="text-right">Amount</div>
+                  </div>
+
+                  <div className="divide-y divide-black/5">
+                    {netProfitViewPage.map((row, idx) => {
+                      const isSale = row.kind === 'sale';
+                      return (
+                        <div key={`${row.kind}-${row.id}-${idx}`} className="px-6 py-4 bg-white hover:bg-[#FAFAFA] transition">
+                          <div className="hidden md:grid grid-cols-[140px_140px_1.3fr_160px_160px] gap-3 items-center">
+                            <div>
+                              <Chip
+                                label={isSale ? '📈 Sales Income' : '📉 Purchase Expense'}
+                                tone={isSale ? 'gcash' : 'bank'}
+                              />
+                            </div>
+
+                            <div>
+                              <div className="text-[10px] font-extrabold text-[#B80F24]">Reference</div>
+                              <div className="text-[13px] font-extrabold text-[#1E1E1E]">#{row.id}</div>
+                            </div>
+
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-extrabold text-[#B80F24]">Details</div>
+                              <div className="text-[11px] font-bold text-[#6D6D6D] truncate">{row.details}</div>
+                            </div>
+
+                            <div>
+                              <div className="text-[10px] font-extrabold text-[#B80F24]">Date</div>
+                              <div className="text-[11px] font-bold text-[#6D6D6D]">{formatDateTime(row.createdAt)}</div>
+                            </div>
+
+                            <div className="text-right">
+                              <div className="text-[10px] font-extrabold text-[#B80F24]">Amount</div>
+                              <div className={classNames('text-[13px] font-extrabold', isSale ? 'text-green-700' : 'text-red-600')}>
+                                {isSale ? '+' : '-'}
+                                {fmtMoneyPhp(row.amount)}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="md:hidden space-y-2">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <Chip
+                                  label={isSale ? '📈 Sales Income' : '📉 Purchase Expense'}
+                                  tone={isSale ? 'gcash' : 'bank'}
+                                />
+                                <div className="mt-2 text-[13px] font-extrabold text-[#1E1E1E]">{row.label}</div>
+                                <div className="mt-1 text-[11px] font-bold text-[#6D6D6D]">{row.details}</div>
+                                <div className="mt-1 text-[10px] font-bold text-black/45">{formatDateTime(row.createdAt)}</div>
+                              </div>
+
+                              <div className={classNames('text-[13px] font-extrabold', isSale ? 'text-green-700' : 'text-red-600')}>
+                                {isSale ? '+' : '-'}
+                                {fmtMoneyPhp(row.amount)}
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      ) : (
-                        <>
-                          <div className="divide-y divide-black/5">
-                            {eodRowsPage.map((row, index) => {
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-black/5 px-5 py-3 bg-[#FAFAFA]">
+                    <span className="text-[11px] font-bold text-[#6D6D6D]">
+                      Showing {Math.min((netProfitPage - 1) * NET_PROFIT_PAGE_SIZE + 1, netProfitView.length)}–{Math.min(netProfitPage * NET_PROFIT_PAGE_SIZE, netProfitView.length)} of {netProfitView.length}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        disabled={netProfitPage === 1}
+                        onClick={() => setNetProfitPage((p) => p - 1)}
+                        className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
+                        type="button"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-[11px] font-extrabold text-[#1E1E1E]">
+                        {netProfitPage} / {netProfitTotalPages}
+                      </span>
+                      <button
+                        disabled={netProfitPage === netProfitTotalPages}
+                        onClick={() => setNetProfitPage((p) => p + 1)}
+                        className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
+                        type="button"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+        )}
+
+        {tab === 'Sales Income' && (
+          <section className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_20px_rgba(0,0,0,0.06)] ring-1 ring-black/5">
+            <div className="rounded-t-2xl bg-[#B80F24] px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/15 text-white ring-1 ring-white/15">
+                  <MdReceiptLong className="h-5 w-5" />
+                </span>
+                <div>
+                  <div className="text-[14px] font-extrabold text-white">Sales Income</div>
+                  <div className="text-[10px] font-bold text-white/80">Click a row to open the official receipt</div>
+                </div>
+              </div>
+
+              <div className="hidden md:flex items-center gap-3">
+                <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/15">
+                  <div className="text-[10px] font-extrabold text-white/80">Records</div>
+                  <div className="text-[12px] font-extrabold text-white">{receiptsTotals.count}</div>
+                </div>
+                <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/15">
+                  <div className="text-[10px] font-extrabold text-white/80">Total Sales</div>
+                  <div className="text-[12px] font-extrabold text-white">{fmtMoneyPhp(receiptsTotals.totalSales)}</div>
+                </div>
+                <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/15">
+                  <div className="text-[10px] font-extrabold text-white/80">Net Profit</div>
+                  <div className="text-[12px] font-extrabold text-white">{fmtMoneyPhp(salesNetProfitSummary.netProfit)}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-[#F7F7F7] px-6 py-4 border-b border-black/5">
+              <div className="grid gap-3 md:grid-cols-[1fr_160px_160px_auto] items-end">
+                <div className="relative">
+                  <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6D6D6D]" size={18} />
+                  <input
+                    value={receiptQuery}
+                    onChange={(e) => setReceiptQuery(e.target.value)}
+                    placeholder="Search by Order ID, date/time, or item name..."
+                    className={classNames(INPUT, 'pl-10')}
+                  />
+                </div>
+
+                <div className="relative">
+                  <div className="mb-1 flex items-center gap-2 text-[10px] font-extrabold text-[#6D6D6D]">
+                    <MdPayments className="h-4 w-4" />
+                    Payment
+                  </div>
+                  <select value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value as any)} className={SELECT}>
+                    <option value="all">All</option>
+                    <option value="cash">Cash</option>
+                    <option value="gcash">GCash</option>
+                    <option value="bank">Bank</option>
+                  </select>
+                </div>
+
+                <div className="relative">
+                  <div className="mb-1 flex items-center gap-2 text-[10px] font-extrabold text-[#6D6D6D]">
+                    <MdCalendarMonth className="h-4 w-4" />
+                    Date
+                  </div>
+                  <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value as any)} className={SELECT}>
+                    <option value="all">All time</option>
+                    <option value="today">Today</option>
+                    <option value="7d">Last 7 days</option>
+                    <option value="30d">Last 30 days</option>
+                  </select>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setReceiptQuery('');
+                    setPaymentFilter('all');
+                    setDateFilter('all');
+                  }}
+                  className={BTN_SUBTLE}
+                  type="button"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            {receiptsLoading ? (
+              <div className="px-6 py-14 text-center text-[12px] font-bold text-[#6D6D6D]">Loading receipts...</div>
+            ) : receiptsView.length === 0 ? (
+              <div className="px-6 py-14 text-center">
+                <div className="text-[13px] font-extrabold text-[#1E1E1E]">No receipts found</div>
+                <div className="mt-1 text-[11px] font-bold text-[#6D6D6D]">Try adjusting search, payment, or date filters.</div>
+              </div>
+            ) : (
+              <>
+                <div className="hidden md:grid grid-cols-[140px_1.4fr_120px_160px_160px_120px] gap-3 px-6 py-3 text-[10px] font-extrabold text-[#6D6D6D] bg-white">
+                  <div>Order</div>
+                  <div>Date & Items</div>
+                  <div>Status</div>
+                  <div>Payment</div>
+                  <div className="text-right">Total</div>
+                  <div className="text-right">Change</div>
+                </div>
+
+                <div className="divide-y divide-black/5">
+                  {receiptsViewPage.map((order: any) => {
+                    const p = paymentMeta(order.paymentmethod);
+                    const itemsQty = (order.items || []).reduce((sum: number, it: any) => sum + Number(it.quantity || 0), 0);
+                    const topItems = (order.items || [])
+                      .slice(0, 2)
+                      .map((it: any) => it.MenuItem?.name)
+                      .filter(Boolean)
+                      .join(', ');
+
+                    return (
+                      <div
+                        key={order.orderID}
+                        onClick={() => setSelectedOrder(order)}
+                        className="group cursor-pointer px-6 py-4 bg-white transition hover:bg-[#FAFAFA]"
+                      >
+                        <div className="hidden md:grid grid-cols-[140px_1.4fr_120px_160px_160px_120px] gap-3 items-center">
+                          <div>
+                            <div className="text-[10px] font-extrabold text-[#B80F24]">Order ID</div>
+                            <div className="text-[13px] font-extrabold text-[#1E1E1E]">#{order.orderID}</div>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-[10px] font-extrabold text-[#B80F24]">Date &amp; Time</div>
+                            <div className="text-[11px] font-bold text-[#6D6D6D] truncate">{formatDateTime(order.createdAt)}</div>
+                            <div className="mt-1 flex items-center gap-2">
+                              <span className="text-[10px] font-extrabold text-[#6D6D6D]">
+                                {itemsQty} item{itemsQty !== 1 ? 's' : ''}
+                              </span>
+                              <span className="h-1 w-1 rounded-full bg-black/20" />
+                              <span className="text-[10px] font-bold text-black/40 truncate">
+                                {topItems || 'No items'}
+                                {(order.items || []).length > 2 ? '…' : ''}
+                              </span>
+                            </div>
+                          </div>
+                          <div>
+                            <StatusChip status={order.status === 'voided' ? 'Voided' : 'Completed'} />
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <Chip label={`${p.emoji} ${p.label}`} tone={p.tone} />
+                          </div>
+                          <div className="text-right">
+                            <div className="text-[10px] font-extrabold text-[#B80F24]">Total</div>
+                            <div className="text-[13px] font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(order.amount)}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-[10px] font-extrabold text-[#B80F24]">Change</div>
+                            <div className="text-[13px] font-extrabold text-green-600">{fmtMoneyPhp(order.change)}</div>
+                          </div>
+                        </div>
+
+                        <div className="md:hidden">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-[10px] font-extrabold text-[#B80F24]">Order #{order.orderID}</div>
+                              <div className="mt-1 text-[11px] font-bold text-[#6D6D6D]">{formatDateTime(order.createdAt)}</div>
+                              <div className="mt-2 flex items-center gap-2">
+                                <StatusChip status={order.status === 'voided' ? 'Voided' : 'Completed'} />
+                                <span className="text-[10px] font-extrabold text-[#6D6D6D]">
+                                  {itemsQty} item{itemsQty !== 1 ? 's' : ''}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="text-right">
+                              <div className="text-[10px] font-extrabold text-[#B80F24]">Total</div>
+                              <div className="text-[13px] font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(order.amount)}</div>
+                              <div className="mt-2 text-[10px] font-extrabold text-[#B80F24]">Change</div>
+                              <div className="text-[12px] font-extrabold text-green-600">{fmtMoneyPhp(order.change)}</div>
+                            </div>
+                          </div>
+
+                          <div className="mt-3">
+                            <button className={classNames(BTN_PRIMARY, 'w-full')} onClick={() => setSelectedOrder(order)} type="button">
+                              <MdVisibility className="h-4 w-4" />
+                              View Receipt
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-between border-t border-black/5 px-5 py-3 bg-[#FAFAFA]">
+                  <span className="text-[11px] font-bold text-[#6D6D6D]">
+                    Showing {Math.min((receiptsPage - 1) * RECEIPTS_PAGE_SIZE + 1, receiptsView.length)}–{Math.min(receiptsPage * RECEIPTS_PAGE_SIZE, receiptsView.length)} of {receiptsView.length}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      disabled={receiptsPage === 1}
+                      onClick={() => setReceiptsPage((p) => p - 1)}
+                      className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
+                      type="button"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-[11px] font-extrabold text-[#1E1E1E]">
+                      {receiptsPage} / {receiptsTotalPages}
+                    </span>
+                    <button
+                      disabled={receiptsPage === receiptsTotalPages}
+                      onClick={() => setReceiptsPage((p) => p + 1)}
+                      className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
+                      type="button"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </section>
+        )}
+
+        {tab === 'Inventory Audit' && (
+          <section className="space-y-4">
+            <div className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_20px_rgba(0,0,0,0.06)] ring-1 ring-black/5">
+              <div className="flex flex-col gap-4 bg-[#7E0012] px-6 py-5 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="text-[16px] font-extrabold text-white">Inventory Audit</div>
+                  <div className="mt-1 text-[11px] font-bold text-white/85">
+                    Connected daily summary from Orders and InventoryAudit
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-[220px_auto] md:items-end">
+                  <div>
+                    <div className="mb-1 text-[10px] font-extrabold text-white/85">Select Date</div>
+                    <input
+                      type="date"
+                      value={eodDate}
+                      onChange={(e) => setEodDate(e.target.value)}
+                      className="w-full rounded-xl border border-white/20 bg-white px-3 py-2 text-[12px] font-extrabold text-[#1E1E1E] shadow-sm focus:outline-none focus:ring-4 focus:ring-white/20"
+                    />
+                  </div>
+
+                  <button
+                    onClick={fetchEodAudit}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2 text-[11px] font-extrabold text-[#7E0012] shadow hover:bg-[#F7F7F7]"
+                    type="button"
+                  >
+                    <MdChecklist className="h-4 w-4" />
+                    Refresh EOD
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-[#F7F7F7] px-6 py-4 border-b border-black/5">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  <SummaryCard
+                    title="Total Sales"
+                    value={fmtMoneyPhp(salesEodSummary.totalSales)}
+                    subtitle={`${salesEodSummary.totalOrders} completed order(s)`}
+                    icon={<MdTrendingUp className="h-5 w-5" />}
+                  />
+                  <SummaryCard
+                    title="Items Sold"
+                    value={String(salesEodSummary.totalItemsSold)}
+                    subtitle="Total item quantity from orders"
+                    icon={<MdReceiptLong className="h-5 w-5" />}
+                  />
+                  <SummaryCard
+                    title="Audited Items"
+                    value={String(salesEodSummary.totalAuditedItems)}
+                    subtitle="Rows from InventoryAudit"
+                    icon={<MdChecklist className="h-5 w-5" />}
+                  />
+                  <SummaryCard
+                    title="Total Used"
+                    value={fmtQty(salesEodSummary.totalUsed)}
+                    subtitle="System minus physical"
+                    icon={<MdInventory2 className="h-5 w-5" />}
+                  />
+                  <SummaryCard
+                    title="Variance"
+                    value={fmtQty(salesEodSummary.totalVariance)}
+                    subtitle={`${salesEodSummary.overages} overage(s), ${salesEodSummary.shortages} shortage(s)`}
+                    icon={<MdWarningAmber className="h-5 w-5" />}
+                    danger={salesEodSummary.totalVariance !== 0}
+                  />
+                </div>
+              </div>
+
+              <div className="px-6 py-5">
+                <div className="mb-4 grid gap-3 md:grid-cols-[1fr_220px]">
+                  <div className="relative">
+                    <MdSearch className="absolute left-3 top-5 -translate-y-1/2 text-[#6D6D6D]" size={18} />
+                    <input
+                      value={eodQuery}
+                      onChange={(e) => setEodQuery(e.target.value)}
+                      placeholder="Search ingredient, unit, stock, or variance..."
+                      className={classNames(INPUT, 'pl-10')}
+                    />
+                  </div>
+
+                  <div className="rounded-xl bg-[#F7F7F7] px-4 py-3 ring-1 ring-black/5">
+                    <div className="text-[10px] font-extrabold text-[#6D6D6D]">Report Date</div>
+                    <div className="mt-1 text-[13px] font-extrabold text-[#1E1E1E]">
+                      {formatDateOnly(`${eodDate}T00:00:00`)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+                  <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-black/10 shadow-sm">
+                    <div className="grid grid-cols-[1.4fr_0.8fr_0.8fr_0.8fr_0.8fr] gap-3 bg-[#FAFAFA] px-5 py-4 text-[10px] font-extrabold uppercase tracking-wide text-[#6D6D6D] border-b border-black/5">
+                      <div>Ingredient</div>
+                      <div className="text-right">System</div>
+                      <div className="text-right">Physical</div>
+                      <div className="text-right">Used</div>
+                      <div className="text-right">Variance</div>
+                    </div>
+
+                    {eodLoading ? (
+                      <div className="px-6 py-14 text-center text-[12px] font-bold text-[#6D6D6D]">Loading EOD audit data...</div>
+                    ) : eodRowsView.length === 0 ? (
+                      <div className="px-6 py-14 text-center">
+                        <div className="text-[13px] font-extrabold text-[#1E1E1E]">No EOD audit data found</div>
+                        <div className="mt-1 text-[11px] font-bold text-[#6D6D6D]">
+                          No InventoryAudit records were found for this selected date.
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="divide-y divide-black/5">
+                          {eodRowsPage.map((row, index) => {
                             const system = Number(row.systemStock || 0);
                             const physical = Number(row.physicalStock || 0);
                             const used = system - physical;
@@ -1516,199 +1859,199 @@ export default function ReportsPage() {
                               </div>
                             );
                           })}
-                          </div>
-                          <div className="flex items-center justify-between border-t border-black/5 px-5 py-3 bg-[#FAFAFA]">
-                            <span className="text-[11px] font-bold text-[#6D6D6D]">
-                              Showing {Math.min((eodPage - 1) * EOD_PAGE_SIZE + 1, eodRowsView.length)}–{Math.min(eodPage * EOD_PAGE_SIZE, eodRowsView.length)} of {eodRowsView.length}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <button
-                                disabled={eodPage === 1}
-                                onClick={() => setEodPage((p) => p - 1)}
-                                className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
-                                type="button"
-                              >
-                                Previous
-                              </button>
-                              <span className="text-[11px] font-extrabold text-[#1E1E1E]">
-                                {eodPage} / {eodTotalPages}
-                              </span>
-                              <button
-                                disabled={eodPage === eodTotalPages}
-                                onClick={() => setEodPage((p) => p + 1)}
-                                className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
-                                type="button"
-                              >
-                                Next
-                              </button>
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="rounded-2xl bg-[#7E0012] p-6 text-white shadow-[0_18px_30px_rgba(0,0,0,0.15)] ring-1 ring-black/10">
-                        <div className="text-[13px] font-extrabold">Daily Sales Snapshot</div>
-
-                        <div className="mt-4 space-y-4 text-[12px] font-extrabold">
-                          <div className="flex items-center justify-between">
-                            <span className="text-white/90">Sales Amount</span>
-                            <span>{fmtMoneyPhp(salesEodSummary.totalSales)}</span>
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                            <span className="text-white/90">Total Change</span>
-                            <span>{fmtMoneyPhp(salesEodSummary.totalChange)}</span>
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                            <span className="text-white/90">Completed Orders</span>
-                            <span>{salesEodSummary.totalOrders}</span>
-                          </div>
-
-                          <div className="mt-4 border-t border-white/20 pt-4 flex items-center justify-between">
-                            <span className="text-white">Items Sold</span>
-                            <span className="text-[16px]">{salesEodSummary.totalItemsSold}</span>
-                          </div>
                         </div>
-                      </div>
-
-                      <div className="rounded-2xl bg-white p-5 ring-1 ring-black/10 shadow-sm">
-                        <div className="text-[13px] font-extrabold text-[#1E1E1E]">EOD Inventory Summary</div>
-
-                        <div className="mt-4 space-y-3 text-[11px] font-extrabold">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[#6D6D6D]">System Stock Total</span>
-                            <span className="text-[#1E1E1E]">{fmtQty(salesEodSummary.totalSystemStock)}</span>
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                            <span className="text-[#6D6D6D]">Physical Stock Total</span>
-                            <span className="text-[#1E1E1E]">{fmtQty(salesEodSummary.totalPhysicalStock)}</span>
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                            <span className="text-[#6D6D6D]">Used Today</span>
-                            <span className="text-[#B80F24]">{fmtQty(salesEodSummary.totalUsed)}</span>
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                            <span className="text-[#6D6D6D]">Overages</span>
-                            <span className="text-amber-600">{salesEodSummary.overages}</span>
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                            <span className="text-[#6D6D6D]">Shortages</span>
-                            <span className="text-red-600">{salesEodSummary.shortages}</span>
-                          </div>
-
-                          <div className="border-t border-black/10 pt-3 flex items-center justify-between">
-                            <span className="text-[#1E1E1E]">Net Variance</span>
-                            <span
-                              className={classNames(
-                                salesEodSummary.totalVariance > 0
-                                  ? 'text-amber-600'
-                                  : salesEodSummary.totalVariance < 0
-                                  ? 'text-red-600'
-                                  : 'text-[#1E1E1E]'
-                              )}
+                        <div className="flex items-center justify-between border-t border-black/5 px-5 py-3 bg-[#FAFAFA]">
+                          <span className="text-[11px] font-bold text-[#6D6D6D]">
+                            Showing {Math.min((eodPage - 1) * EOD_PAGE_SIZE + 1, eodRowsView.length)}–{Math.min(eodPage * EOD_PAGE_SIZE, eodRowsView.length)} of {eodRowsView.length}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              disabled={eodPage === 1}
+                              onClick={() => setEodPage((p) => p - 1)}
+                              className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
+                              type="button"
                             >
-                              {salesEodSummary.totalVariance > 0 ? '+' : ''}
-                              {fmtQty(salesEodSummary.totalVariance)}
+                              Previous
+                            </button>
+                            <span className="text-[11px] font-extrabold text-[#1E1E1E]">
+                              {eodPage} / {eodTotalPages}
                             </span>
+                            <button
+                              disabled={eodPage === eodTotalPages}
+                              onClick={() => setEodPage((p) => p + 1)}
+                              className="rounded-lg px-3 py-1.5 text-[11px] font-extrabold bg-white ring-1 ring-black/10 disabled:opacity-40 hover:bg-black/5 transition"
+                              type="button"
+                            >
+                              Next
+                            </button>
                           </div>
                         </div>
-                      </div>
-
-                      <div className="rounded-2xl bg-[#F7F7F7] p-5 ring-1 ring-black/5">
-                        <div className="text-[12px] font-extrabold text-[#1E1E1E]">Notes</div>
-                        <div className="mt-2 text-[11px] font-bold leading-5 text-[#6D6D6D]">
-                          This report is based on the selected date. Sales are pulled from the Order table and inventory results
-                          are pulled from InventoryAudit.
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 overflow-hidden rounded-2xl bg-white ring-1 ring-black/10 shadow-sm">
-                    <div className="border-b border-black/5 bg-[#FAFAFA] px-5 py-4">
-                      <div className="text-[12px] font-extrabold text-[#1E1E1E]">Orders for Selected Date</div>
-                      <div className="mt-1 text-[10px] font-bold text-[#6D6D6D]">
-                        Connected daily sales entries from the Order table
-                      </div>
-                    </div>
-
-                    {salesEodOrdersForDate.length === 0 ? (
-                      <div className="px-6 py-10 text-center text-[11px] font-bold text-[#6D6D6D]">
-                        No completed orders found for this date.
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-black/5">
-                        {salesEodOrdersForDate.map((order) => {
-                          const p = paymentMeta(order.paymentmethod);
-                          return (
-                            <div
-                              key={order.orderID}
-                              className="grid gap-3 px-5 py-4 md:grid-cols-[120px_1fr_140px_140px_120px] md:items-center hover:bg-[#FAFAFA]"
-                            >
-                              <div>
-                                <div className="text-[10px] font-extrabold text-[#B80F24]">Order</div>
-                                <div className="text-[12px] font-extrabold text-[#1E1E1E]">#{order.orderID}</div>
-                              </div>
-
-                              <div>
-                                <div className="text-[10px] font-extrabold text-[#B80F24]">Date & Time</div>
-                                <div className="text-[11px] font-bold text-[#6D6D6D]">{formatDateTime(order.createdAt)}</div>
-                              </div>
-
-                              <div>
-                                <div className="text-[10px] font-extrabold text-[#B80F24]">Payment</div>
-                                <div className="mt-1">
-                                  <Chip label={`${p.emoji} ${p.label}`} tone={p.tone} />
-                                </div>
-                              </div>
-
-                              <div className="md:text-right">
-                                <div className="text-[10px] font-extrabold text-[#B80F24]">Total</div>
-                                <div className="text-[12px] font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(order.amount)}</div>
-                              </div>
-
-                              <div className="md:text-right">
-                                <button
-                                  className={classNames(BTN_PRIMARY, 'w-full md:w-auto')}
-                                  onClick={() => setSelectedOrder(order)}
-                                  type="button"
-                                >
-                                  <MdVisibility className="h-4 w-4" />
-                                  View
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                      </>
                     )}
                   </div>
+
+                  <div className="space-y-4">
+                    <div className="rounded-2xl bg-[#7E0012] p-6 text-white shadow-[0_18px_30px_rgba(0,0,0,0.15)] ring-1 ring-black/10">
+                      <div className="text-[13px] font-extrabold">Daily Sales Snapshot</div>
+
+                      <div className="mt-4 space-y-4 text-[12px] font-extrabold">
+                        <div className="flex items-center justify-between">
+                          <span className="text-white/90">Sales Amount</span>
+                          <span>{fmtMoneyPhp(salesEodSummary.totalSales)}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-white/90">Total Change</span>
+                          <span>{fmtMoneyPhp(salesEodSummary.totalChange)}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-white/90">Completed Orders</span>
+                          <span>{salesEodSummary.totalOrders}</span>
+                        </div>
+
+                        <div className="mt-4 border-t border-white/20 pt-4 flex items-center justify-between">
+                          <span className="text-white">Items Sold</span>
+                          <span className="text-[16px]">{salesEodSummary.totalItemsSold}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl bg-white p-5 ring-1 ring-black/10 shadow-sm">
+                      <div className="text-[13px] font-extrabold text-[#1E1E1E]">EOD Inventory Summary</div>
+
+                      <div className="mt-4 space-y-3 text-[11px] font-extrabold">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[#6D6D6D]">System Stock Total</span>
+                          <span className="text-[#1E1E1E]">{fmtQty(salesEodSummary.totalSystemStock)}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-[#6D6D6D]">Physical Stock Total</span>
+                          <span className="text-[#1E1E1E]">{fmtQty(salesEodSummary.totalPhysicalStock)}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-[#6D6D6D]">Used Today</span>
+                          <span className="text-[#B80F24]">{fmtQty(salesEodSummary.totalUsed)}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-[#6D6D6D]">Overages</span>
+                          <span className="text-amber-600">{salesEodSummary.overages}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-[#6D6D6D]">Shortages</span>
+                          <span className="text-red-600">{salesEodSummary.shortages}</span>
+                        </div>
+
+                        <div className="border-t border-black/10 pt-3 flex items-center justify-between">
+                          <span className="text-[#1E1E1E]">Net Variance</span>
+                          <span
+                            className={classNames(
+                              salesEodSummary.totalVariance > 0
+                                ? 'text-amber-600'
+                                : salesEodSummary.totalVariance < 0
+                                ? 'text-red-600'
+                                : 'text-[#1E1E1E]'
+                            )}
+                          >
+                            {salesEodSummary.totalVariance > 0 ? '+' : ''}
+                            {fmtQty(salesEodSummary.totalVariance)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl bg-[#F7F7F7] p-5 ring-1 ring-black/5">
+                      <div className="text-[12px] font-extrabold text-[#1E1E1E]">Notes</div>
+                      <div className="mt-2 text-[11px] font-bold leading-5 text-[#6D6D6D]">
+                        This report is based on the selected date. Sales are pulled from the Order table and inventory results
+                        are pulled from InventoryAudit.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 overflow-hidden rounded-2xl bg-white ring-1 ring-black/10 shadow-sm">
+                  <div className="border-b border-black/5 bg-[#FAFAFA] px-5 py-4">
+                    <div className="text-[12px] font-extrabold text-[#1E1E1E]">Orders for Selected Date</div>
+                    <div className="mt-1 text-[10px] font-bold text-[#6D6D6D]">
+                      Connected daily sales entries from the Order table
+                    </div>
+                  </div>
+
+                  {salesEodOrdersForDate.length === 0 ? (
+                    <div className="px-6 py-10 text-center text-[11px] font-bold text-[#6D6D6D]">
+                      No completed orders found for this date.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-black/5">
+                      {salesEodOrdersForDate.map((order) => {
+                        const p = paymentMeta(order.paymentmethod);
+                        return (
+                          <div
+                            key={order.orderID}
+                            className="grid gap-3 px-5 py-4 md:grid-cols-[120px_1fr_140px_140px_120px] md:items-center hover:bg-[#FAFAFA]"
+                          >
+                            <div>
+                              <div className="text-[10px] font-extrabold text-[#B80F24]">Order</div>
+                              <div className="text-[12px] font-extrabold text-[#1E1E1E]">#{order.orderID}</div>
+                            </div>
+
+                            <div>
+                              <div className="text-[10px] font-extrabold text-[#B80F24]">Date & Time</div>
+                              <div className="text-[11px] font-bold text-[#6D6D6D]">{formatDateTime(order.createdAt)}</div>
+                            </div>
+
+                            <div>
+                              <div className="text-[10px] font-extrabold text-[#B80F24]">Payment</div>
+                              <div className="mt-1">
+                                <Chip label={`${p.emoji} ${p.label}`} tone={p.tone} />
+                              </div>
+                            </div>
+
+                            <div className="md:text-right">
+                              <div className="text-[10px] font-extrabold text-[#B80F24]">Total</div>
+                              <div className="text-[12px] font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(order.amount)}</div>
+                            </div>
+
+                            <div className="md:text-right">
+                              <button
+                                className={classNames(BTN_PRIMARY, 'w-full md:w-auto')}
+                                onClick={() => setSelectedOrder(order)}
+                                type="button"
+                              >
+                                <MdVisibility className="h-4 w-4" />
+                                View
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
-            </section>
-          )}
+            </div>
+          </section>
+        )}
 
-          {tab !== 'Inventory Audit' && tab !== 'Sales Income' && tab !== 'Purchase Expenses' && (
-            <>
-              <section className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-2xl bg-[#E7E7E7] p-4 shadow-[0_10px_20px_rgba(0,0,0,0.06)]">
-                  <p className="mb-3 text-[14px] font-extrabold text-[#1E1E1E]">{leftCard.title}</p>
-                  <Donut totalLabel={leftCard.label} totalValue={leftCard.value} />
-                </div>
-                <div className="rounded-2xl bg-[#E7E7E7] p-4 shadow-[0_10px_20px_rgba(0,0,0,0.06)]">
-                  <LineAreaChart />
-                </div>
-              </section>
-            </>
-          )}
-        </main>
+        {tab !== 'Inventory Audit' && tab !== 'Sales Income' && tab !== 'Purchase Expenses' && tab !== 'Net Profit' && (
+          <>
+            <section className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl bg-[#E7E7E7] p-4 shadow-[0_10px_20px_rgba(0,0,0,0.06)]">
+                <p className="mb-3 text-[14px] font-extrabold text-[#1E1E1E]">{leftCard.title}</p>
+                <Donut totalLabel={leftCard.label} totalValue={leftCard.value} />
+              </div>
+              <div className="rounded-2xl bg-[#E7E7E7] p-4 shadow-[0_10px_20px_rgba(0,0,0,0.06)]">
+                <LineAreaChart />
+              </div>
+            </section>
+          </>
+        )}
+      </main>
     </div>
   );
 }

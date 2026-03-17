@@ -40,9 +40,11 @@ interface CartItem extends MenuItem {
 type PayMethod = 'cash' | 'gcash' | 'bank';
 
 const BRAND = '#B80F24';
+const VAT_RATE = 0.12;
+const SENIOR_DISCOUNT_RATE = 0.2;
 const money = (n: number) => `₱${Number(n || 0).toFixed(2)}`;
 
-// ---------- Toast (stable component) ----------
+// ---------- Toast ----------
 function Toast({
   show,
   text,
@@ -54,7 +56,7 @@ function Toast({
 }) {
   if (!show) return null;
   return (
-    <div className="fixed z-999 left-1/2 top-5 -translate-x-1/2">
+    <div className="fixed z-[999] left-1/2 top-5 -translate-x-1/2">
       <div className="flex items-center gap-2 rounded-2xl bg-gray-900 text-white px-4 py-3 shadow-xl border border-white/10">
         <span className="text-sm font-bold">{text}</span>
         <button
@@ -69,11 +71,16 @@ function Toast({
   );
 }
 
-// ---------- CartPanel (MOVED OUTSIDE so it won't remount on every keystroke) ----------
+// ---------- CartPanel ----------
 function CartPanel({
   compact,
   cart,
   cartCount,
+  cartSubtotal,
+  discountEnabled,
+  setDiscountEnabled,
+  vatExemptionAmount,
+  discountAmount,
   cartTotal,
   paymentMethod,
   setPaymentMethod,
@@ -95,6 +102,11 @@ function CartPanel({
 
   cart: CartItem[];
   cartCount: number;
+  cartSubtotal: number;
+  discountEnabled: boolean;
+  setDiscountEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  vatExemptionAmount: number;
+  discountAmount: number;
   cartTotal: number;
 
   paymentMethod: PayMethod;
@@ -119,7 +131,8 @@ function CartPanel({
   changeDue: number;
 }) {
   return (
-    <div className="h-full w-full bg-white flex flex-col">
+    <div className="h-full min-h-0 w-full bg-white overflow-hidden grid grid-rows-[auto_minmax(260px,1fr)_auto]">
+      {/* HEADER */}
       <div className="p-5 border-b flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div
@@ -160,14 +173,15 @@ function CartPanel({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      {/* ORDER ITEMS */}
+      <div className="min-h-0 overflow-y-auto p-4 space-y-3 bg-white">
         {cart.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-gray-300">
             <div className="h-14 w-14 rounded-3xl bg-gray-50 flex items-center justify-center mb-3 border border-gray-100">
               <MdReceipt size={34} className="opacity-30" />
             </div>
             <p className="text-sm font-black">No items selected</p>
-            <p className="text-[11px] font-bold text-gray-400 mt-1 text-center max-w-220px">
+            <p className="text-[11px] font-bold text-gray-400 mt-1 text-center max-w-[220px]">
               Tap a menu item to add it here.
             </p>
           </div>
@@ -223,169 +237,235 @@ function CartPanel({
       </div>
 
       {/* PAYMENT */}
-      <div className="p-5 bg-gray-50 border-t space-y-4">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-              Payment Method
-            </label>
-            <span className="text-[10px] font-black text-gray-400">
-              {paymentMethod === 'cash' ? 'Cash' : paymentMethod === 'gcash' ? 'GCash' : 'Bank'}
-            </span>
+      <div className="border-t bg-gray-50 p-5 overflow-y-auto max-h-[48vh]">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                Payment Method
+              </label>
+              <span className="text-[10px] font-black text-gray-400">
+                {paymentMethod === 'cash' ? 'Cash' : paymentMethod === 'gcash' ? 'GCash' : 'Bank'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  { key: 'cash', label: 'Cash', icon: '💵' },
+                  { key: 'gcash', label: 'GCash', icon: '📱' },
+                  { key: 'bank', label: 'Bank', icon: '🏦' },
+                ] as const
+              ).map((m) => {
+                const active = paymentMethod === m.key;
+                return (
+                  <button
+                    key={m.key}
+                    onClick={() => {
+                      setPaymentMethod(m.key);
+                      setPaymentConfirmed(false);
+                      if (m.key !== 'cash') setAmountPaidInput('');
+                    }}
+                    className={[
+                      'rounded-2xl px-3 py-3 text-xs font-black transition border-2',
+                      active
+                        ? 'text-white shadow-md'
+                        : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300',
+                    ].join(' ')}
+                    style={active ? { backgroundColor: BRAND, borderColor: BRAND } : undefined}
+                  >
+                    <span className="mr-1">{m.icon}</span>
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            {(
-              [
-                { key: 'cash', label: 'Cash', icon: '💵' },
-                { key: 'gcash', label: 'GCash', icon: '📱' },
-                { key: 'bank', label: 'Bank', icon: '🏦' },
-              ] as const
-            ).map((m) => {
-              const active = paymentMethod === m.key;
-              return (
-                <button
-                  key={m.key}
-                  onClick={() => {
-                    setPaymentMethod(m.key);
-                    setPaymentConfirmed(false);
-                    if (m.key !== 'cash') setAmountPaidInput('');
-                  }}
-                  className={[
-                    'rounded-2xl px-3 py-3 text-xs font-black transition border-2',
-                    active
-                      ? 'text-white shadow-md'
-                      : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300',
-                  ].join(' ')}
-                  style={active ? { backgroundColor: BRAND, borderColor: BRAND } : undefined}
-                >
-                  <span className="mr-1">{m.icon}</span>
-                  {m.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+          <div className="rounded-2xl bg-white border border-gray-100 p-4 shadow-sm">
+            <div className="mb-4">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                Discount
+              </label>
 
-        <div className="rounded-2xl bg-white border border-gray-100 p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black text-gray-500 uppercase tracking-widest">
-              Total Due
-            </span>
-            <span className="text-2xl font-black text-gray-900">{money(cartTotal)}</span>
-          </div>
+              <button
+                onClick={() => setDiscountEnabled((prev) => !prev)}
+                disabled={cart.length === 0}
+                className={[
+                  'mt-2 w-full rounded-2xl border-2 px-4 py-3 text-sm font-black transition',
+                  discountEnabled
+                    ? 'text-white shadow-md'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-gray-500',
+                  cart.length === 0 ? 'opacity-60 cursor-not-allowed' : '',
+                ].join(' ')}
+                style={discountEnabled ? { backgroundColor: BRAND, borderColor: BRAND } : undefined}
+                type="button"
+              >
+                {discountEnabled
+                  ? 'Senior Citizen Discount Applied'
+                  : 'Apply Senior Citizen Discount'}
+              </button>
+            </div>
 
-          {paymentMethod === 'cash' ? (
-            <>
-              <div className="mt-4 space-y-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                  Cash Received
-                </label>
-
-                {/* Stable caret: controlled string, no remount */}
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={amountPaidInput}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    if (/^\d*\.?\d{0,2}$/.test(next)) setAmountPaidInput(next);
-                  }}
-                  placeholder="0.00"
-                  className="w-full rounded-2xl border-2 border-gray-200 bg-white px-4 py-3 font-black text-lg outline-none focus:ring-4 focus:ring-red-100"
-                />
-
-                <div className="grid grid-cols-3 gap-2">
-                  {[50, 100, 200].map((v) => (
-                    <button
-                      key={v}
-                      onClick={() => {
-                        const base = amountPaidInput.trim() === '' ? 0 : Number(amountPaidInput);
-                        const next = base + v;
-                        setAmountPaidInput(next.toFixed(2));
-                      }}
-                      className="rounded-2xl bg-gray-100 hover:bg-gray-200 transition px-3 py-2 text-xs font-black text-gray-800"
-                      disabled={cart.length === 0}
-                      title={`Add ${money(v)}`}
-                    >
-                      +{money(v)}
-                    </button>
-                  ))}
-                </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black text-gray-500 uppercase tracking-widest">
+                  Subtotal
+                </span>
+                <span className="text-lg font-black text-gray-900">{money(cartSubtotal)}</span>
               </div>
 
-              <div className="mt-4 flex items-center justify-between">
+              {discountEnabled && (
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-gray-500 uppercase tracking-widest">
+                    VAT Exemption (12%)
+                  </span>
+                  <span className="text-lg font-black text-green-700">
+                    -{money(vatExemptionAmount)}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between">
                 <span className="text-[11px] font-black text-gray-500 uppercase tracking-widest">
-                  Change
+                  Senior Discount (20%)
                 </span>
                 <span
-                  className={[
-                    'text-lg font-black',
-                    amountPaidInput.trim() === '' ? 'text-gray-400' : changeDue < 0 ? 'text-red-600' : 'text-green-700',
-                  ].join(' ')}
+                  className={
+                    discountEnabled
+                      ? 'text-lg font-black text-green-700'
+                      : 'text-lg font-black text-gray-400'
+                  }
                 >
-                  {money(amountPaidInput.trim() === '' ? 0 : changeDue)}
+                  -{money(discountAmount)}
                 </span>
               </div>
-            </>
-          ) : (
-            <div className="mt-4 space-y-3">
-              <div
-                className="rounded-2xl border-2 p-4 text-center"
-                style={{
-                  backgroundColor: paymentMethod === 'gcash' ? '#EFF6FF' : '#F5F3FF',
-                  borderColor: paymentMethod === 'gcash' ? '#BFDBFE' : '#DDD6FE',
-                }}
-              >
-                <p
-                  className="text-xs font-black mb-1"
-                  style={{ color: paymentMethod === 'gcash' ? '#2563EB' : '#6D28D9' }}
-                >
-                  {paymentMethod === 'gcash' ? '📱 GCash Payment' : '🏦 Bank Transfer'}
-                </p>
-                <p className="text-[11px] font-bold text-gray-500">
-                  Customer shows proof, then tick confirmation.
-                </p>
+
+              <div className="flex items-center justify-between border-t pt-3">
+                <span className="text-[11px] font-black text-gray-500 uppercase tracking-widest">
+                  Total Due
+                </span>
+                <span className="text-2xl font-black text-gray-900">{money(cartTotal)}</span>
               </div>
-
-              <label className="flex items-center gap-3 rounded-2xl border-2 border-gray-200 bg-white p-3 cursor-pointer hover:border-green-500 transition">
-                <input
-                  type="checkbox"
-                  checked={paymentConfirmed}
-                  onChange={(e) => setPaymentConfirmed(e.target.checked)}
-                  className="w-4 h-4 accent-green-600"
-                />
-                <span className="text-xs font-black text-gray-800">Payment received and verified</span>
-              </label>
             </div>
-          )}
-        </div>
 
-        <button
-          onClick={handleCheckout}
-          disabled={
-            cart.length === 0 ||
-            isSubmitting ||
-            (paymentMethod === 'cash' ? amountPaid < cartTotal : !paymentConfirmed)
-          }
-          className={[
-            'w-full rounded-2xl py-4 font-black shadow-lg transition-all',
-            cart.length === 0 ||
-            isSubmitting ||
-            (paymentMethod === 'cash' ? amountPaid < cartTotal : !paymentConfirmed)
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'text-white hover:brightness-95',
-          ].join(' ')}
-          style={
-            cart.length === 0 ||
-            isSubmitting ||
-            (paymentMethod === 'cash' ? amountPaid < cartTotal : !paymentConfirmed)
-              ? undefined
-              : { backgroundColor: BRAND }
-          }
-        >
-          {isSubmitting ? 'PROCESSING...' : 'CONFIRM & PAY'}
-        </button>
+            {paymentMethod === 'cash' ? (
+              <>
+                <div className="mt-4 space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                    Cash Received
+                  </label>
+
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={amountPaidInput}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      if (/^\d*\.?\d{0,2}$/.test(next)) setAmountPaidInput(next);
+                    }}
+                    placeholder="0.00"
+                    className="w-full rounded-2xl border-2 border-gray-200 bg-white px-4 py-3 font-black text-lg outline-none focus:ring-4 focus:ring-red-100"
+                  />
+
+                  <div className="grid grid-cols-3 gap-2">
+                    {[50, 100, 200].map((v) => (
+                      <button
+                        key={v}
+                        onClick={() => {
+                          const base = amountPaidInput.trim() === '' ? 0 : Number(amountPaidInput);
+                          const next = base + v;
+                          setAmountPaidInput(next.toFixed(2));
+                        }}
+                        className="rounded-2xl bg-gray-100 hover:bg-gray-200 transition px-3 py-2 text-xs font-black text-gray-800"
+                        disabled={cart.length === 0}
+                        title={`Add ${money(v)}`}
+                      >
+                        +{money(v)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-[11px] font-black text-gray-500 uppercase tracking-widest">
+                    Change
+                  </span>
+                  <span
+                    className={[
+                      'text-lg font-black',
+                      amountPaidInput.trim() === ''
+                        ? 'text-gray-400'
+                        : changeDue < 0
+                          ? 'text-red-600'
+                          : 'text-green-700',
+                    ].join(' ')}
+                  >
+                    {money(amountPaidInput.trim() === '' ? 0 : changeDue)}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="mt-4 space-y-3">
+                <div
+                  className="rounded-2xl border-2 p-4 text-center"
+                  style={{
+                    backgroundColor: paymentMethod === 'gcash' ? '#EFF6FF' : '#F5F3FF',
+                    borderColor: paymentMethod === 'gcash' ? '#BFDBFE' : '#DDD6FE',
+                  }}
+                >
+                  <p
+                    className="text-xs font-black mb-1"
+                    style={{ color: paymentMethod === 'gcash' ? '#2563EB' : '#6D28D9' }}
+                  >
+                    {paymentMethod === 'gcash' ? '📱 GCash Payment' : '🏦 Bank Transfer'}
+                  </p>
+                  <p className="text-[11px] font-bold text-gray-500">
+                    Customer shows proof, then tick confirmation.
+                  </p>
+                </div>
+
+                <label className="flex items-center gap-3 rounded-2xl border-2 border-gray-200 bg-white p-3 cursor-pointer hover:border-green-500 transition">
+                  <input
+                    type="checkbox"
+                    checked={paymentConfirmed}
+                    onChange={(e) => setPaymentConfirmed(e.target.checked)}
+                    className="w-4 h-4 accent-green-600"
+                  />
+                  <span className="text-xs font-black text-gray-800">
+                    Payment received and verified
+                  </span>
+                </label>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={handleCheckout}
+            disabled={
+              cart.length === 0 ||
+              isSubmitting ||
+              (paymentMethod === 'cash' ? amountPaid < cartTotal : !paymentConfirmed)
+            }
+            className={[
+              'w-full rounded-2xl py-4 font-black shadow-lg transition-all',
+              cart.length === 0 ||
+              isSubmitting ||
+              (paymentMethod === 'cash' ? amountPaid < cartTotal : !paymentConfirmed)
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'text-white hover:brightness-95',
+            ].join(' ')}
+            style={
+              cart.length === 0 ||
+              isSubmitting ||
+              (paymentMethod === 'cash' ? amountPaid < cartTotal : !paymentConfirmed)
+                ? undefined
+                : { backgroundColor: BRAND }
+            }
+          >
+            {isSubmitting ? 'PROCESSING...' : 'CONFIRM & PAY'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -400,10 +480,10 @@ export default function OrderPage() {
     return false;
   });
 
-  // Persist collapse state to localStorage
   useEffect(() => {
     localStorage.setItem('sidebarCollapsed', String(collapsed));
   }, [collapsed]);
+
   const activeNav = 'Order';
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -419,7 +499,6 @@ export default function OrderPage() {
 
   const [cart, setCart] = useState<CartItem[]>([]);
 
-  // ✅ stable cash typing: string state
   const [amountPaidInput, setAmountPaidInput] = useState<string>('');
   const amountPaid = useMemo(() => {
     const v = Number(amountPaidInput);
@@ -429,18 +508,39 @@ export default function OrderPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PayMethod>('cash');
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [discountEnabled, setDiscountEnabled] = useState(false);
 
   const [toast, setToast] = useState<{ show: boolean; text: string }>({ show: false, text: '' });
+
   const popToast = (text: string) => {
     setToast({ show: true, text });
     window.clearTimeout((popToast as any)._t);
     (popToast as any)._t = window.setTimeout(() => setToast({ show: false, text: '' }), 1800);
   };
 
-  const cartTotal = useMemo(
+  const cartSubtotal = useMemo(
     () => cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0),
     [cart]
   );
+
+  const vatExemptSales = useMemo(() => {
+    return discountEnabled ? cartSubtotal / (1 + VAT_RATE) : 0;
+  }, [discountEnabled, cartSubtotal]);
+
+  const vatExemptionAmount = useMemo(() => {
+    return discountEnabled ? cartSubtotal - vatExemptSales : 0;
+  }, [discountEnabled, cartSubtotal, vatExemptSales]);
+
+  const discountAmount = useMemo(() => {
+    return discountEnabled ? vatExemptSales * SENIOR_DISCOUNT_RATE : 0;
+  }, [discountEnabled, vatExemptSales]);
+
+  const cartTotal = useMemo(() => {
+    return discountEnabled
+      ? Math.max(0, vatExemptSales - discountAmount)
+      : cartSubtotal;
+  }, [discountEnabled, vatExemptSales, discountAmount, cartSubtotal]);
+
   const cartCount = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
 
   const changeDue = useMemo(() => {
@@ -448,12 +548,15 @@ export default function OrderPage() {
     return amountPaid - cartTotal;
   }, [amountPaidInput, amountPaid, cartTotal]);
 
-  // Fetch
   useEffect(() => {
     async function loadStoreData() {
       await syncMenuAvailability();
+
       try {
-        const { data: catData } = await supabase.from('Category').select('categoryID, categoryName');
+        const { data: catData } = await supabase
+          .from('Category')
+          .select('categoryID, categoryName');
+
         const { data: menuData, error: menuError } = await supabase
           .from('MenuItem')
           .select('*, Category (categoryName)')
@@ -476,41 +579,44 @@ export default function OrderPage() {
         setLoading(false);
       }
     }
+
     loadStoreData();
   }, []);
 
-  // Debounce search
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim().toLowerCase()), 200);
     return () => window.clearTimeout(t);
   }, [search]);
 
-  // Keyboard shortcut Ctrl/Cmd + K
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const isK = e.key.toLowerCase() === 'k';
       const meta = e.metaKey || e.ctrlKey;
+
       if (meta && isK) {
         e.preventDefault();
         searchRef.current?.focus();
       }
+
       if (e.key === 'Escape') setShowCartMobile(false);
     };
+
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Cart actions
   const addToCart = (item: MenuItem) => {
     if (!item.isAvailable) return;
 
     setCart((prev) => {
       const existing = prev.find((i) => i.menuItemID === item.menuItemID);
+
       if (existing) {
         return prev.map((i) =>
           i.menuItemID === item.menuItemID ? { ...i, quantity: i.quantity + 1 } : i
         );
       }
+
       return [...prev, { ...item, quantity: 1 }];
     });
 
@@ -530,13 +636,15 @@ export default function OrderPage() {
     );
   };
 
-  const removeLine = (menuItemID: number) => setCart((prev) => prev.filter((i) => i.menuItemID !== menuItemID));
+  const removeLine = (menuItemID: number) =>
+    setCart((prev) => prev.filter((i) => i.menuItemID !== menuItemID));
 
   const clearCart = () => {
     setCart([]);
     setAmountPaidInput('');
     setPaymentMethod('cash');
     setPaymentConfirmed(false);
+    setDiscountEnabled(false);
     popToast('Cart cleared');
   };
 
@@ -549,7 +657,9 @@ export default function OrderPage() {
   const filtered = useMemo(() => {
     let items = [...menuItems];
 
-    if (selectedCategory !== 'All') items = items.filter((i) => i.categoryID === selectedCategory);
+    if (selectedCategory !== 'All') {
+      items = items.filter((i) => i.categoryID === selectedCategory);
+    }
 
     if (debouncedSearch) {
       items = items.filter((i) => {
@@ -610,7 +720,7 @@ export default function OrderPage() {
 
       alert(
         `Order Successful! ${
-          paymentMethod === 'cash' ? `Change: ${money(changeDue)}` : 'Payment confirmed'
+          paymentMethod === 'cash' ? `Change: ${money(finalChange)}` : 'Payment confirmed'
         }`
       );
 
@@ -636,13 +746,17 @@ export default function OrderPage() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#F8F9FA]">
-      <Toast show={toast.show} text={toast.text} onClose={() => setToast({ show: false, text: '' })} />
+      <Toast
+        show={toast.show}
+        text={toast.text}
+        onClose={() => setToast({ show: false, text: '' })}
+      />
 
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} activeNav={activeNav} />
 
-      <main className="flex flex-1 overflow-hidden">
+      <main className="flex flex-1 overflow-hidden min-h-0">
         {/* LEFT: MENU */}
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex flex-1 flex-col overflow-hidden min-h-0">
           <div className="px-6 pt-6 pb-4">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -653,6 +767,7 @@ export default function OrderPage() {
                 >
                   {collapsed ? '›' : '‹'}
                 </button>
+
                 <div>
                   <h1 className="text-2xl font-black text-gray-900 tracking-tight">Orders</h1>
                   <p className="text-[12px] font-bold text-gray-500 mt-1">
@@ -713,7 +828,9 @@ export default function OrderPage() {
 
               <div className="md:col-span-2">
                 <div className="rounded-2xl bg-white border border-gray-200 shadow-sm px-4 py-3 h-full flex items-center justify-between">
-                  <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Results</span>
+                  <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">
+                    Results
+                  </span>
                   <span className="text-sm font-black text-gray-900">{filtered.length}</span>
                 </div>
               </div>
@@ -754,7 +871,7 @@ export default function OrderPage() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-6 pb-28 lg:pb-6">
+          <div className="flex-1 overflow-y-auto px-6 pb-28 lg:pb-6 min-h-0">
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5">
               {filtered.map((item) => {
                 const inCart = qtyInCart.get(item.menuItemID) || 0;
@@ -766,7 +883,7 @@ export default function OrderPage() {
                     disabled={!item.isAvailable}
                     className={[
                       'group relative flex flex-col rounded-2xl bg-white border shadow-sm overflow-hidden text-left transition',
-                      'hover:-translate-y-[2px hover:shadow-lg',
+                      'hover:-translate-y-[2px] hover:shadow-lg',
                       item.isAvailable ? 'border-gray-100' : 'border-gray-100 opacity-55 grayscale',
                     ].join(' ')}
                   >
@@ -819,15 +936,22 @@ export default function OrderPage() {
                       <div className="mt-3 flex items-center justify-between">
                         <span className="text-lg font-black text-gray-900">{money(Number(item.price))}</span>
 
-                        {/* + button never disappears */}
                         <div className="h-11 w-11 rounded-2xl grid place-items-center border-2 bg-gray-50 border-gray-100 transition">
                           <div
                             className="h-11 w-11 rounded-2xl grid place-items-center transition-colors"
-                            style={{ backgroundColor: item.isAvailable ? (inCart > 0 ? `${BRAND}12` : 'transparent') : 'transparent' }}
+                            style={{
+                              backgroundColor: item.isAvailable
+                                ? inCart > 0
+                                  ? `${BRAND}12`
+                                  : 'transparent'
+                                : 'transparent',
+                            }}
                           >
                             <MdAdd
                               className="text-xl transition-colors"
-                              style={{ color: item.isAvailable ? (inCart > 0 ? BRAND : '#111827') : '#9CA3AF' }}
+                              style={{
+                                color: item.isAvailable ? (inCart > 0 ? BRAND : '#111827') : '#9CA3AF',
+                              }}
                             />
                           </div>
                         </div>
@@ -865,10 +989,15 @@ export default function OrderPage() {
         </div>
 
         {/* RIGHT: CART (Desktop) */}
-        <div className="hidden lg:block w-420px border-l shadow-2xl z-10">
+        <div className="hidden lg:block w-[420px] h-full min-h-0 overflow-hidden border-l shadow-2xl z-10 bg-white">
           <CartPanel
             cart={cart}
             cartCount={cartCount}
+            cartSubtotal={cartSubtotal}
+            discountEnabled={discountEnabled}
+            setDiscountEnabled={setDiscountEnabled}
+            vatExemptionAmount={vatExemptionAmount}
+            discountAmount={discountAmount}
             cartTotal={cartTotal}
             paymentMethod={paymentMethod}
             setPaymentMethod={setPaymentMethod}
@@ -892,11 +1021,16 @@ export default function OrderPage() {
         {showCartMobile && (
           <div className="lg:hidden fixed inset-0 z-50">
             <div className="absolute inset-0 bg-black/40" onClick={() => setShowCartMobile(false)} />
-            <div className="absolute right-0 top-0 h-full w-[92%] max-w-420px shadow-2xl">
+            <div className="absolute right-0 top-0 h-full w-[92%] max-w-[420px] overflow-hidden shadow-2xl bg-white">
               <CartPanel
                 compact
                 cart={cart}
                 cartCount={cartCount}
+                cartSubtotal={cartSubtotal}
+                discountEnabled={discountEnabled}
+                setDiscountEnabled={setDiscountEnabled}
+                vatExemptionAmount={vatExemptionAmount}
+                discountAmount={discountAmount}
                 cartTotal={cartTotal}
                 paymentMethod={paymentMethod}
                 setPaymentMethod={setPaymentMethod}

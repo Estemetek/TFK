@@ -453,7 +453,7 @@ export default function InventoryPage() {
             </div>
           </header>
 
-          <section className="grid gap-4 lg:grid-cols-3">
+          <section className="grid gap-4 lg:grid-cols-2">
             <StatCard title="Total Ingredients" value={inventoryItems.length} subtitle="All items currently tracked" />
             <StatCard
               title="Low Stock Items"
