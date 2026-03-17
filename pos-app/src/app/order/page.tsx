@@ -393,7 +393,17 @@ function CartPanel({
 
 // -------------------- PAGE --------------------
 export default function OrderPage() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('sidebarCollapsed') === 'true';
+    }
+    return false;
+  });
+
+  // Persist collapse state to localStorage
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsed', String(collapsed));
+  }, [collapsed]);
   const activeNav = 'Order';
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -635,11 +645,20 @@ export default function OrderPage() {
         <div className="flex flex-1 flex-col overflow-hidden">
           <div className="px-6 pt-6 pb-4">
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-black text-gray-900 tracking-tight">Orders</h1>
-                <p className="text-[12px] font-bold text-gray-500 mt-1">
-                  Search fast, tap to add, and checkout smoothly.
-                </p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setCollapsed(!collapsed)}
+                  className="h-10 w-10 rounded-full bg-white shadow flex items-center justify-center text-lg font-bold hover:bg-black/5 transition"
+                  aria-label="Toggle sidebar"
+                >
+                  {collapsed ? '›' : '‹'}
+                </button>
+                <div>
+                  <h1 className="text-2xl font-black text-gray-900 tracking-tight">Orders</h1>
+                  <p className="text-[12px] font-bold text-gray-500 mt-1">
+                    Search fast, tap to add, and checkout smoothly.
+                  </p>
+                </div>
               </div>
 
               <button

@@ -250,7 +250,17 @@ function GhostButton({
 // --- MAIN PAGE ---
 export default function MenuPage() {
   const router = useRouter();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('sidebarCollapsed') === 'true';
+    }
+    return false;
+  });
+
+  // Persist collapse state to localStorage
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsed', String(collapsed));
+  }, [collapsed]);
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -546,7 +556,7 @@ export default function MenuPage() {
       <div
         className={[
           'grid h-screen transition-[grid-template-columns] duration-200',
-          collapsed ? 'grid-cols-[82px_1fr]' : 'grid-cols-[220px_1fr]',
+          collapsed ? 'grid-cols-[96px_1fr]' : 'grid-cols-[256px_1fr]',
         ].join(' ')}
       >
         <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} activeNav={activeNav} />

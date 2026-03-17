@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import { logout } from '../lib/auth';
+import { Sidebar } from '../components/Sidebar';
 import {
   MdDashboard,
   MdRestaurantMenu,
@@ -459,75 +460,7 @@ function Drawer({
   );
 }
 
-function AppSidebar({
-  isMobile,
-  collapsed,
-  navItems,
-  activeNav,
-  onNavigate,
-  onLogout,
-}: {
-  isMobile?: boolean;
-  collapsed: boolean;
-  navItems: NavItem[];
-  activeNav: string;
-  onNavigate: (path?: string) => void;
-  onLogout: () => void;
-}) {
-  const isCollapsed = isMobile ? false : collapsed;
 
-  return (
-    <aside className={cn('flex h-full flex-col items-stretch gap-4 bg-surface/80 backdrop-blur px-3 py-5 shadow-md ring-1 ring-card-border', !isMobile && 'rounded-r-2xl')}>
-      <div className="mb-2 flex items-center gap-3 px-2">
-        <img src="/TFK.png" alt="TFK Logo" className="h-12 w-12 rounded-full shadow ring-1 ring-card-border" />
-        {!isCollapsed && (
-          <div className="min-w-0">
-            <span className="block truncate text-sm font-black text-foreground">Taiwan Fried Kitchen</span>
-            <span className="block text-[10px] font-bold text-text-muted uppercase tracking-widest">POS Dashboard</span>
-          </div>
-        )}
-      </div>
-
-      <nav className={cn('flex w-full flex-col gap-2', isCollapsed ? 'items-center' : '')}>
-        {navItems.map((item) => {
-          const isActive = item.name === activeNav;
-          return (
-            <button
-              key={item.name}
-              onClick={() => onNavigate(item.path)}
-              className={cn(
-                'flex items-center rounded-2xl ring-1 ring-card-border transition hover:-translate-y-0.5 hover:shadow',
-                isCollapsed ? 'h-14 w-14 self-center bg-card/70 justify-center' : 'h-12 w-full bg-card/70 px-2 gap-3'
-              )}
-              type="button"
-            >
-              <span className={cn('grid h-10 w-10 place-items-center rounded-full shadow-inner transition', isActive ? 'bg-primary text-white' : 'bg-white text-text-muted')}>
-                {iconMap[item.name]}
-              </span>
-              {!isCollapsed && <span className={cn('text-xs font-extrabold', isActive ? 'text-foreground' : 'text-text-muted')}>{item.name}</span>}
-            </button>
-          );
-        })}
-      </nav>
-
-      <div className={cn('mt-auto', isCollapsed ? '' : 'px-2')}>
-        <button
-          onClick={onLogout}
-          className={cn(
-            'ring-1 ring-card-border transition hover:shadow',
-            isCollapsed ? 'mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-surface-dark text-white' : 'flex w-full items-center gap-3 rounded-2xl bg-card/70 px-2 py-2'
-          )}
-          type="button"
-        >
-          <span className="grid h-10 w-10 place-items-center rounded-full bg-white text-text-muted shadow-inner">
-            <MdLogout className="h-5 w-5" />
-          </span>
-          {!isCollapsed && <span className="text-xs font-extrabold text-text-muted">Logout</span>}
-        </button>
-      </div>
-    </aside>
-  );
-}
 
 function StockAlertMeter({
   total,
@@ -799,8 +732,18 @@ export default function DashboardPage() {
   const pathname = usePathname();
 
   // -------------------- State --------------------
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('sidebarCollapsed') === 'true';
+    }
+    return false;
+  });
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Persist collapse state to localStorage
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsed', String(collapsed));
+  }, [collapsed]);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -1335,23 +1278,9 @@ export default function DashboardPage() {
 
       {mobileOpen && <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)} />}
 
-      <div className={cn('fixed left-0 top-0 z-50 h-screen w-72 transition-transform duration-300 lg:hidden', mobileOpen ? 'translate-x-0' : '-translate-x-full')}>
-        <AppSidebar
-          isMobile
-          collapsed={collapsed}
-          navItems={navItems}
-          activeNav={activeNav}
-          onNavigate={(path) => {
-            if (path) router.push(path);
-            setMobileOpen(false);
-          }}
-          onLogout={handleLogout}
-        />
-      </div>
-
       <div className="hidden lg:block">
         <div className={cn('h-screen transition-all duration-300', collapsed ? 'w-24' : 'w-64')}>
-          <AppSidebar collapsed={collapsed} navItems={navItems} activeNav={activeNav} onNavigate={(path) => path && router.push(path)} onLogout={handleLogout} />
+          <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} activeNav={activeNav} />
         </div>
       </div>
 

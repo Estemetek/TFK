@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import { logout } from '../lib/auth';
+import { Sidebar } from '../components/Sidebar';
 import {
   MdDashboard,
   MdRestaurantMenu,
@@ -213,8 +214,18 @@ export default function StaffPage() {
   const pathname = usePathname();
 
   // desktop collapse + mobile drawer
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('sidebarCollapsed') === 'true';
+    }
+    return false;
+  });
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Persist collapse state to localStorage
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsed', String(collapsed));
+  }, [collapsed]);
 
   const activeNav = 'User Management';
 
@@ -539,84 +550,7 @@ export default function StaffPage() {
     });
   };
 
-  const Sidebar = ({ variant }: { variant: 'desktop' | 'mobile' }) => {
-    const isCollapsed = variant === 'desktop' ? collapsed : false;
-    return (
-      <aside
-        className={cn(
-          'flex h-full flex-col items-stretch gap-4 bg-surface px-3 py-5 shadow-md',
-          variant === 'desktop' ? 'rounded-r-3xl' : 'rounded-3xl',
-          variant === 'mobile' && 'w-280px'
-        )}
-      >
-        <div className={cn('mb-1 flex items-center gap-3 px-2', isCollapsed && 'justify-center')}>
-          <img
-            src="/TFK.png"
-            alt="TFK Logo"
-            className="h-12 w-12 rounded-full shadow ring-1 ring-card-border"
-          />
-          {!isCollapsed && (
-            <span className="text-sm font-semibold text-foreground">Taiwan Fried Kitchen</span>
-          )}
-        </div>
 
-        <nav className={cn('flex w-full flex-col gap-2', isCollapsed && 'items-center')}>
-          {navItems.map((item) => {
-            const isActive = item.name === activeNav;
-            return (
-              <button
-                key={item.name}
-                onClick={() => item.path && router.push(item.path)}
-                className={cn(
-                  'group flex items-center rounded-2xl ring-1 ring-card-border transition',
-                  'hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
-                  isCollapsed ? 'h-14 w-14 justify-center bg-card' : 'h-12 w-full gap-3 bg-card px-2'
-                )}
-              >
-                <span
-                  className={cn(
-                    'grid h-10 w-10 place-items-center rounded-full shadow-inner ring-1 ring-card-border transition',
-                    isActive ? 'bg-primary text-white ring-primary/20' : 'bg-white text-text-muted'
-                  )}
-                >
-                  {iconMap[item.name]}
-                </span>
-                {!isCollapsed && (
-                  <span className={cn('text-xs font-extrabold', isActive ? 'text-foreground' : 'text-text-muted')}>
-                    {item.name}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className={cn('mt-auto', isCollapsed ? '' : 'px-2')}>
-          <button
-            onClick={handleLogout}
-            className={cn(
-              'ring-1 ring-card-border transition hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
-              isCollapsed
-                ? 'mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-surface-dark text-white'
-                : 'flex w-full items-center gap-3 rounded-2xl bg-card px-2 py-2'
-            )}
-            aria-label="Logout"
-            title="Logout"
-          >
-            <span
-              className={cn(
-                'grid h-10 w-10 place-items-center rounded-full shadow-inner ring-1 ring-card-border',
-                isCollapsed ? 'bg-surface-dark text-white ring-white/10' : 'bg-white text-text-muted'
-              )}
-            >
-              <MdLogout className="h-5 w-5" />
-            </span>
-            {!isCollapsed && <span className="text-xs font-extrabold text-text-muted">Logout</span>}
-          </button>
-        </div>
-      </aside>
-    );
-  };
 
   if (loading && staffList.length === 0) {
     return (
@@ -659,19 +593,19 @@ export default function StaffPage() {
               <MdClose className="h-6 w-6 text-text-muted" />
             </button>
           </div>
-          <Sidebar variant="mobile" />
+          <Sidebar collapsed={true} setCollapsed={() => {}} activeNav={activeNav} />
         </div>
       </div>
 
       <div
         className={cn(
           'grid h-screen transition-[grid-template-columns] duration-200',
-          collapsed ? 'lg:grid-cols-[88px_1fr]' : 'lg:grid-cols-[240px_1fr]'
+          collapsed ? 'lg:grid-cols-[96px_1fr]' : 'lg:grid-cols-[256px_1fr]'
         )}
       >
         {/* Desktop sidebar */}
         <div className="hidden lg:block">
-          <Sidebar variant="desktop" />
+          <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} activeNav={activeNav} />
         </div>
 
         {/* Main */}
@@ -727,12 +661,6 @@ export default function StaffPage() {
               </div>
 
               <div className="flex items-center gap-3">
-                <button
-                  className="grid h-10 w-10 place-items-center rounded-full bg-white ring-1 ring-card-border transition hover:bg-card"
-                  aria-label="Notifications"
-                >
-                  🔔
-                </button>
                 <button
                   onClick={() => router.push('/profile')}
                   className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[12px] font-extrabold text-[#B80F24] shadow-sm ring-1 ring-card-border"

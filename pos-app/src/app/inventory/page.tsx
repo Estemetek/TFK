@@ -88,8 +88,18 @@ function wholeNumber(value: number | string | null | undefined) {
 export default function InventoryPage() {
   const router = useRouter();
 
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('sidebarCollapsed') === 'true';
+    }
+    return false;
+  });
   const [activeNav, setActiveNav] = useState('Inventory');
+
+  // Persist collapse state to localStorage
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsed', String(collapsed));
+  }, [collapsed]);
 
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -307,7 +317,7 @@ export default function InventoryPage() {
       <div
         className={cn(
           'grid h-screen transition-[grid-template-columns] duration-200',
-          collapsed ? 'grid-cols-[82px_1fr]' : 'grid-cols-[220px_1fr]'
+          collapsed ? 'grid-cols-[96px_1fr]' : 'grid-cols-[256px_1fr]'
         )}
       >
         <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} activeNav={activeNav} />

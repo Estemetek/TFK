@@ -137,10 +137,10 @@ export function Sidebar({
 
   return (
     <aside className="flex flex-col items-stretch gap-4 rounded-r-2xl bg-surface px-3 py-5 shadow-md h-screen overflow-y-auto">
-      <div className="mb-2 flex items-center gap-3 px-2">
-        <img src="/TFK.png" alt="TFK Logo" className="h-12 w-12 rounded-full shadow" />
+      <div className="mb-2 flex items-center gap-3 px-2 min-w-0">
+        <img src="/TFK.png" alt="TFK Logo" className="h-12 w-12 rounded-full shadow shrink-0" />
         {!collapsed && (
-          <span className="text-sm font-semibold text-foreground">Taiwan Fried Kitchen</span>
+          <span className="text-sm font-semibold text-foreground whitespace-nowrap">Taiwan Fried Kitchen</span>
         )}
       </div>
       <nav className={`flex w-full flex-col gap-2 ${collapsed ? 'items-center' : ''}`}>
