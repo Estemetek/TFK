@@ -118,6 +118,9 @@ export default function InventoryPage() {
   const [view, setView] = useState<'list' | 'grid'>('list');
   const [showOnlyLow, setShowOnlyLow] = useState(false);
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null);
+
   const fetchInventory = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -295,11 +298,17 @@ export default function InventoryPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (confirm('Are you sure you want to delete this ingredient?')) {
-      await supabase.from('Ingredient').delete().eq('ingredientID', id);
-      await fetchInventory();
-    }
+  const handleDeleteClick = (item: InventoryItem) => {
+    setDeleteTarget(item);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    await supabase.from('Ingredient').delete().eq('ingredientID', deleteTarget.ingredientID);
+    await fetchInventory();
+    setShowDeleteConfirm(false);
+    setDeleteTarget(null);
   };
 
   return (
@@ -529,7 +538,7 @@ export default function InventoryPage() {
                         setEditItem(item);
                         setShowEditModal(true);
                       }}
-                      onDelete={() => handleDelete(item.ingredientID)}
+                      onDelete={() => handleDeleteClick(item)}
                       onRestock={() => {
                         setRestockItem(item);
                         setRestockQuantity(0);
@@ -549,7 +558,7 @@ export default function InventoryPage() {
                         setEditItem(item);
                         setShowEditModal(true);
                       }}
-                      onDelete={() => handleDelete(item.ingredientID)}
+                      onDelete={() => handleDeleteClick(item)}
                       onRestock={() => {
                         setRestockItem(item);
                         setRestockQuantity(0);
@@ -592,6 +601,16 @@ export default function InventoryPage() {
           setEditItem(null);
         }}
         onSave={handleSave}
+      />
+
+      <DeleteConfirmModal
+        open={showDeleteConfirm}
+        item={deleteTarget}
+        onClose={() => {
+          setShowDeleteConfirm(false);
+          setDeleteTarget(null);
+        }}
+        onConfirm={handleConfirmDelete}
       />
     </div>
   );
@@ -1106,6 +1125,85 @@ function AddIngredientModal({ open, onClose, onSave, title, initialData }: any) 
               Save
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DeleteConfirmModal({
+  open,
+  item,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean;
+  item: InventoryItem | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  if (!open || !item) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" onClick={onClose}>
+      <div
+        className={cn(CARD, 'w-full max-w-sm p-6')}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="text-center">
+          {/* Icon */}
+          <div className="mx-auto h-16 w-16 rounded-full bg-red-50 ring-1 ring-red-200 flex items-center justify-center mb-4">
+            <MdDelete className="text-3xl text-red-600" />
+          </div>
+
+          <h3 className="text-lg font-semibold text-foreground">Delete Ingredient?</h3>
+          <p className="text-sm text-text-muted mt-2">
+            You are about to delete{' '}
+            <span className="font-semibold text-foreground">"{item.name}"</span>.
+            This action cannot be undone.
+          </p>
+        </div>
+
+        {/* Summary box */}
+        <div className={cn(SURFACE, 'mt-5 p-4 space-y-2')}>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+              Ingredient
+            </span>
+            <span className="text-sm font-semibold text-foreground">{item.name}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+              Current Stock
+            </span>
+            <span className="text-sm font-semibold text-foreground">
+              {wholeNumber(item.currentStock)} {item.unit}
+            </span>
+          </div>
+          <div className="flex items-center justify-between border-t border-black/5 pt-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+              Unit Cost
+            </span>
+            <span className="text-sm font-semibold text-foreground">
+              ₱{Number(item.costPerUnit || 0).toFixed(2)}
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-5 space-y-2">
+          <button
+            onClick={onConfirm}
+            className={cn(BTN_PRIMARY, 'w-full justify-center py-3')}
+          >
+            <MdDelete size={18} />
+            YES, DELETE IT
+          </button>
+          <button
+            onClick={onClose}
+            className={cn(BTN_NEUTRAL, 'w-full justify-center py-3')}
+          >
+            GO BACK
+          </button>
         </div>
       </div>
     </div>
