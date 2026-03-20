@@ -580,9 +580,18 @@ export default function OrderPage() {
 
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [sortBy, setSortBy] = useState<'popular' | 'name' | 'price_low' | 'price_high'>('popular');
+  const [sortBy, setSortBy] = useState<'popular' | 'name' | 'price_low' | 'price_high'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('orderSortBy') as any) || 'popular';
+    }
+    return 'popular';
+  });
   const [showCartMobile, setShowCartMobile] = useState(false);
   const searchRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem('orderSortBy', sortBy);
+  }, [sortBy]);
 
   const [cart, setCart] = useState<CartItem[]>([]);
 
@@ -647,7 +656,8 @@ export default function OrderPage() {
         const { data: menuData, error: menuError } = await supabase
           .from('MenuItem')
           .select('*, Category (categoryName)')
-          .eq('status', 'Active');
+          .eq('status', 'Active')
+          .order('menuItemID');
 
         if (menuError) throw menuError;
         if (catData) setCategories(catData);

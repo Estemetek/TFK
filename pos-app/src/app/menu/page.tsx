@@ -99,7 +99,7 @@ function RightDrawer({
 
     // basic focus
     setTimeout(() => {
-      const el = panelRef.current?.querySelector<HTMLElement>('input, select, textarea, button');
+      const el = panelRef.current?.querySelector<HTMLElement>('input, select, textarea');
       el?.focus();
     }, 0);
 
@@ -111,7 +111,7 @@ function RightDrawer({
       window.removeEventListener('keydown', handleEsc);
       document.body.style.overflow = prev;
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -311,6 +311,12 @@ export default function MenuPage() {
   const [isRecipeOpen, setIsRecipeOpen] = useState(false);
   const [activeRecipeItem, setActiveRecipeItem] = useState<MenuItem | null>(null);
 
+  // Category management modal
+  const [isCategoryMgmtOpen, setIsCategoryMgmtOpen] = useState(false);
+  const [editingCategoryID, setEditingCategoryID] = useState<number | null>(null);
+  const [editingCategoryForm, setEditingCategoryForm] = useState({ categoryName: '', description: '' });
+  const [categoryMgmtSubmitting, setCategoryMgmtSubmitting] = useState(false);
+
   const activeNav = 'Menu';
 
   const fetchAllData = useCallback(async () => {
@@ -402,6 +408,11 @@ export default function MenuPage() {
       imageUrl: '',
     });
     setIsAddOpen(true);
+  };
+
+  const handlePriceInput = (value: string): string => {
+    // Only allow numbers and one decimal point
+    return value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
   };
 
   const handleAddCategory = async () => {
@@ -549,6 +560,105 @@ export default function MenuPage() {
     setIsRecipeOpen(true);
   };
 
+  const handleEditCategory = (cat: Category) => {
+    setEditingCategoryID(cat.categoryID);
+    setEditingCategoryForm({ categoryName: cat.categoryName, description: cat.description || '' });
+  };
+
+  const handleUpdateCategory = async () => {
+    if (!editingCategoryID) return;
+    if (!editingCategoryForm.categoryName.trim()) {
+      alert('Please enter a category name.');
+      return;
+    }
+
+    setCategoryMgmtSubmitting(true);
+    const { error } = await supabase
+      .from('Category')
+      .update({
+        categoryName: editingCategoryForm.categoryName.trim(),
+        description: editingCategoryForm.description.trim(),
+      })
+      .eq('categoryID', editingCategoryID);
+
+    if (error) {
+      alert(error.message);
+    } else {
+      setEditingCategoryID(null);
+      setEditingCategoryForm({ categoryName: '', description: '' });
+      fetchAllData();
+    }
+    setCategoryMgmtSubmitting(false);
+  };
+
+  const handleArchiveCategory = async (cat: Category) => {
+    const itemCount = categoryCounts.get(cat.categoryID) || 0;
+    if (itemCount > 0) {
+      alert(`Cannot archive "${cat.categoryName}" because it has ${itemCount} active item(s).\n\nPlease move or delete these items first.`);
+      return;
+    }
+
+    const ok = confirm(`Archive "${cat.categoryName}"?\n\nThis will hide it from the category list (you can restore it later if needed).`);
+    if (!ok) return;
+
+    setCategoryMgmtSubmitting(true);
+    const { error } = await supabase
+      .from('Category')
+      .update({ categoryName: `[ARCHIVED] ${cat.categoryName}` })
+      .eq('categoryID', cat.categoryID);
+
+    if (error) {
+      alert(error.message);
+    } else {
+      setEditingCategoryID(null);
+      setEditingCategoryForm({ categoryName: '', description: '' });
+      fetchAllData();
+    }
+    setCategoryMgmtSubmitting(false);
+  };
+
+  const handleRestoreCategory = async (cat: Category) => {
+    const ok = confirm(`Restore "${cat.categoryName}"?\n\nThis will bring it back to the active categories list.`);
+    if (!ok) return;
+
+    setCategoryMgmtSubmitting(true);
+    const restoredName = cat.categoryName.replace('[ARCHIVED] ', '');
+
+    const { error } = await supabase
+      .from('Category')
+      .update({ categoryName: restoredName })
+      .eq('categoryID', cat.categoryID);
+
+    if (error) {
+      alert(error.message);
+    } else {
+      setEditingCategoryID(null);
+      setEditingCategoryForm({ categoryName: '', description: '' });
+      fetchAllData();
+    }
+    setCategoryMgmtSubmitting(false);
+  };
+
+  const activeCategoriesForDisplay = useMemo(
+    () => categories.filter((c) => !c.categoryName.startsWith('[ARCHIVED]')).slice(0, 6),
+    [categories]
+  );
+
+  const archivedCategoriesCount = useMemo(
+    () => categories.filter((c) => c.categoryName.startsWith('[ARCHIVED]')).length,
+    [categories]
+  );
+
+  const remainingCategoriesCount = useMemo(
+    () => Math.max(0, categories.length - 6 - archivedCategoriesCount),
+    [categories.length, archivedCategoriesCount]
+  );
+
+  const activeCategoriesForForms = useMemo(
+    () => categories.filter((c) => !c.categoryName.startsWith('[ARCHIVED]')),
+    [categories]
+  );
+
   const totalVisibleCount = useMemo(() => menuItems.filter((i) => (i.status || '').toLowerCase() !== 'archived').length, [menuItems]);
 
   return (
@@ -623,7 +733,7 @@ export default function MenuPage() {
                 </div>
               </button>
 
-              {categories.map((c) => {
+              {activeCategoriesForDisplay.map((c) => {
                 const count = categoryCounts.get(c.categoryID) || 0;
                 const active = selectedCatID === c.categoryID;
 
@@ -653,6 +763,26 @@ export default function MenuPage() {
                   </button>
                 );
               })}
+
+              {remainingCategoriesCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryMgmtOpen(true)}
+                  className="min-w-170px text-left rounded-2xl p-4 shadow-sm ring-1 bg-[#F7F7F7] text-[#1E1E1E] ring-black/5 hover:bg-black/0.03 transition"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-12 w-12 rounded-2xl bg-white text-[#b80f24] grid place-items-center">
+                      <span className="text-lg font-extrabold">+</span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-extrabold truncate">View All</p>
+                      <p className="text-xs text-black/45">
+                        +{remainingCategoriesCount} more
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              )}
             </div>
           </section>
 
@@ -999,7 +1129,7 @@ export default function MenuPage() {
               <TextInput
                 inputMode="decimal"
                 value={form.price}
-                onChange={(e) => setForm({ ...form, price: e.target.value })}
+                onChange={(e) => setForm({ ...form, price: handlePriceInput(e.target.value) })}
                 placeholder="0.00"
               />
             </Field>
@@ -1007,7 +1137,7 @@ export default function MenuPage() {
               <TextInput
                 inputMode="decimal"
                 value={form.regularPrice}
-                onChange={(e) => setForm({ ...form, regularPrice: e.target.value })}
+                onChange={(e) => setForm({ ...form, regularPrice: handlePriceInput(e.target.value) })}
                 placeholder="0.00"
               />
             </Field>
@@ -1016,7 +1146,7 @@ export default function MenuPage() {
           <Field label="Category">
             <Select value={form.categoryID} onChange={(e) => setForm({ ...form, categoryID: e.target.value })}>
               <option value="">Select a category</option>
-              {categories.map((c) => (
+              {activeCategoriesForForms.map((c) => (
                 <option key={c.categoryID} value={c.categoryID}>
                   {c.categoryName}
                 </option>
@@ -1071,21 +1201,21 @@ export default function MenuPage() {
               <TextInput
                 inputMode="decimal"
                 value={editForm.price}
-                onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
+                onChange={(e) => setEditForm({ ...editForm, price: handlePriceInput(e.target.value) })}
               />
             </Field>
             <Field label="Regular Price (₱)">
               <TextInput
                 inputMode="decimal"
                 value={editForm.regularPrice}
-                onChange={(e) => setEditForm({ ...editForm, regularPrice: e.target.value })}
+                onChange={(e) => setEditForm({ ...editForm, regularPrice: handlePriceInput(e.target.value) })}
               />
             </Field>
           </div>
 
           <Field label="Category">
             <Select value={editForm.categoryID} onChange={(e) => setEditForm({ ...editForm, categoryID: e.target.value })}>
-              {categories.map((c) => (
+              {activeCategoriesForForms.map((c) => (
                 <option key={c.categoryID} value={c.categoryID}>
                   {c.categoryName}
                 </option>
@@ -1103,6 +1233,139 @@ export default function MenuPage() {
               {isSubmitting ? 'Updating...' : 'Update Item'}
             </PrimaryButton>
           </div>
+        </div>
+      </RightDrawer>
+
+      {/* --- CATEGORY MANAGEMENT MODAL --- */}
+      <RightDrawer
+        open={isCategoryMgmtOpen}
+        title="Manage Categories"
+        onClose={() => {
+          setIsCategoryMgmtOpen(false);
+          setEditingCategoryID(null);
+          setEditingCategoryForm({ categoryName: '', description: '' });
+        }}
+      >
+        <div className="space-y-4">
+          {editingCategoryID ? (
+            <div>
+              <p className="text-xs font-extrabold text-black/50 mb-3">EDITING CATEGORY</p>
+              <div className="space-y-4">
+                <Field label="Category Name">
+                  <TextInput
+                    value={editingCategoryForm.categoryName}
+                    onChange={(e) => setEditingCategoryForm({ ...editingCategoryForm, categoryName: e.target.value })}
+                    placeholder="e.g. Main Course"
+                  />
+                </Field>
+
+                <Field label="Description">
+                  <TextArea
+                    value={editingCategoryForm.description}
+                    onChange={(e) => setEditingCategoryForm({ ...editingCategoryForm, description: e.target.value })}
+                    placeholder="Enter category description"
+                    rows={3}
+                  />
+                </Field>
+
+                <div className="pt-4 flex justify-end gap-2 border-t border-black/10">
+                  <GhostButton
+                    onClick={() => {
+                      setEditingCategoryID(null);
+                      setEditingCategoryForm({ categoryName: '', description: '' });
+                    }}
+                  >
+                    Cancel
+                  </GhostButton>
+                  <PrimaryButton disabled={categoryMgmtSubmitting} onClick={handleUpdateCategory}>
+                    {categoryMgmtSubmitting ? 'Saving...' : 'Save Changes'}
+                  </PrimaryButton>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div>
+                <p className="text-xs font-extrabold text-black/50 mb-3">ACTIVE CATEGORIES</p>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {activeCategoriesForForms.length === 0 ? (
+                    <p className="text-xs text-black/45">No active categories</p>
+                  ) : (
+                    activeCategoriesForForms.map((c) => {
+                      const itemCount = categoryCounts.get(c.categoryID) || 0;
+                      return (
+                        <div
+                          key={c.categoryID}
+                          className="flex items-center justify-between p-3 bg-[#F7F7F7] rounded-xl hover:bg-black/5 transition"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-extrabold text-black/80">{c.categoryName}</p>
+                            <p className="text-[10px] text-black/45">{itemCount} item(s)</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleEditCategory(c)}
+                              className="h-8 w-8 rounded-lg bg-black/5 grid place-items-center hover:bg-black/10 transition"
+                              title="Edit"
+                            >
+                              <MdEdit className="h-4 w-4 text-black/70" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleArchiveCategory(c)}
+                              className="h-8 w-8 rounded-lg grid place-items-center text-white shadow transition active:scale-[0.99] disabled:opacity-50"
+                              style={{ backgroundColor: PRIMARY }}
+                              onMouseEnter={(e) => {
+                                (e.currentTarget as HTMLButtonElement).style.backgroundColor = PRIMARY_DARK;
+                              }}
+                              onMouseLeave={(e) => {
+                                (e.currentTarget as HTMLButtonElement).style.backgroundColor = PRIMARY;
+                              }}
+                              title="Archive"
+                              disabled={categoryMgmtSubmitting}
+                            >
+                              <MdDelete className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {archivedCategoriesCount > 0 && (
+                <div>
+                  <p className="text-xs font-extrabold text-black/50 mb-3">ARCHIVED CATEGORIES ({archivedCategoriesCount})</p>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {categories
+                      .filter((c) => c.categoryName.startsWith('[ARCHIVED]'))
+                      .map((c) => (
+                        <div
+                          key={c.categoryID}
+                          className="flex items-center justify-between p-3 bg-black/5 rounded-xl hover:bg-black/10 transition opacity-60"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-extrabold text-black/60">{c.categoryName}</p>
+                            <p className="text-[10px] text-black/40">Archived</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRestoreCategory(c)}
+                            className="h-8 w-8 rounded-lg grid place-items-center text-white shadow transition active:scale-[0.99] disabled:opacity-50 bg-blue-600 hover:bg-blue-700"
+                            title="Restore"
+                            disabled={categoryMgmtSubmitting}
+                          >
+                            <MdCheckCircle className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </RightDrawer>
 

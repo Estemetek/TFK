@@ -107,6 +107,11 @@ const ModalRight = ({
   );
 };
 
+const handlePhoneInput = (value: string): string => {
+  // Only allow numbers, no letters or special characters
+  return value.replace(/[^\d]/g, '');
+};
+
 const Field = ({
   label,
   placeholder,
@@ -1161,7 +1166,7 @@ export default function StaffPage() {
               label="Phone number"
               placeholder="Enter phone number"
               value={form.phone}
-              onChange={(v) => setForm((p) => ({ ...p, phone: v }))}
+              onChange={(v) => setForm((p) => ({ ...p, phone: handlePhoneInput(v) }))}
             />
             <Field
               label="Date of birth"

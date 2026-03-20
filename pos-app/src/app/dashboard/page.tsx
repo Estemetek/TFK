@@ -180,7 +180,7 @@ function calcStockAlertRow(i: LowStockItem): StockAlertRow {
 }
 
 function getExpenseAmount(row: any) {
-  return safeNum(row?.amount ?? row?.expenseAmount ?? row?.totalAmount ?? row?.value ?? row?.cost ?? row?.price ?? 0);
+  return safeNum(row?.totalCost ?? row?.amount ?? row?.expenseAmount ?? row?.totalAmount ?? row?.value ?? row?.cost ?? row?.price ?? 0);
 }
 
 function getExpenseDate(row: any) {
@@ -855,35 +855,20 @@ export default function DashboardPage() {
   const fetchExpenseRows = async (todayIso: string, startWeeklyIso: string) => {
     const expenseSelect = '*';
 
-    const todayExpenseFromExpense = supabase.from('Expense').select(expenseSelect).gte('createdAt', todayIso);
-    const weeklyExpenseFromExpense = supabase.from('Expense').select(expenseSelect).gte('createdAt', startWeeklyIso);
-
-    const todayExpenseFromExpenses = supabase.from('Expenses').select(expenseSelect).gte('createdAt', todayIso);
-    const weeklyExpenseFromExpenses = supabase.from('Expenses').select(expenseSelect).gte('createdAt', startWeeklyIso);
+    // Query Purchase table for expenses
+    const todayExpenseFromPurchase = supabase.from('Purchase').select(expenseSelect).gte('createdAt', todayIso);
+    const weeklyExpenseFromPurchase = supabase.from('Purchase').select(expenseSelect).gte('createdAt', startWeeklyIso);
 
     let todayRows: any[] = [];
     let weeklyRows: any[] = [];
 
-    const firstTry = await Promise.allSettled([todayExpenseFromExpense, weeklyExpenseFromExpense]);
+    const purchaseTry = await Promise.allSettled([todayExpenseFromPurchase, weeklyExpenseFromPurchase]);
 
-    const firstToday = firstTry[0].status === 'fulfilled' ? firstTry[0].value : null;
-    const firstWeekly = firstTry[1].status === 'fulfilled' ? firstTry[1].value : null;
+    const purchaseToday = purchaseTry[0].status === 'fulfilled' ? purchaseTry[0].value : null;
+    const purchaseWeekly = purchaseTry[1].status === 'fulfilled' ? purchaseTry[1].value : null;
 
-    const firstHasData = !firstToday?.error || !firstWeekly?.error;
-
-    if (firstHasData && (!firstToday?.error || !firstWeekly?.error)) {
-      todayRows = firstToday?.data || [];
-      weeklyRows = firstWeekly?.data || [];
-      return { todayRows, weeklyRows };
-    }
-
-    const secondTry = await Promise.allSettled([todayExpenseFromExpenses, weeklyExpenseFromExpenses]);
-
-    const secondToday = secondTry[0].status === 'fulfilled' ? secondTry[0].value : null;
-    const secondWeekly = secondTry[1].status === 'fulfilled' ? secondTry[1].value : null;
-
-    todayRows = secondToday?.data || [];
-    weeklyRows = secondWeekly?.data || [];
+    todayRows = purchaseToday?.data || [];
+    weeklyRows = purchaseWeekly?.data || [];
 
     return { todayRows, weeklyRows };
   };
