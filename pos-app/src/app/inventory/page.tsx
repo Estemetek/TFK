@@ -121,6 +121,16 @@ export default function InventoryPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null);
 
+  const [currentUserID, setCurrentUserID] = useState<string | null>(null);
+
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUserID(user?.id ?? null);
+    };
+    getUser();
+  }, []);
+
   const fetchInventory = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -240,6 +250,7 @@ export default function InventoryPage() {
           currentStock: newStock,
           costPerUnit: unitCost,
           updatedAt: new Date().toISOString(),
+          updatedBy: currentUserID,
         })
         .eq('ingredientID', ingredient.ingredientID);
 
@@ -268,6 +279,7 @@ export default function InventoryPage() {
             reorderLevel: wholeNumber(formData.reorderLevel),
             costPerUnit: parseFloat(formData.price),
             updatedAt: new Date().toISOString(),
+            updatedBy: currentUserID,
           })
           .eq('ingredientID', editItem.ingredientID);
       } else {
