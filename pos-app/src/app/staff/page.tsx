@@ -801,11 +801,6 @@ export default function StaffPage() {
                     >
                       Edit profile
                     </button>
-                    <button
-                      className="w-full rounded-xl bg-white px-4 py-3 text-[12px] font-extrabold text-[#B80F24] shadow-sm ring-1 ring-[#B80F24]/25 transition hover:bg-[#B80F24]/5"
-                    >
-                      Delete profile
-                    </button>
                   </div>
                 </section>
               </div>

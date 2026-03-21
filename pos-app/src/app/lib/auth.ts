@@ -21,6 +21,25 @@ export async function login(email: string, password: string) {
       throw new Error('Failed to establish session');
     }
 
+    // CHECK IF ACCOUNT IS ACTIVE
+    const { data: userAccount, error: accountError } = await supabase
+      .from('UsersAccount')
+      .select('isActive')
+      .eq('email', email.trim())
+      .single();
+
+    if (accountError || !userAccount) {
+      // Sign out if account not found
+      await supabase.auth.signOut();
+      throw new Error('User account not found');
+    }
+
+    if (!userAccount.isActive) {
+      // Sign out if account is deactivated
+      await supabase.auth.signOut();
+      throw new Error('This account has been deactivated. Contact your administrator.');
+    }
+
     return { success: true, user: data.user };
   } catch (error) {
     console.error('Login error:', error);

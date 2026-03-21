@@ -18,6 +18,10 @@ export async function login(username: string, password: string) {
     throw new Error('Invalid credentials');
   }
 
+  if (!data.isActive) {
+    throw new Error('This account has been deactivated. Contact your administrator.');
+  }
+
   return {
     userID: data.userID,
     roleID: data.roleID,

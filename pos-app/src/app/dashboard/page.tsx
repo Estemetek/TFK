@@ -879,9 +879,9 @@ export default function DashboardPage() {
     const start4Weeks = startOfWeek(addDays(currentWeekStart, -21));
 
     try {
-      const ordersTodayQ = supabase.from('Order').select('orderID, amount, createdAt, paymentmethod').gte('createdAt', today.toISOString());
+      const ordersTodayQ = supabase.from('Order').select('orderID, amount, createdAt, paymentmethod').neq('status', 'voided').gte('createdAt', today.toISOString());
 
-      const ordersWeeklyQ = supabase.from('Order').select('orderID, amount, createdAt').gte('createdAt', start4Weeks.toISOString());
+      const ordersWeeklyQ = supabase.from('Order').select('orderID, amount, createdAt').neq('status', 'voided').gte('createdAt', start4Weeks.toISOString());
 
       const ingredientsQ = supabase.from('Ingredient').select('name, currentStock, reorderLevel, unit');
 
@@ -1005,6 +1005,12 @@ export default function DashboardPage() {
       const weeklySalesTotal = salesArr.reduce((a, b) => a + b, 0);
       const weeklyExpensesTotal = expenseArr.reduce((a, b) => a + b, 0);
       const weeklyNetProfitTotal = weeklyNetProfitArr.reduce((a, b) => a + b, 0);
+      
+      // Current week is the last index (index 3 = most recent week)
+      const currentWeekSales = salesArr[3] ?? 0;
+      const currentWeekExpenses = expenseArr[3] ?? 0;
+      const currentWeekNetProfit = weeklyNetProfitArr[3] ?? 0;
+      const currentWeekLabel = weekLabels[3] ?? 'Current Week';
 
       setSalesWeekly(salesArr);
       setExpensesWeekly(expenseArr);
@@ -1035,17 +1041,18 @@ export default function DashboardPage() {
         },
         {
           label: 'Weekly Net Profit',
-          value: fmtMoneyPhp(weeklyNetProfitTotal),
-          note: weeklyNetProfitTotal < 0 ? 'Net Loss (Last 4 Weeks)' : 'Sales - Expenses (Last 4 Weeks)',
+          value: fmtMoneyPhp(currentWeekNetProfit),
+          note: currentWeekNetProfit < 0 ? `Net Loss (${currentWeekLabel})` : `Profit (${currentWeekLabel})`,
           icon: <MdInsights />,
-          accentVar: weeklyNetProfitTotal < 0 ? '--accent-red' : '--accent-green',
-          valueClassName: weeklyNetProfitTotal < 0 ? 'text-red-600' : 'text-green-700',
-          detailsTitle: 'Weekly Net Profit',
+          accentVar: currentWeekNetProfit < 0 ? '--accent-red' : '--accent-green',
+          valueClassName: currentWeekNetProfit < 0 ? 'text-red-600' : 'text-green-700',
+          detailsTitle: 'Weekly Net Profit (4-Week Trend)',
           detailsRows: weekLabels.map((label, i) => ({
             week: label,
             sales_php: salesArr[i] ?? 0,
             expenses_php: expenseArr[i] ?? 0,
             net_profit_php: weeklyNetProfitArr[i] ?? 0,
+            isCurrent: i === 3,
           })),
           sparkValues: weeklyNetProfitArr.map((v) => Math.abs(v)),
         },
@@ -1235,8 +1242,8 @@ export default function DashboardPage() {
 
         {drawerRows.length ? (
           <div className="overflow-hidden rounded-2xl ring-1 ring-card-border">
-            <div className="grid grid-cols-3 bg-surface-dark/5 text-[10px] font-black uppercase tracking-widest text-text-muted">
-              {Object.keys(drawerRows[0]).slice(0, 3).map((h) => (
+            <div className="grid grid-cols-4 bg-surface-dark/5 text-[10px] font-black uppercase tracking-widest text-text-muted">
+              {Object.keys(drawerRows[0]).filter((k) => k !== 'isCurrent').map((h) => (
                 <div key={h} className="px-3 py-2 border-b border-card-border">
                   {h}
                 </div>
@@ -1244,9 +1251,9 @@ export default function DashboardPage() {
             </div>
             <div className="divide-y divide-card-border">
               {drawerRows.map((r, idx) => {
-                const keys = Object.keys(r).slice(0, 3);
+                const keys = Object.keys(r).filter((k) => k !== 'isCurrent');
                 return (
-                  <div key={idx} className="grid grid-cols-3 text-xs">
+                  <div key={idx} className="grid grid-cols-4 text-xs">
                     {keys.map((k) => (
                       <div key={k} className="px-3 py-2">
                         {String(r[k])}

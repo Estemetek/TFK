@@ -1145,7 +1145,7 @@ export default function MenuPage() {
 
           <Field label="Category">
             <Select value={form.categoryID} onChange={(e) => setForm({ ...form, categoryID: e.target.value })}>
-              <option value="">Select a category</option>
+              <option value="">None</option>
               {activeCategoriesForForms.map((c) => (
                 <option key={c.categoryID} value={c.categoryID}>
                   {c.categoryName}
@@ -1215,6 +1215,7 @@ export default function MenuPage() {
 
           <Field label="Category">
             <Select value={editForm.categoryID} onChange={(e) => setEditForm({ ...editForm, categoryID: e.target.value })}>
+              <option value="">None</option>
               {activeCategoriesForForms.map((c) => (
                 <option key={c.categoryID} value={c.categoryID}>
                   {c.categoryName}
