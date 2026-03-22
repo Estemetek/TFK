@@ -73,7 +73,6 @@ export default function EODAuditPage() {
   const [hasSubmittedToday, setHasSubmittedToday] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-  // for success prompt after submission
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [auditSummary, setAuditSummary] = useState({
     sessionID: 0,
@@ -174,7 +173,7 @@ export default function EODAuditPage() {
       const variance = physical - system;
       const usedToday = system - physical;
 
-      if (variance !== 0) changedItems++; // counts how many ingredients have changes in the physical count compared to the system stock
+      if (variance !== 0) changedItems++;
       if (usedToday > 0) totalUsage += usedToday;
       if (variance > 0) overages += 1;
     }
@@ -232,41 +231,20 @@ export default function EODAuditPage() {
 
       if (itemsError) throw itemsError;
 
-      // STEP 3: Record OUT transactions after submitting EOD audit (skips no-change)
-      const transactions = ingredients
-      .filter((item) => {
+      const consumedCount = ingredients.filter((item) => {
         const system = Number(item.currentStock) || 0;
         const physical = Number(auditCounts[item.ingredientID] ?? 0);
-        const used = system - physical;
-        return used > 0; // only records ingredients that have different physical count compared to the system stock, skips no-change
-      })
-      .map((item) => {
-        const system = Number(item.currentStock) || 0;
-        const physical = Number(auditCounts[item.ingredientID] ?? 0);
-        const used = system - physical;
-        return {
-          ingredientID: item.ingredientID,
-          type: "OUT",
-          referenceNo: `EOD-${session.sessionID}`, // refers back to the audit session
-          quantity: used,
-        };
-      });
+        return system - physical > 0;
+      }).length;
 
-    if (transactions.length > 0) {
-      const { error: txError } = await supabase
-        .from("InventoryTransaction")
-        .insert(transactions);
-
-      if (txError) throw txError;
-    }
-
-      setAuditSummary({
-        sessionID: session.sessionID,
-        totalItems: ingredients.length,
-        transactionsLogged: transactions.length,
-      });
-      setShowConfirmModal(false);
-      setShowSuccessModal(true);
+    setAuditSummary({
+      sessionID: session.sessionID,
+      totalItems: ingredients.length,
+      transactionsLogged: consumedCount,
+    });
+    setShowConfirmModal(false);
+    setShowSuccessModal(true);
+    setIsSubmitting(false);
     } catch (err: any) {
       alert("Audit failed: " + err.message);
       setIsSubmitting(false);
@@ -670,7 +648,7 @@ function AuditSuccessModal({
               Session ID
             </span>
             <span className="text-sm font-semibold text-foreground">
-              EOD-{summary.sessionID}
+              AUDIT-SESSION-{summary.sessionID}
             </span>
           </div>
           <div className="flex items-center justify-between">
