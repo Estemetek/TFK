@@ -73,6 +73,14 @@ export default function EODAuditPage() {
   const [hasSubmittedToday, setHasSubmittedToday] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
+  // for success prompt after submission
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [auditSummary, setAuditSummary] = useState({
+    sessionID: 0,
+    totalItems: 0,
+    transactionsLogged: 0,
+  });
+
   const fetchIngredients = async () => {
     setLoading(true);
 
@@ -166,7 +174,7 @@ export default function EODAuditPage() {
       const variance = physical - system;
       const usedToday = system - physical;
 
-      if (variance !== 0) changedItems++;
+      if (variance !== 0) changedItems++; // counts how many ingredients have changes in the physical count compared to the system stock
       if (usedToday > 0) totalUsage += usedToday;
       if (variance > 0) overages += 1;
     }
@@ -224,8 +232,41 @@ export default function EODAuditPage() {
 
       if (itemsError) throw itemsError;
 
-      alert("EOD Batch Audit successfully submitted and locked.");
-      router.push("/inventory");
+      // STEP 3: Record OUT transactions after submitting EOD audit (skips no-change)
+      const transactions = ingredients
+      .filter((item) => {
+        const system = Number(item.currentStock) || 0;
+        const physical = Number(auditCounts[item.ingredientID] ?? 0);
+        const used = system - physical;
+        return used > 0; // only records ingredients that have different physical count compared to the system stock, skips no-change
+      })
+      .map((item) => {
+        const system = Number(item.currentStock) || 0;
+        const physical = Number(auditCounts[item.ingredientID] ?? 0);
+        const used = system - physical;
+        return {
+          ingredientID: item.ingredientID,
+          type: "OUT",
+          referenceNo: `EOD-${session.sessionID}`, // refers back to the audit session
+          quantity: used,
+        };
+      });
+
+    if (transactions.length > 0) {
+      const { error: txError } = await supabase
+        .from("InventoryTransaction")
+        .insert(transactions);
+
+      if (txError) throw txError;
+    }
+
+      setAuditSummary({
+        sessionID: session.sessionID,
+        totalItems: ingredients.length,
+        transactionsLogged: transactions.length,
+      });
+      setShowConfirmModal(false);
+      setShowSuccessModal(true);
     } catch (err: any) {
       alert("Audit failed: " + err.message);
       setIsSubmitting(false);
@@ -576,6 +617,91 @@ export default function EODAuditPage() {
           </div>
         </div>
       )}
+
+      <AuditSuccessModal
+        show={showSuccessModal}
+        summary={auditSummary}
+        onDone={() => {
+          setShowSuccessModal(false);
+          router.push("/inventory");
+        }}
+      />
+    </div>
+  );
+}
+
+function AuditSuccessModal({
+  show,
+  summary,
+  onDone,
+}: {
+  show: boolean;
+  summary: { sessionID: number; totalItems: number; transactionsLogged: number };
+  onDone: () => void;
+}) {
+  if (!show) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl ring-1 ring-black/5 flex flex-col items-center text-center">
+
+        {/* Success icon */}
+        <div className="h-20 w-20 rounded-full bg-green-50 ring-1 ring-green-200 flex items-center justify-center mb-5">
+          <svg
+            className="h-10 w-10 text-green-600"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2.5}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+
+        <h2 className="text-2xl font-bold text-foreground">Audit Submitted!</h2>
+        <p className="text-sm text-text-muted mt-2 leading-relaxed">
+          The EOD inventory audit has been finalized, locked, and recorded to the database.
+        </p>
+
+        {/* Summary details */}
+        <div className="mt-6 w-full rounded-2xl bg-black/5 border border-black/5 p-4 space-y-3 text-left">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+              Session ID
+            </span>
+            <span className="text-sm font-semibold text-foreground">
+              EOD-{summary.sessionID}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+              Ingredients Audited
+            </span>
+            <span className="text-sm font-semibold text-foreground">
+              {summary.totalItems}
+            </span>
+          </div>
+          <div className="flex items-center justify-between border-t border-black/10 pt-3">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+              Transactions Logged
+            </span>
+            <span className="text-sm font-semibold text-green-700">
+              {summary.transactionsLogged} OUT record{summary.transactionsLogged !== 1 ? "s" : ""}
+            </span>
+          </div>
+        </div>
+
+        <p className="mt-4 text-[11px] text-text-muted">
+          This audit is now locked. No further changes can be made for today.
+        </p>
+
+        <button
+          onClick={onDone}
+          className={cn(BTN_PRIMARY, "mt-6 w-full justify-center py-3")}
+        >
+          Done — Back to Inventory
+        </button>
+      </div>
     </div>
   );
 }
