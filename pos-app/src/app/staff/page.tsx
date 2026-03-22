@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import { logout } from '../lib/auth';
@@ -12,8 +12,6 @@ import {
   MdInventory2,
   MdAssessment,
   MdShoppingCart,
-  MdLogout,
-  MdEdit,
   MdDelete,
   MdVisibility,
   MdKeyboardArrowLeft,
@@ -23,6 +21,9 @@ import {
   MdFilterList,
   MdChevronLeft,
   MdChevronRight,
+  MdWarningAmber,
+  MdCheckCircle,
+  MdInfo,
 } from 'react-icons/md';
 
 type NavItem = { name: string; path?: string };
@@ -39,6 +40,8 @@ type Staff = {
   avatarInitials: string;
   isActive: boolean;
 };
+
+type PopupType = 'success' | 'error' | 'info' | 'warning';
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
@@ -107,8 +110,123 @@ const ModalRight = ({
   );
 };
 
+const PopupDialog = ({
+  open,
+  type = 'info',
+  title,
+  message,
+  confirmText = 'OK',
+  cancelText,
+  loading = false,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  type?: PopupType;
+  title: string;
+  message: React.ReactNode;
+  confirmText?: string;
+  cancelText?: string;
+  loading?: boolean;
+  onConfirm: () => void;
+  onCancel?: () => void;
+}) => {
+  React.useEffect(() => {
+    if (!open) return;
+
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !loading) {
+        if (onCancel) onCancel();
+        else onConfirm();
+      }
+    };
+
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [open, loading, onCancel, onConfirm]);
+
+  if (!open) return null;
+
+  const icon =
+    type === 'success' ? (
+      <MdCheckCircle className="h-6 w-6" />
+    ) : type === 'error' || type === 'warning' ? (
+      <MdWarningAmber className="h-6 w-6" />
+    ) : (
+      <MdInfo className="h-6 w-6" />
+    );
+
+  const iconClasses =
+    type === 'success'
+      ? 'bg-emerald-50 text-emerald-600'
+      : type === 'error'
+      ? 'bg-red-50 text-red-600'
+      : type === 'warning'
+      ? 'bg-[#B80F24]/10 text-[#B80F24]'
+      : 'bg-black/5 text-black/70';
+
+  const confirmClasses =
+    type === 'success'
+      ? 'bg-emerald-600 text-white ring-emerald-600/30 hover:brightness-95'
+      : type === 'error'
+      ? 'bg-[#B80F24] text-white ring-[#B80F24]/30 hover:brightness-95'
+      : type === 'warning'
+      ? 'bg-[#B80F24] text-white ring-[#B80F24]/30 hover:brightness-95'
+      : 'bg-[#1E1E1E] text-white ring-black/10 hover:bg-black/90';
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+      <button
+        type="button"
+        aria-label="Close dialog"
+        onClick={() => {
+          if (loading) return;
+          if (onCancel) onCancel();
+          else onConfirm();
+        }}
+        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+      />
+
+      <div className="relative w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-black/10">
+        <div className="flex items-start gap-4">
+          <div className={cn('grid h-12 w-12 shrink-0 place-items-center rounded-2xl', iconClasses)}>
+            {icon}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[16px] font-extrabold text-[#1E1E1E]">{title}</h3>
+            <div className="mt-2 text-[13px] leading-6 text-[#6D6D6D]">{message}</div>
+          </div>
+        </div>
+
+        <div className="mt-6 flex items-center justify-end gap-3">
+          {cancelText ? (
+            <button
+              onClick={onCancel}
+              disabled={loading}
+              className="rounded-xl border border-black/10 bg-white px-4 py-2.5 text-[12px] font-extrabold text-[#1E1E1E] transition hover:bg-[#F7F7F7] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {cancelText}
+            </button>
+          ) : null}
+
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className={cn(
+              'rounded-xl px-4 py-2.5 text-[12px] font-extrabold shadow-sm ring-1 transition disabled:cursor-not-allowed disabled:opacity-60',
+              confirmClasses
+            )}
+          >
+            {loading ? 'Processing...' : confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const handlePhoneInput = (value: string): string => {
-  // Only allow numbers, no letters or special characters
   return value.replace(/[^\d]/g, '');
 };
 
@@ -219,7 +337,6 @@ export default function StaffPage() {
   const router = useRouter();
   const pathname = usePathname();
 
-  // desktop collapse + mobile drawer
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('sidebarCollapsed') === 'true';
@@ -228,7 +345,6 @@ export default function StaffPage() {
   });
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Persist collapse state to localStorage
   useEffect(() => {
     localStorage.setItem('sidebarCollapsed', String(collapsed));
   }, [collapsed]);
@@ -242,21 +358,81 @@ export default function StaffPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // controls
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<'name' | 'role' | 'newest'>('name');
   const [roleFilter, setRoleFilter] = useState<'All' | 'Manager' | 'Staff'>('All');
 
-  // selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // pagination (client-side)
   const PAGE_SIZE = 8;
   const [page, setPage] = useState(1);
 
-  // modals
   const [openAdd, setOpenAdd] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
+
+  const [popup, setPopup] = useState<{
+    open: boolean;
+    type: PopupType;
+    title: string;
+    message: React.ReactNode;
+    confirmText: string;
+    cancelText?: string;
+    loading?: boolean;
+    onConfirm?: () => void;
+    onCancel?: () => void;
+  }>({
+    open: false,
+    type: 'info',
+    title: '',
+    message: '',
+    confirmText: 'OK',
+  });
+
+  const showPopup = ({
+    type = 'info',
+    title,
+    message,
+    confirmText = 'OK',
+    cancelText,
+    onConfirm,
+    onCancel,
+    loading = false,
+  }: {
+    type?: PopupType;
+    title: string;
+    message: React.ReactNode;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm?: () => void;
+    onCancel?: () => void;
+    loading?: boolean;
+  }) => {
+    setPopup({
+      open: true,
+      type,
+      title,
+      message,
+      confirmText,
+      cancelText,
+      loading,
+      onConfirm,
+      onCancel,
+    });
+  };
+
+  const closePopup = () => {
+    setPopup({
+      open: false,
+      type: 'info',
+      title: '',
+      message: '',
+      confirmText: 'OK',
+      cancelText: undefined,
+      loading: false,
+      onConfirm: undefined,
+      onCancel: undefined,
+    });
+  };
 
   const [form, setForm] = useState({
     fullName: '',
@@ -337,90 +513,141 @@ export default function StaffPage() {
     setMobileOpen(false);
   }, [pathname]);
 
-  const handleDeleteStaff = async (staffToDelete: Staff) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to deactivate ${staffToDelete.name}? They will not be able to access the system.`
-    );
+  const handleDeleteStaff = (staffToDelete: Staff) => {
+    showPopup({
+      type: 'warning',
+      title: 'Deactivate user?',
+      message: `Are you sure you want to deactivate ${staffToDelete.name}? They will not be able to access the system.`,
+      confirmText: 'Deactivate',
+      cancelText: 'Cancel',
+      onCancel: closePopup,
+      onConfirm: async () => {
+        closePopup();
 
-    if (!confirmed) return;
+        try {
+          setLoading(true);
 
-    try {
-      setLoading(true);
+          const { error } = await supabase
+            .from('UsersAccount')
+            .update({ isActive: false })
+            .eq('userID', staffToDelete.id);
 
-      const { error } = await supabase
-        .from('UsersAccount')
-        .update({ isActive: false })
-        .eq('userID', staffToDelete.id);
+          if (error) {
+            console.error('Error deactivating staff:', error);
+            showPopup({
+              type: 'error',
+              title: 'Failed to deactivate user',
+              message: 'Please try again.',
+              confirmText: 'Close',
+              onConfirm: closePopup,
+            });
+            setLoading(false);
+            return;
+          }
 
-      if (error) {
-        console.error('Error deactivating staff:', error);
-        alert('Failed to deactivate user. Please try again.');
-        setLoading(false);
-        return;
-      }
+          setStaffList((prev) => prev.filter((s) => s.id !== staffToDelete.id));
 
-      // Update local state
-      setStaffList(staffList.filter((s) => s.id !== staffToDelete.id));
-      if (selectedStaff?.id === staffToDelete.id) {
-        setSelectedStaff(null);
-        setView('staff');
-      }
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(staffToDelete.id);
-        return next;
-      });
+          if (selectedStaff?.id === staffToDelete.id) {
+            setSelectedStaff(null);
+            setView('staff');
+          }
 
-      alert(`${staffToDelete.name} has been deactivated.`);
-      setLoading(false);
-    } catch (err) {
-      console.error('Error:', err);
-      alert('An error occurred while deactivating the user.');
-      setLoading(false);
-    }
+          setSelectedIds((prev) => {
+            const next = new Set(prev);
+            next.delete(staffToDelete.id);
+            return next;
+          });
+
+          showPopup({
+            type: 'success',
+            title: 'User deactivated',
+            message: `${staffToDelete.name} has been deactivated successfully.`,
+            confirmText: 'OK',
+            onConfirm: closePopup,
+          });
+          setLoading(false);
+        } catch (err) {
+          console.error('Error:', err);
+          showPopup({
+            type: 'error',
+            title: 'Something went wrong',
+            message: 'An error occurred while deactivating the user.',
+            confirmText: 'Close',
+            onConfirm: closePopup,
+          });
+          setLoading(false);
+        }
+      },
+    });
   };
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = () => {
     if (selectedIds.size === 0) return;
 
-    const confirmed = window.confirm(
-      `Are you sure you want to deactivate ${selectedIds.size} user(s)? They will not be able to access the system.`
-    );
+    showPopup({
+      type: 'warning',
+      title: 'Deactivate selected users?',
+      message: `Are you sure you want to deactivate ${selectedIds.size} user(s)? They will not be able to access the system.`,
+      confirmText: 'Deactivate',
+      cancelText: 'Cancel',
+      onCancel: closePopup,
+      onConfirm: async () => {
+        closePopup();
 
-    if (!confirmed) return;
+        try {
+          setLoading(true);
 
-    try {
-      setLoading(true);
+          const idsToDeactivate = Array.from(selectedIds);
+          const count = idsToDeactivate.length;
 
-      // Deactivate all selected users
-      const idsToDeactivate = Array.from(selectedIds);
-      const { error } = await supabase
-        .from('UsersAccount')
-        .update({ isActive: false })
-        .in('userID', idsToDeactivate);
+          const { error } = await supabase
+            .from('UsersAccount')
+            .update({ isActive: false })
+            .in('userID', idsToDeactivate);
 
-      if (error) {
-        console.error('Error deactivating users:', error);
-        alert('Failed to deactivate users. Please try again.');
-        setLoading(false);
-        return;
-      }
+          if (error) {
+            console.error('Error deactivating users:', error);
+            showPopup({
+              type: 'error',
+              title: 'Failed to deactivate users',
+              message: 'Please try again.',
+              confirmText: 'Close',
+              onConfirm: closePopup,
+            });
+            setLoading(false);
+            return;
+          }
 
-      // Update local state
-      setStaffList(staffList.filter((s) => !selectedIds.has(s.id)));
-      if (selectedStaff && selectedIds.has(selectedStaff.id)) {
-        setSelectedStaff(null);
-        setView('staff');
-      }
-      setSelectedIds(new Set());
+          setStaffList((prev) => prev.filter((s) => !selectedIds.has(s.id)));
 
-      alert(`${selectedIds.size} user(s) have been deactivated.`);
-      setLoading(false);
-    } catch (err) {
-      console.error('Error:', err);
-      alert('An error occurred while deactivating users.');
-      setLoading(false);
-    }
+          if (selectedStaff && selectedIds.has(selectedStaff.id)) {
+            setSelectedStaff(null);
+            setView('staff');
+          }
+
+          setSelectedIds(new Set());
+
+          showPopup({
+            type: 'success',
+            title: 'Users deactivated',
+            message: `${count} user(s) have been deactivated successfully.`,
+            confirmText: 'OK',
+            onConfirm: closePopup,
+          });
+          setLoading(false);
+        } catch (err) {
+          console.error('Error:', err);
+          showPopup({
+            type: 'error',
+            title: 'Something went wrong',
+            message: 'An error occurred while deactivating users.',
+            confirmText: 'Close',
+            onConfirm: closePopup,
+          });
+          setLoading(false);
+        }
+      },
+    });
   };
 
   const handleLogout = async () => {
@@ -453,16 +680,36 @@ export default function StaffPage() {
 
   const handleAddStaff = async () => {
     if (!form.fullName || !form.email || !form.phone || !form.password) {
-      alert('Please fill in all required fields');
+      showPopup({
+        type: 'warning',
+        title: 'Incomplete form',
+        message: 'Please fill in all required fields.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
       return;
     }
+
     if (form.password.trim().length < 6) {
-      alert('Password must be at least 6 characters long');
+      showPopup({
+        type: 'warning',
+        title: 'Invalid password',
+        message: 'Password must be at least 6 characters long.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
       return;
     }
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(form.email.trim())) {
-      alert('Please enter a valid email address');
+      showPopup({
+        type: 'warning',
+        title: 'Invalid email',
+        message: 'Please enter a valid email address.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
       return;
     }
 
@@ -486,20 +733,42 @@ export default function StaffPage() {
           authError.message.includes('Database error') ||
           authError.message.includes('User already registered')
         ) {
-          alert(
-            'This email is already registered. Please:\n1. Use a different email address, OR\n2. Delete the existing user from Supabase Dashboard → Authentication → Users'
-          );
+          showPopup({
+            type: 'error',
+            title: 'Email already registered',
+            message: 'This email is already registered.',
+            confirmText: 'Close',
+            onConfirm: closePopup,
+          });
         } else if (authError.message.includes('Password')) {
-          alert(`Password error: ${authError.message}`);
+          showPopup({
+            type: 'error',
+            title: 'Password error',
+            message: authError.message,
+            confirmText: 'Close',
+            onConfirm: closePopup,
+          });
         } else {
-          alert(`Failed to create auth user: ${authError.message}`);
+          showPopup({
+            type: 'error',
+            title: 'Failed to create auth user',
+            message: authError.message,
+            confirmText: 'Close',
+            onConfirm: closePopup,
+          });
         }
         setLoading(false);
         return;
       }
 
       if (!authData.user) {
-        alert('Failed to create user - no user data returned');
+        showPopup({
+          type: 'error',
+          title: 'Failed to create user',
+          message: 'No user data was returned.',
+          confirmText: 'Close',
+          onConfirm: closePopup,
+        });
         setLoading(false);
         return;
       }
@@ -511,7 +780,13 @@ export default function StaffPage() {
         .single();
 
       if (roleError) {
-        alert(`Failed to find role: ${roleError.message}`);
+        showPopup({
+          type: 'error',
+          title: 'Role not found',
+          message: roleError.message,
+          confirmText: 'Close',
+          onConfirm: closePopup,
+        });
         setLoading(false);
         return;
       }
@@ -534,18 +809,20 @@ export default function StaffPage() {
       ]);
 
       if (insertError) {
-        alert(
-          `Failed to add staff profile: ${insertError.message}\n\nNote: The auth user was created but the profile failed. You may need to manually delete the user from Supabase Auth.`
-        );
+        showPopup({
+          type: 'error',
+          title: 'Failed to add staff profile',
+          message: insertError.message,
+          confirmText: 'Close',
+          onConfirm: closePopup,
+        });
         setLoading(false);
         return;
       }
 
-      alert('Staff added successfully!');
       setOpenAdd(false);
       resetAddForm();
 
-      // reload
       const [usersRes, rolesRes] = await Promise.all([
         supabase
           .from('UsersAccount')
@@ -578,14 +855,28 @@ export default function StaffPage() {
       setSelectedStaff(mapped[0] ?? null);
       setPage(1);
       setSelectedIds(new Set());
+
+      showPopup({
+        type: 'success',
+        title: 'Staff added',
+        message: 'Staff added successfully.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
+
       setLoading(false);
     } catch (e: any) {
-      alert(`Error: ${e.message}`);
+      showPopup({
+        type: 'error',
+        title: 'Error',
+        message: e.message,
+        confirmText: 'Close',
+        onConfirm: closePopup,
+      });
       setLoading(false);
     }
   };
 
-  // derived list (search + filter + sort)
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
 
@@ -601,16 +892,16 @@ export default function StaffPage() {
 
     out = [...out].sort((a, b) => {
       if (sort === 'role') return a.role.localeCompare(b.role) || a.name.localeCompare(b.name);
-      if (sort === 'newest') return b.code.localeCompare(a.code); // best effort (code is uid slice)
+      if (sort === 'newest') return b.code.localeCompare(a.code);
       return a.name.localeCompare(b.name);
     });
 
     return out;
   }, [staffList, query, roleFilter, sort]);
 
-  // pagination
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageSafe = Math.min(page, totalPages);
+
   const pageItems = useMemo(() => {
     const start = (pageSafe - 1) * PAGE_SIZE;
     return filtered.slice(start, start + PAGE_SIZE);
@@ -644,8 +935,6 @@ export default function StaffPage() {
     });
   };
 
-
-
   if (loading && staffList.length === 0) {
     return (
       <div className="min-h-screen grid place-items-center bg-background text-foreground">
@@ -661,7 +950,6 @@ export default function StaffPage() {
 
   return (
     <div className="h-screen overflow-hidden bg-background text-foreground">
-      {/* Mobile backdrop */}
       {mobileOpen && (
         <button
           aria-label="Close menu"
@@ -670,7 +958,6 @@ export default function StaffPage() {
         />
       )}
 
-      {/* Mobile drawer */}
       <div
         className={cn(
           'fixed left-3 top-3 z-50 h-[calc(100vh-24px)] transition-transform duration-200 lg:hidden',
@@ -697,18 +984,14 @@ export default function StaffPage() {
           collapsed ? 'lg:grid-cols-[96px_1fr]' : 'lg:grid-cols-[256px_1fr]'
         )}
       >
-        {/* Desktop sidebar */}
         <div className="hidden lg:block">
           <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} activeNav={activeNav} />
         </div>
 
-        {/* Main */}
         <main className="min-w-0 h-screen overflow-y-auto space-y-4 p-4 sm:p-5 md:p-7">
-          {/* Top bar */}
           <header className="sticky top-3 z-30 rounded-2xl bg-white/70 px-4 py-3 shadow-sm ring-1 ring-card-border backdrop-blur">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                {/* Mobile menu */}
                 <button
                   aria-label="Open menu"
                   onClick={() => setMobileOpen(true)}
@@ -717,7 +1000,6 @@ export default function StaffPage() {
                   <MdMenu className="h-6 w-6 text-text-muted" />
                 </button>
 
-                {/* Desktop collapse */}
                 <button
                   aria-label="Toggle sidebar"
                   onClick={() => setCollapsed((c) => !c)}
@@ -766,10 +1048,8 @@ export default function StaffPage() {
             </div>
           </header>
 
-          {/* DETAILS VIEW */}
           {view === 'details' && selectedStaff ? (
             <section className="grid gap-6 lg:grid-cols-[360px_1fr]">
-              {/* Left profile card */}
               <div className="space-y-4">
                 <section className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-card-border">
                   <p className="mb-3 text-xs font-extrabold text-[#1E1E1E]">Profile</p>
@@ -805,7 +1085,6 @@ export default function StaffPage() {
                 </section>
               </div>
 
-              {/* Right details */}
               <div className="space-y-5">
                 <section className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-card-border">
                   <p className="mb-3 text-[12px] font-extrabold text-[#1E1E1E]">Employee Personal Details</p>
@@ -855,7 +1134,6 @@ export default function StaffPage() {
             </section>
           ) : (
             <>
-              {/* Toolbar */}
               <section className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="flex flex-1 items-center gap-2 rounded-2xl bg-white px-3 py-2 shadow-sm ring-1 ring-card-border">
@@ -919,9 +1197,7 @@ export default function StaffPage() {
                 </div>
               </section>
 
-              {/* Table */}
               <section className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-card-border">
-                {/* Desktop table header */}
                 <div className="hidden lg:grid grid-cols-[42px_80px_1.2fr_1.4fr_150px_140px_1fr_140px] items-center bg-[#F7F7F7] px-3 py-3 text-[10px] font-extrabold text-[#6D6D6D]">
                   <div className="flex items-center justify-center">
                     <input
@@ -943,7 +1219,6 @@ export default function StaffPage() {
                   <div className="text-right">Actions</div>
                 </div>
 
-                {/* States */}
                 {loading ? (
                   <div className="px-4 py-10 text-center text-[12px] font-semibold text-[#6D6D6D]">
                     Loading staff...
@@ -958,7 +1233,6 @@ export default function StaffPage() {
                   </div>
                 ) : (
                   <>
-                    {/* Desktop rows */}
                     <div className="hidden lg:block divide-y divide-black/5">
                       {pageItems.map((s, idx) => (
                         <div
@@ -1016,7 +1290,6 @@ export default function StaffPage() {
                       ))}
                     </div>
 
-                    {/* Mobile cards (responsive instead of horizontal scroll) */}
                     <div className="lg:hidden divide-y divide-black/5">
                       {pageItems.map((s) => (
                         <div key={s.id} className="bg-white px-4 py-4">
@@ -1072,7 +1345,6 @@ export default function StaffPage() {
                       ))}
                     </div>
 
-                    {/* Footer pagination */}
                     <div className="flex flex-wrap items-center justify-between gap-3 bg-white px-4 py-3 ring-1 ring-black/5">
                       <p className="text-[12px] font-semibold text-[#6D6D6D]">
                         Showing{' '}
@@ -1126,7 +1398,6 @@ export default function StaffPage() {
         </main>
       </div>
 
-      {/* ADD STAFF MODAL */}
       <ModalRight open={openAdd} title="Add Staff" onClose={() => setOpenAdd(false)}>
         <div className="space-y-5">
           <div className="rounded-2xl bg-[#F7F7F7] p-4 ring-1 ring-black/5">
@@ -1202,7 +1473,6 @@ export default function StaffPage() {
         </div>
       </ModalRight>
 
-      {/* EDIT STAFF MODAL */}
       <ModalRight open={openEdit} title="Edit Staff" onClose={() => setOpenEdit(false)}>
         <div className="space-y-5">
           <div className="rounded-2xl bg-[#F7F7F7] p-4 ring-1 ring-black/5">
@@ -1273,6 +1543,18 @@ export default function StaffPage() {
           </div>
         </div>
       </ModalRight>
+
+      <PopupDialog
+        open={popup.open}
+        type={popup.type}
+        title={popup.title}
+        message={popup.message}
+        confirmText={popup.confirmText}
+        cancelText={popup.cancelText}
+        loading={popup.loading}
+        onConfirm={popup.onConfirm || closePopup}
+        onCancel={popup.onCancel}
+      />
     </div>
   );
 }

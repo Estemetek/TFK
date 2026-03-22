@@ -125,7 +125,9 @@ export default function InventoryPage() {
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       setCurrentUserID(user?.id ?? null);
     };
     getUser();
@@ -191,9 +193,7 @@ export default function InventoryPage() {
   }, [inventoryItems, query, showOnlyLow, sort]);
 
   const syncMenuAvailability = async () => {
-    const { data: menuItems, error: menuError } = await supabase
-      .from('MenuItem')
-      .select('menuItemID');
+    const { data: menuItems, error: menuError } = await supabase.from('MenuItem').select('menuItemID');
 
     if (menuError) {
       console.error('Error fetching menu items:', menuError);
@@ -206,13 +206,9 @@ export default function InventoryPage() {
         .select('ingredientID')
         .eq('menuItemID', menu.menuItemID);
 
-      // Menu item is available only if it has at least one ingredient linked
       const isAvailable = recipeIngredients && recipeIngredients.length > 0;
 
-      await supabase
-        .from('MenuItem')
-        .update({ isAvailable })
-        .eq('menuItemID', menu.menuItemID);
+      await supabase.from('MenuItem').update({ isAvailable }).eq('menuItemID', menu.menuItemID);
     }
   };
 
@@ -928,61 +924,66 @@ function RestockModal({
             </button>
           </div>
 
-          <div className="mt-5 space-y-4 flex-1 overflow-auto pr-1">
-            <Field label="Ingredient Name">
-              <input className={INPUT_DISABLED} value={ingredient.name} disabled />
-            </Field>
+          <div className="mt-5 flex-1 overflow-y-auto overflow-x-hidden pr-3">
+            <div className="space-y-4">
+              <Field label="Ingredient Name">
+                <input className={INPUT_DISABLED} value={ingredient.name} disabled />
+              </Field>
 
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Current Stock">
-                <input className={INPUT_DISABLED} value={stock} disabled />
-              </Field>
-              <Field label="Unit">
-                <input className={INPUT_DISABLED} value={ingredient.unit} disabled />
-              </Field>
-            </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Current Stock">
+                  <input className={INPUT_DISABLED} value={stock} disabled />
+                </Field>
+                <Field label="Unit">
+                  <input className={INPUT_DISABLED} value={ingredient.unit} disabled />
+                </Field>
+              </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Reorder Level">
-                <input className={INPUT_DISABLED} value={reorder} disabled />
-              </Field>
-              <Field label="Unit Cost">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Reorder Level">
+                  <input className={INPUT_DISABLED} value={reorder} disabled />
+                </Field>
+                <Field label="Unit Cost">
+                  <input
+                    className={INPUT_BASE}
+                    type="number"
+                    value={unitCost}
+                    min={0.01}
+                    step={0.01}
+                    onChange={(e) => setUnitCost(Number(e.target.value))}
+                    placeholder="Enter unit cost"
+                  />
+                </Field>
+              </div>
+
+              <Field label="Add Quantity">
                 <input
-                  className={INPUT_BASE}
                   type="number"
-                  value={unitCost}
-                  min={0.01}
-                  step={0.01}
-                  onChange={(e) => setUnitCost(Number(e.target.value))}
-                  placeholder="Enter unit cost"
+                  className={INPUT_BASE}
+                  value={quantity}
+                  min={1}
+                  step={1}
+                  inputMode="numeric"
+                  onChange={(e) => setQuantity(wholeNumber(e.target.value))}
+                  onKeyDown={(e) => {
+                    if (['.', ',', '-', 'e', 'E', '+'].includes(e.key)) {
+                      e.preventDefault();
+                    }
+                  }}
+                  placeholder="Enter quantity to add"
+                  autoFocus
                 />
               </Field>
-            </div>
 
-            <Field label="Add Quantity">
-              <input
-                type="number"
-                className={INPUT_BASE}
-                value={quantity}
-                min={1}
-                step={1}
-                inputMode="numeric"
-                onChange={(e) => setQuantity(wholeNumber(e.target.value))}
-                onKeyDown={(e) => {
-                  if (['.', ',', '-', 'e', 'E', '+'].includes(e.key)) {
-                    e.preventDefault();
-                  }
-                }}
-                placeholder="Enter quantity to add"
-                autoFocus
-              />
-            </Field>
-
-            <div className={cn(CARD, 'p-4')}>
-              <p className="text-xs text-text-muted">Estimated added cost</p>
-              <p className="text-lg font-semibold mt-1">
-                ₱{isNaN(wholeNumber(quantity) * unitCost) ? '0.00' : (wholeNumber(quantity) * unitCost).toFixed(2)}
-              </p>
+              <div className="rounded-2xl border border-black/10 bg-white px-4 py-4 shadow-sm">
+                <p className="text-xs text-text-muted">Estimated added cost</p>
+                <p className="mt-1 text-lg font-semibold">
+                  ₱
+                  {isNaN(wholeNumber(quantity) * unitCost)
+                    ? '0.00'
+                    : (wholeNumber(quantity) * unitCost).toFixed(2)}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -1158,44 +1159,32 @@ function DeleteConfirmModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" onClick={onClose}>
-      <div
-        className={cn(CARD, 'w-full max-w-sm p-6')}
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className={cn(CARD, 'w-full max-w-sm p-6')} onClick={(e) => e.stopPropagation()}>
         <div className="text-center">
-          {/* Icon */}
           <div className="mx-auto h-16 w-16 rounded-full bg-red-50 ring-1 ring-red-200 flex items-center justify-center mb-4">
             <MdDelete className="text-3xl text-red-600" />
           </div>
 
           <h3 className="text-lg font-semibold text-foreground">Delete Ingredient?</h3>
           <p className="text-sm text-text-muted mt-2">
-            You are about to delete{' '}
-            <span className="font-semibold text-foreground">"{item.name}"</span>.
+            You are about to delete <span className="font-semibold text-foreground">"{item.name}"</span>.
             This action cannot be undone.
           </p>
         </div>
 
-        {/* Summary box */}
         <div className={cn(SURFACE, 'mt-5 p-4 space-y-2')}>
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-              Ingredient
-            </span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Ingredient</span>
             <span className="text-sm font-semibold text-foreground">{item.name}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-              Current Stock
-            </span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Current Stock</span>
             <span className="text-sm font-semibold text-foreground">
               {wholeNumber(item.currentStock)} {item.unit}
             </span>
           </div>
           <div className="flex items-center justify-between border-t border-black/5 pt-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-              Unit Cost
-            </span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Unit Cost</span>
             <span className="text-sm font-semibold text-foreground">
               ₱{Number(item.costPerUnit || 0).toFixed(2)}
             </span>
@@ -1203,17 +1192,11 @@ function DeleteConfirmModal({
         </div>
 
         <div className="mt-5 space-y-2">
-          <button
-            onClick={onConfirm}
-            className={cn(BTN_PRIMARY, 'w-full justify-center py-3')}
-          >
+          <button onClick={onConfirm} className={cn(BTN_PRIMARY, 'w-full justify-center py-3')}>
             <MdDelete size={18} />
             YES, DELETE IT
           </button>
-          <button
-            onClick={onClose}
-            className={cn(BTN_NEUTRAL, 'w-full justify-center py-3')}
-          >
+          <button onClick={onClose} className={cn(BTN_NEUTRAL, 'w-full justify-center py-3')}>
             GO BACK
           </button>
         </div>

@@ -20,6 +20,11 @@ import {
   MdReceiptLong,
   MdCheckCircle,
   MdCancel,
+  MdWarningAmber,
+  MdInfo,
+  MdArchive,
+  MdDeleteForever,
+  MdRestore,
 } from 'react-icons/md';
 import { RecipeModal } from '../components/RecipeModal';
 import { syncMenuAvailability } from '../lib/syncMenuAvailability';
@@ -48,12 +53,18 @@ type MenuItem = {
   UsersAccount?: { username: string };
 };
 
-type MenuType = 'Normal Menu';
+type MenuType = 'Normal Menu' | 'Archived Menu';
+
+type PopupType = 'success' | 'error' | 'info' | 'warning';
 
 const PRIMARY = '#b80f24';
 const PRIMARY_DARK = '#6d0f2a';
 const BG = '#F3F3F3';
 const TEXT = '#1E1E1E';
+
+function cn(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(' ');
+}
 
 const getCategoryIcon = (name: string) => {
   const n = name.toLowerCase();
@@ -88,30 +99,36 @@ function RightDrawer({
   children: React.ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const wasOpenRef = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      wasOpenRef.current = false;
+      return;
+    }
 
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handleEsc);
 
-    // basic focus
-    setTimeout(() => {
-      const el = panelRef.current?.querySelector<HTMLElement>('input, select, textarea');
-      el?.focus();
-    }, 0);
-
-    // lock scroll
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+
+    if (!wasOpenRef.current) {
+      wasOpenRef.current = true;
+
+      requestAnimationFrame(() => {
+        const el = panelRef.current?.querySelector<HTMLElement>('input, select, textarea');
+        el?.focus();
+      });
+    }
 
     return () => {
       window.removeEventListener('keydown', handleEsc);
       document.body.style.overflow = prev;
     };
-  }, [open]);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -143,12 +160,212 @@ function RightDrawer({
   );
 }
 
+function PopupModal({
+  open,
+  type = 'info',
+  title,
+  message,
+  confirmText = 'OK',
+  cancelText,
+  loading = false,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  type?: PopupType;
+  title: string;
+  message: React.ReactNode;
+  confirmText?: string;
+  cancelText?: string;
+  loading?: boolean;
+  onConfirm: () => void;
+  onCancel?: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !loading) {
+        if (onCancel) onCancel();
+        else onConfirm();
+      }
+    };
+
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [open, loading, onCancel, onConfirm]);
+
+  if (!open) return null;
+
+  const icon =
+    type === 'success' ? (
+      <MdCheckCircle className="h-6 w-6" />
+    ) : type === 'error' || type === 'warning' ? (
+      <MdWarningAmber className="h-6 w-6" />
+    ) : (
+      <MdInfo className="h-6 w-6" />
+    );
+
+  const iconClasses =
+    type === 'success'
+      ? 'bg-emerald-50 text-emerald-600'
+      : type === 'error'
+        ? 'bg-red-50 text-red-600'
+        : type === 'warning'
+          ? 'bg-amber-50 text-amber-600'
+          : 'bg-black/5 text-black/70';
+
+  const confirmClasses =
+    type === 'error' || type === 'warning'
+      ? 'bg-[#B80F24] text-white ring-[#B80F24]/30 hover:brightness-95'
+      : type === 'success'
+        ? 'bg-emerald-600 text-white ring-emerald-600/30 hover:brightness-95'
+        : 'bg-[#1E1E1E] text-white ring-black/10 hover:bg-black/90';
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+        onClick={() => {
+          if (!loading) {
+            if (onCancel) onCancel();
+            else onConfirm();
+          }
+        }}
+      />
+      <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-black/10">
+        <div className="flex items-start gap-4">
+          <div className={cn('grid h-12 w-12 shrink-0 place-items-center rounded-2xl', iconClasses)}>
+            {icon}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[18px] font-extrabold text-[#1E1E1E]">{title}</h3>
+            <div className="mt-2 text-[14px] leading-6 text-[#5E5E5E]">{message}</div>
+          </div>
+        </div>
+
+        <div className="mt-6 flex items-center justify-end gap-3">
+          {cancelText ? (
+            <button
+              onClick={onCancel}
+              disabled={loading}
+              className="rounded-xl border border-black/10 bg-white px-4 py-2.5 text-[12px] font-extrabold text-[#1E1E1E] transition hover:bg-[#F7F7F7] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {cancelText}
+            </button>
+          ) : null}
+
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className={cn(
+              'rounded-xl px-4 py-2.5 text-[12px] font-extrabold shadow-sm ring-1 transition disabled:cursor-not-allowed disabled:opacity-60',
+              confirmClasses
+            )}
+          >
+            {loading ? 'Processing...' : confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ActionChoiceModal({
+  open,
+  title,
+  message,
+  archiveText = 'Archive',
+  deleteText = 'Delete Permanently',
+  hideArchive = false,
+  loading = false,
+  onArchive,
+  onDelete,
+  onCancel,
+}: {
+  open: boolean;
+  title: string;
+  message: React.ReactNode;
+  archiveText?: string;
+  deleteText?: string;
+  hideArchive?: boolean;
+  loading?: boolean;
+  onArchive?: () => void;
+  onDelete: () => void;
+  onCancel: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !loading) onCancel();
+    };
+
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [open, loading, onCancel]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[95] flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+        onClick={() => {
+          if (!loading) onCancel();
+        }}
+      />
+      <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-black/10">
+        <div className="flex items-start gap-4">
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-50 text-amber-600">
+            <MdWarningAmber className="h-6 w-6" />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[18px] font-extrabold text-[#1E1E1E]">{title}</h3>
+            <div className="mt-2 text-[14px] leading-6 text-[#5E5E5E]">{message}</div>
+          </div>
+        </div>
+
+        <div className="mt-6 space-y-3">
+          {!hideArchive && onArchive ? (
+            <button
+              onClick={onArchive}
+              disabled={loading}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-black/10 bg-[#F8F8F8] px-4 py-3 text-sm font-extrabold text-[#1E1E1E] transition hover:bg-[#F2F2F2] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <MdArchive className="h-5 w-5" />
+              {archiveText}
+            </button>
+          ) : null}
+
+          <button
+            onClick={onDelete}
+            disabled={loading}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#B80F24] px-4 py-3 text-sm font-extrabold text-white shadow transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <MdDeleteForever className="h-5 w-5" />
+            {deleteText}
+          </button>
+
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm font-extrabold text-[#1E1E1E] transition hover:bg-[#F7F7F7] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-2">
-      <p className="text-[11px] font-extrabold" style={{ color: TEXT }}>
-        {label}
-      </p>
+    <div className="space-y-2.5">
+      <p className="text-[12px] font-extrabold tracking-[0.01em] text-[#1E1E1E]">{label}</p>
       {children}
     </div>
   );
@@ -182,14 +399,34 @@ function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
 
 function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select
-      {...props}
-      className={[
-        'w-full rounded-xl bg-[#F3F3F3] px-3 py-3 text-xs outline-none appearance-none ring-1 ring-transparent',
-        'focus:ring-2 focus:ring-[#b80f24]/35',
-        props.className || '',
-      ].join(' ')}
-    />
+    <div className="relative">
+      <select
+        {...props}
+        className={[
+          'w-full appearance-none rounded-2xl border border-black/10 bg-white px-4 py-3 pr-11 text-sm font-semibold text-[#1E1E1E] shadow-sm outline-none transition',
+          'hover:border-black/15',
+          'focus:border-[#b80f24]/30 focus:ring-4 focus:ring-[#b80f24]/10',
+          'disabled:cursor-not-allowed disabled:opacity-60',
+          props.className || '',
+        ].join(' ')}
+      />
+      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4">
+        <svg
+          className="h-4 w-4 text-[#6D6D6D]"
+          viewBox="0 0 20 20"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M5 7.5L10 12.5L15 7.5"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </div>
+    </div>
   );
 }
 
@@ -250,6 +487,7 @@ function GhostButton({
 // --- MAIN PAGE ---
 export default function MenuPage() {
   const router = useRouter();
+
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('sidebarCollapsed') === 'true';
@@ -257,7 +495,6 @@ export default function MenuPage() {
     return false;
   });
 
-  // Persist collapse state to localStorage
   useEffect(() => {
     localStorage.setItem('sidebarCollapsed', String(collapsed));
   }, [collapsed]);
@@ -266,17 +503,15 @@ export default function MenuPage() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [selectedCatID, setSelectedCatID] = useState<number | 'all'>('all');
 
-  const menuTypes: MenuType[] = ['Normal Menu'];
+  const menuTypes: MenuType[] = ['Normal Menu', 'Archived Menu'];
   const [selectedMenuType, setSelectedMenuType] = useState<MenuType>('Normal Menu');
 
   const [loading, setLoading] = useState(true);
 
-  // Filters
   const [query, setQuery] = useState('');
   const [availabilityFilter, setAvailabilityFilter] = useState<'all' | 'in' | 'out'>('all');
   const [sortBy, setSortBy] = useState<'name' | 'price_asc' | 'price_desc' | 'updated_desc'>('name');
 
-  // Drawers
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [categorySubmitting, setCategorySubmitting] = useState(false);
   const [catForm, setCatForm] = useState({ categoryName: '', description: '' });
@@ -293,7 +528,7 @@ export default function MenuPage() {
     price: '',
     regularPrice: '',
     categoryID: '',
-    isAvailable: false, // default to out of stock, sync logic will update
+    isAvailable: false,
     imageUrl: '',
   });
 
@@ -307,20 +542,156 @@ export default function MenuPage() {
     imageUrl: '',
   });
 
-  // Recipe modal
   const [isRecipeOpen, setIsRecipeOpen] = useState(false);
   const [activeRecipeItem, setActiveRecipeItem] = useState<MenuItem | null>(null);
 
-  // Category management modal
+  const [isCategoryListOpen, setIsCategoryListOpen] = useState(false);
   const [isCategoryMgmtOpen, setIsCategoryMgmtOpen] = useState(false);
+  const [isArchivedCategoriesOpen, setIsArchivedCategoriesOpen] = useState(false);
   const [editingCategoryID, setEditingCategoryID] = useState<number | null>(null);
   const [editingCategoryForm, setEditingCategoryForm] = useState({ categoryName: '', description: '' });
   const [categoryMgmtSubmitting, setCategoryMgmtSubmitting] = useState(false);
 
+  const [popup, setPopup] = useState<{
+    open: boolean;
+    type: PopupType;
+    title: string;
+    message: React.ReactNode;
+    confirmText: string;
+    cancelText?: string;
+    loading?: boolean;
+    onConfirm?: () => void;
+    onCancel?: () => void;
+  }>({
+    open: false,
+    type: 'info',
+    title: '',
+    message: '',
+    confirmText: 'OK',
+  });
+
+  const [actionChoice, setActionChoice] = useState<{
+    open: boolean;
+    title: string;
+    message: React.ReactNode;
+    archiveText?: string;
+    deleteText?: string;
+    hideArchive?: boolean;
+    onArchive?: () => void;
+    onDelete?: () => void;
+  }>({
+    open: false,
+    title: '',
+    message: '',
+    archiveText: 'Archive',
+    deleteText: 'Delete Permanently',
+    hideArchive: false,
+  });
+
+  const showPopup = ({
+    type = 'info',
+    title,
+    message,
+    confirmText = 'OK',
+    cancelText,
+    onConfirm,
+    onCancel,
+    loading = false,
+  }: {
+    type?: PopupType;
+    title: string;
+    message: React.ReactNode;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm?: () => void;
+    onCancel?: () => void;
+    loading?: boolean;
+  }) => {
+    setPopup({
+      open: true,
+      type,
+      title,
+      message,
+      confirmText,
+      cancelText,
+      onConfirm,
+      onCancel,
+      loading,
+    });
+  };
+
+  const closePopup = () => {
+    setPopup((prev) => ({
+      ...prev,
+      open: false,
+      title: '',
+      message: '',
+      confirmText: 'OK',
+      cancelText: undefined,
+      onConfirm: undefined,
+      onCancel: undefined,
+      loading: false,
+    }));
+  };
+
+  const showActionChoice = ({
+    title,
+    message,
+    archiveText = 'Archive',
+    deleteText = 'Delete Permanently',
+    hideArchive = false,
+    onArchive,
+    onDelete,
+  }: {
+    title: string;
+    message: React.ReactNode;
+    archiveText?: string;
+    deleteText?: string;
+    hideArchive?: boolean;
+    onArchive?: () => void;
+    onDelete?: () => void;
+  }) => {
+    setActionChoice({
+      open: true,
+      title,
+      message,
+      archiveText,
+      deleteText,
+      hideArchive,
+      onArchive,
+      onDelete,
+    });
+  };
+
+  const closeActionChoice = () => {
+    setActionChoice({
+      open: false,
+      title: '',
+      message: '',
+      archiveText: 'Archive',
+      deleteText: 'Delete Permanently',
+      hideArchive: false,
+      onArchive: undefined,
+      onDelete: undefined,
+    });
+  };
+
   const activeNav = 'Menu';
+
+  const closeCategoryDrawer = useCallback(() => setIsCategoryOpen(false), []);
+  const closeAddDrawer = useCallback(() => setIsAddOpen(false), []);
+  const closeEditDrawer = useCallback(() => setIsEditOpen(false), []);
+  const closeCategoryListDrawer = useCallback(() => setIsCategoryListOpen(false), []);
+  const closeArchivedCategoriesDrawer = useCallback(() => setIsArchivedCategoriesOpen(false), []);
+  const closeCategoryMgmtDrawer = useCallback(() => {
+    setIsCategoryMgmtOpen(false);
+    setEditingCategoryID(null);
+    setEditingCategoryForm({ categoryName: '', description: '' });
+  }, []);
 
   const fetchAllData = useCallback(async () => {
     setLoading(true);
+
     const [{ data: catData, error: catErr }, { data: menuData, error: menuErr }] = await Promise.all([
       supabase.from('Category').select('*').order('categoryName'),
       supabase
@@ -354,19 +725,32 @@ export default function MenuPage() {
     return map;
   }, [menuItems]);
 
-  const visibleItems = useMemo(() => {
-    // base (exclude archived)
-    let items = menuItems.filter((i) => (i.status || '').toLowerCase() !== 'archived');
+  const totalCategoryItemCounts = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const item of menuItems) {
+      map.set(item.categoryID, (map.get(item.categoryID) || 0) + 1);
+    }
+    return map;
+  }, [menuItems]);
 
-    // category filter
+  const activeMenuItemsCount = useMemo(
+    () => menuItems.filter((i) => (i.status || '').toLowerCase() !== 'archived').length,
+    [menuItems]
+  );
+
+  const archivedMenuItemsCount = useMemo(
+    () => menuItems.filter((i) => (i.status || '').toLowerCase() === 'archived').length,
+    [menuItems]
+  );
+
+  const visibleItems = useMemo(() => {
+    let items =
+      selectedMenuType === 'Archived Menu'
+        ? menuItems.filter((i) => (i.status || '').toLowerCase() === 'archived')
+        : menuItems.filter((i) => (i.status || '').toLowerCase() !== 'archived');
+
     if (selectedCatID !== 'all') items = items.filter((i) => i.categoryID === selectedCatID);
 
-    // menu type filter (best-effort)
-    // If your DB already uses status like "Special Deals", it will filter correctly.
-    // Otherwise, "Normal Menu" will show all active items.
-    if (selectedMenuType !== 'Normal Menu') items = items.filter((i) => i.status === selectedMenuType);
-
-    // search
     const q = query.trim().toLowerCase();
     if (q) {
       items = items.filter((i) => {
@@ -380,11 +764,9 @@ export default function MenuPage() {
       });
     }
 
-    // availability
     if (availabilityFilter === 'in') items = items.filter((i) => i.isAvailable);
     if (availabilityFilter === 'out') items = items.filter((i) => !i.isAvailable);
 
-    // sort
     const sorted = [...items];
     sorted.sort((a, b) => {
       if (sortBy === 'name') return a.name.localeCompare(b.name);
@@ -397,6 +779,31 @@ export default function MenuPage() {
     return sorted;
   }, [menuItems, selectedCatID, selectedMenuType, query, availabilityFilter, sortBy]);
 
+  const activeCategoriesForForms = useMemo(
+    () => categories.filter((c) => !c.categoryName.startsWith('[ARCHIVED]')),
+    [categories]
+  );
+
+  const archivedCategories = useMemo(
+    () => categories.filter((c) => c.categoryName.startsWith('[ARCHIVED]')),
+    [categories]
+  );
+
+  const activeCategoriesForDisplay = useMemo(
+    () => activeCategoriesForForms.slice(0, 6),
+    [activeCategoriesForForms]
+  );
+
+  const archivedCategoriesCount = useMemo(
+    () => archivedCategories.length,
+    [archivedCategories]
+  );
+
+  const remainingCategoriesCount = useMemo(
+    () => Math.max(0, activeCategoriesForForms.length - 6),
+    [activeCategoriesForForms]
+  );
+
   const openAddDrawer = () => {
     setForm({
       name: '',
@@ -404,41 +811,68 @@ export default function MenuPage() {
       price: '',
       regularPrice: '',
       categoryID: '',
-      isAvailable: false, // default to out of stock, sync logic will update
+      isAvailable: false,
       imageUrl: '',
     });
     setIsAddOpen(true);
   };
 
   const handlePriceInput = (value: string): string => {
-    // Only allow numbers and one decimal point
     return value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
   };
 
   const handleAddCategory = async () => {
     if (!catForm.categoryName.trim()) {
-      alert('Please enter a category name.');
+      showPopup({
+        type: 'warning',
+        title: 'Missing category name',
+        message: 'Please enter a category name.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
       return;
     }
 
     setCategorySubmitting(true);
+
     const { error } = await supabase.from('Category').insert([
       { categoryName: catForm.categoryName.trim(), description: catForm.description.trim() },
     ]);
 
     if (error) {
-      alert(error.message);
+      showPopup({
+        type: 'error',
+        title: 'Failed to add category',
+        message: error.message,
+        confirmText: 'Close',
+        onConfirm: closePopup,
+      });
     } else {
       setIsCategoryOpen(false);
       setCatForm({ categoryName: '', description: '' });
-      fetchAllData();
+      await fetchAllData();
+
+      showPopup({
+        type: 'success',
+        title: 'Category added',
+        message: 'The new category has been added successfully.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
     }
+
     setCategorySubmitting(false);
   };
 
   const handleAddItem = async () => {
     if (!form.name.trim() || !form.price || !form.categoryID) {
-      alert('Please fill in Name, Price, and Category.');
+      showPopup({
+        type: 'warning',
+        title: 'Incomplete form',
+        message: 'Please fill in Name, Price, and Category.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
       return;
     }
 
@@ -446,11 +880,18 @@ export default function MenuPage() {
     const regular = form.regularPrice ? Number(form.regularPrice) : price;
 
     if (Number.isNaN(price) || Number.isNaN(regular)) {
-      alert('Please enter valid prices.');
+      showPopup({
+        type: 'warning',
+        title: 'Invalid price',
+        message: 'Please enter valid prices.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
       return;
     }
 
     setIsSubmitting(true);
+
     const { error } = await supabase.from('MenuItem').insert([
       {
         name: form.name.trim(),
@@ -458,18 +899,33 @@ export default function MenuPage() {
         price,
         regularPrice: regular,
         categoryID: Number(form.categoryID),
-        isAvailable: false, // default to out of stock, sync logic will update
+        isAvailable: false,
         imageUrl: form.imageUrl.trim() || null,
         status: 'Active',
       },
     ]);
 
     if (error) {
-      alert(error.message);
+      showPopup({
+        type: 'error',
+        title: 'Failed to add item',
+        message: error.message,
+        confirmText: 'Close',
+        onConfirm: closePopup,
+      });
     } else {
       setIsAddOpen(false);
-      fetchAllData();
+      await fetchAllData();
+
+      showPopup({
+        type: 'success',
+        title: 'Menu item added',
+        message: `"${form.name.trim()}" has been added successfully.`,
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
     }
+
     setIsSubmitting(false);
   };
 
@@ -494,11 +950,24 @@ export default function MenuPage() {
     const regular = Number(editForm.regularPrice);
 
     if (!editForm.name.trim() || !editForm.categoryID) {
-      alert('Name and Category are required.');
+      showPopup({
+        type: 'warning',
+        title: 'Incomplete form',
+        message: 'Name and Category are required.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
       return;
     }
+
     if (Number.isNaN(price) || Number.isNaN(regular)) {
-      alert('Please enter valid prices.');
+      showPopup({
+        type: 'warning',
+        title: 'Invalid price',
+        message: 'Please enter valid prices.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
       return;
     }
 
@@ -506,6 +975,7 @@ export default function MenuPage() {
     const user = auth?.user;
 
     setIsSubmitting(true);
+
     const { error } = await supabase
       .from('MenuItem')
       .update({
@@ -514,45 +984,219 @@ export default function MenuPage() {
         price,
         regularPrice: regular,
         categoryID: Number(editForm.categoryID),
-        // isAvailable is managed by sync logic, not editable here
         imageUrl: editForm.imageUrl.trim() || null,
         updatedBy: user?.id,
       })
       .eq('menuItemID', editingItemID);
 
     if (error) {
-      alert(error.message);
+      showPopup({
+        type: 'error',
+        title: 'Failed to update item',
+        message: error.message,
+        confirmText: 'Close',
+        onConfirm: closePopup,
+      });
     } else {
       setIsEditOpen(false);
       setEditingItemID(null);
-      fetchAllData();
+      await fetchAllData();
+
+      showPopup({
+        type: 'success',
+        title: 'Item updated',
+        message: `"${editForm.name.trim()}" has been updated successfully.`,
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
     }
+
     setIsSubmitting(false);
   };
 
-  const handleDeleteItem = async (item: MenuItem) => {
-    const ok = confirm(`Archive "${item.name}"?\n\nThis will hide it from the list (you can unarchive later if you implement it).`);
-    if (!ok) return;
+  const confirmArchiveItem = (item: MenuItem) => {
+    showPopup({
+      type: 'warning',
+      title: 'Archive menu item?',
+      message: (
+        <>
+          <p>
+            Archive <span className="font-extrabold text-[#1E1E1E]">"{item.name}"</span>?
+          </p>
+          <p className="mt-2">This will move it to the archived menu tab.</p>
+        </>
+      ),
+      confirmText: 'Archive',
+      cancelText: 'Cancel',
+      onCancel: closePopup,
+      onConfirm: async () => {
+        closePopup();
 
-    const { data: auth } = await supabase.auth.getUser();
-    const user = auth?.user;
+        const { data: auth } = await supabase.auth.getUser();
+        const user = auth?.user;
 
-    setIsSubmitting(true);
-    const { error } = await supabase
-      .from('MenuItem')
-      .update({
-        status: 'Archived',
-        isAvailable: false,
-        updatedBy: user?.id,
-      })
-      .eq('menuItemID', item.menuItemID);
+        setIsSubmitting(true);
 
-    if (error) {
-      alert(error.message);
-    } else {
-      fetchAllData();
-    }
-    setIsSubmitting(false);
+        const { error } = await supabase
+          .from('MenuItem')
+          .update({
+            status: 'Archived',
+            isAvailable: false,
+            updatedBy: user?.id,
+          })
+          .eq('menuItemID', item.menuItemID);
+
+        if (error) {
+          showPopup({
+            type: 'error',
+            title: 'Archive failed',
+            message: error.message,
+            confirmText: 'Close',
+            onConfirm: closePopup,
+          });
+        } else {
+          await fetchAllData();
+
+          showPopup({
+            type: 'success',
+            title: 'Item archived',
+            message: `"${item.name}" has been archived successfully.`,
+            confirmText: 'OK',
+            onConfirm: closePopup,
+          });
+        }
+
+        setIsSubmitting(false);
+      },
+    });
+  };
+
+  const handleRestoreItem = (item: MenuItem) => {
+    showPopup({
+      type: 'info',
+      title: 'Restore menu item?',
+      message: (
+        <>
+          <p>
+            Restore <span className="font-extrabold text-[#1E1E1E]">"{item.name}"</span>?
+          </p>
+          <p className="mt-2">This will bring it back to the normal menu list.</p>
+        </>
+      ),
+      confirmText: 'Restore',
+      cancelText: 'Cancel',
+      onCancel: closePopup,
+      onConfirm: async () => {
+        closePopup();
+
+        const { data: auth } = await supabase.auth.getUser();
+        const user = auth?.user;
+
+        setIsSubmitting(true);
+
+        const { error } = await supabase
+          .from('MenuItem')
+          .update({
+            status: 'Active',
+            updatedBy: user?.id,
+          })
+          .eq('menuItemID', item.menuItemID);
+
+        if (error) {
+          showPopup({
+            type: 'error',
+            title: 'Restore failed',
+            message: error.message,
+            confirmText: 'Close',
+            onConfirm: closePopup,
+          });
+        } else {
+          await fetchAllData();
+
+          showPopup({
+            type: 'success',
+            title: 'Item restored',
+            message: `"${item.name}" has been restored successfully.`,
+            confirmText: 'OK',
+            onConfirm: closePopup,
+          });
+        }
+
+        setIsSubmitting(false);
+      },
+    });
+  };
+
+  const confirmPermanentDeleteItem = (item: MenuItem) => {
+    showPopup({
+      type: 'error',
+      title: 'Delete menu item permanently?',
+      message: (
+        <>
+          <p>
+            Permanently delete <span className="font-extrabold text-[#1E1E1E]">"{item.name}"</span>?
+          </p>
+          <p className="mt-2">This action cannot be undone.</p>
+        </>
+      ),
+      confirmText: 'Delete Permanently',
+      cancelText: 'Cancel',
+      onCancel: closePopup,
+      onConfirm: async () => {
+        closePopup();
+        setIsSubmitting(true);
+
+        const { error } = await supabase.from('MenuItem').delete().eq('menuItemID', item.menuItemID);
+
+        if (error) {
+          showPopup({
+            type: 'error',
+            title: 'Permanent delete failed',
+            message: error.message,
+            confirmText: 'Close',
+            onConfirm: closePopup,
+          });
+        } else {
+          await fetchAllData();
+
+          showPopup({
+            type: 'success',
+            title: 'Item deleted permanently',
+            message: `"${item.name}" has been deleted permanently.`,
+            confirmText: 'OK',
+            onConfirm: closePopup,
+          });
+        }
+
+        setIsSubmitting(false);
+      },
+    });
+  };
+
+  const handleDeleteItem = (item: MenuItem) => {
+    showActionChoice({
+      title: 'Choose action for menu item',
+      message: (
+        <>
+          <p>
+            What do you want to do with <span className="font-extrabold text-[#1E1E1E]">"{item.name}"</span>?
+          </p>
+          <p className="mt-2">
+            Archive will move it to the archived menu tab. Delete permanently will remove it completely from the database.
+          </p>
+        </>
+      ),
+      archiveText: 'Archive Item',
+      deleteText: 'Delete Item Permanently',
+      onArchive: () => {
+        closeActionChoice();
+        confirmArchiveItem(item);
+      },
+      onDelete: () => {
+        closeActionChoice();
+        confirmPermanentDeleteItem(item);
+      },
+    });
   };
 
   const handleRecipeClick = (item: MenuItem) => {
@@ -567,12 +1211,20 @@ export default function MenuPage() {
 
   const handleUpdateCategory = async () => {
     if (!editingCategoryID) return;
+
     if (!editingCategoryForm.categoryName.trim()) {
-      alert('Please enter a category name.');
+      showPopup({
+        type: 'warning',
+        title: 'Missing category name',
+        message: 'Please enter a category name.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
       return;
     }
 
     setCategoryMgmtSubmitting(true);
+
     const { error } = await supabase
       .from('Category')
       .update({
@@ -582,84 +1234,258 @@ export default function MenuPage() {
       .eq('categoryID', editingCategoryID);
 
     if (error) {
-      alert(error.message);
+      showPopup({
+        type: 'error',
+        title: 'Failed to update category',
+        message: error.message,
+        confirmText: 'Close',
+        onConfirm: closePopup,
+      });
     } else {
+      const savedName = editingCategoryForm.categoryName.trim();
       setEditingCategoryID(null);
       setEditingCategoryForm({ categoryName: '', description: '' });
-      fetchAllData();
+      await fetchAllData();
+
+      showPopup({
+        type: 'success',
+        title: 'Category updated',
+        message: `"${savedName}" has been updated successfully.`,
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
     }
+
     setCategoryMgmtSubmitting(false);
   };
 
-  const handleArchiveCategory = async (cat: Category) => {
+  const confirmArchiveCategory = async (cat: Category) => {
     const itemCount = categoryCounts.get(cat.categoryID) || 0;
+
     if (itemCount > 0) {
-      alert(`Cannot archive "${cat.categoryName}" because it has ${itemCount} active item(s).\n\nPlease move or delete these items first.`);
+      showPopup({
+        type: 'warning',
+        title: 'Cannot archive category',
+        message: (
+          <>
+            <p>
+              Cannot archive <span className="font-extrabold text-[#1E1E1E]">"{cat.categoryName}"</span> because it has{' '}
+              <span className="font-extrabold text-[#1E1E1E]">{itemCount}</span> active item(s).
+            </p>
+            <p className="mt-2">Please move or archive those items first.</p>
+          </>
+        ),
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
       return;
     }
 
-    const ok = confirm(`Archive "${cat.categoryName}"?\n\nThis will hide it from the category list (you can restore it later if needed).`);
-    if (!ok) return;
+    showPopup({
+      type: 'warning',
+      title: 'Archive category?',
+      message: (
+        <>
+          <p>
+            Archive <span className="font-extrabold text-[#1E1E1E]">"{cat.categoryName}"</span>?
+          </p>
+          <p className="mt-2">This will hide it from the category list. You can restore it later if needed.</p>
+        </>
+      ),
+      confirmText: 'Archive',
+      cancelText: 'Cancel',
+      onCancel: closePopup,
+      onConfirm: async () => {
+        closePopup();
 
-    setCategoryMgmtSubmitting(true);
-    const { error } = await supabase
-      .from('Category')
-      .update({ categoryName: `[ARCHIVED] ${cat.categoryName}` })
-      .eq('categoryID', cat.categoryID);
+        setCategoryMgmtSubmitting(true);
 
-    if (error) {
-      alert(error.message);
-    } else {
-      setEditingCategoryID(null);
-      setEditingCategoryForm({ categoryName: '', description: '' });
-      fetchAllData();
+        const { error } = await supabase
+          .from('Category')
+          .update({ categoryName: `[ARCHIVED] ${cat.categoryName}` })
+          .eq('categoryID', cat.categoryID);
+
+        if (error) {
+          showPopup({
+            type: 'error',
+            title: 'Archive failed',
+            message: error.message,
+            confirmText: 'Close',
+            onConfirm: closePopup,
+          });
+        } else {
+          setEditingCategoryID(null);
+          setEditingCategoryForm({ categoryName: '', description: '' });
+          await fetchAllData();
+
+          showPopup({
+            type: 'success',
+            title: 'Category archived',
+            message: `"${cat.categoryName}" has been archived successfully.`,
+            confirmText: 'OK',
+            onConfirm: closePopup,
+          });
+        }
+
+        setCategoryMgmtSubmitting(false);
+      },
+    });
+  };
+
+  const confirmPermanentDeleteCategory = async (cat: Category) => {
+    const totalLinkedItems = totalCategoryItemCounts.get(cat.categoryID) || 0;
+
+    if (totalLinkedItems > 0) {
+      showPopup({
+        type: 'warning',
+        title: 'Cannot delete category permanently',
+        message: (
+          <>
+            <p>
+              Cannot permanently delete{' '}
+              <span className="font-extrabold text-[#1E1E1E]">"{cat.categoryName}"</span> because it still has{' '}
+              <span className="font-extrabold text-[#1E1E1E]">{totalLinkedItems}</span> linked menu item(s).
+            </p>
+            <p className="mt-2">Please move, archive, or permanently delete those items first.</p>
+          </>
+        ),
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
+      return;
     }
-    setCategoryMgmtSubmitting(false);
+
+    showPopup({
+      type: 'error',
+      title: 'Delete category permanently?',
+      message: (
+        <>
+          <p>
+            Permanently delete <span className="font-extrabold text-[#1E1E1E]">"{cat.categoryName}"</span>?
+          </p>
+          <p className="mt-2">This action cannot be undone.</p>
+        </>
+      ),
+      confirmText: 'Delete Permanently',
+      cancelText: 'Cancel',
+      onCancel: closePopup,
+      onConfirm: async () => {
+        closePopup();
+
+        setCategoryMgmtSubmitting(true);
+
+        const { error } = await supabase.from('Category').delete().eq('categoryID', cat.categoryID);
+
+        if (error) {
+          showPopup({
+            type: 'error',
+            title: 'Permanent delete failed',
+            message: error.message,
+            confirmText: 'Close',
+            onConfirm: closePopup,
+          });
+        } else {
+          setEditingCategoryID(null);
+          setEditingCategoryForm({ categoryName: '', description: '' });
+
+          if (selectedCatID === cat.categoryID) {
+            setSelectedCatID('all');
+          }
+
+          await fetchAllData();
+
+          showPopup({
+            type: 'success',
+            title: 'Category deleted permanently',
+            message: `"${cat.categoryName}" has been deleted permanently.`,
+            confirmText: 'OK',
+            onConfirm: closePopup,
+          });
+        }
+
+        setCategoryMgmtSubmitting(false);
+      },
+    });
+  };
+
+  const handleCategoryDeleteOptions = (cat: Category) => {
+    showActionChoice({
+      title: 'Choose action for category',
+      message: (
+        <>
+          <p>
+            What do you want to do with <span className="font-extrabold text-[#1E1E1E]">"{cat.categoryName}"</span>?
+          </p>
+          <p className="mt-2">
+            Archive will hide it from active categories. Delete permanently will remove it completely from the database.
+          </p>
+        </>
+      ),
+      archiveText: 'Archive Category',
+      deleteText: 'Delete Category Permanently',
+      onArchive: () => {
+        closeActionChoice();
+        confirmArchiveCategory(cat);
+      },
+      onDelete: () => {
+        closeActionChoice();
+        confirmPermanentDeleteCategory(cat);
+      },
+    });
   };
 
   const handleRestoreCategory = async (cat: Category) => {
-    const ok = confirm(`Restore "${cat.categoryName}"?\n\nThis will bring it back to the active categories list.`);
-    if (!ok) return;
+    showPopup({
+      type: 'info',
+      title: 'Restore category?',
+      message: (
+        <>
+          <p>
+            Restore <span className="font-extrabold text-[#1E1E1E]">"{cat.categoryName}"</span>?
+          </p>
+          <p className="mt-2">This will bring it back to the active categories list.</p>
+        </>
+      ),
+      confirmText: 'Restore',
+      cancelText: 'Cancel',
+      onCancel: closePopup,
+      onConfirm: async () => {
+        closePopup();
 
-    setCategoryMgmtSubmitting(true);
-    const restoredName = cat.categoryName.replace('[ARCHIVED] ', '');
+        setCategoryMgmtSubmitting(true);
+        const restoredName = cat.categoryName.replace('[ARCHIVED] ', '');
 
-    const { error } = await supabase
-      .from('Category')
-      .update({ categoryName: restoredName })
-      .eq('categoryID', cat.categoryID);
+        const { error } = await supabase
+          .from('Category')
+          .update({ categoryName: restoredName })
+          .eq('categoryID', cat.categoryID);
 
-    if (error) {
-      alert(error.message);
-    } else {
-      setEditingCategoryID(null);
-      setEditingCategoryForm({ categoryName: '', description: '' });
-      fetchAllData();
-    }
-    setCategoryMgmtSubmitting(false);
+        if (error) {
+          showPopup({
+            type: 'error',
+            title: 'Restore failed',
+            message: error.message,
+            confirmText: 'Close',
+            onConfirm: closePopup,
+          });
+        } else {
+          setEditingCategoryID(null);
+          setEditingCategoryForm({ categoryName: '', description: '' });
+          await fetchAllData();
+
+          showPopup({
+            type: 'success',
+            title: 'Category restored',
+            message: `"${restoredName}" has been restored successfully.`,
+            confirmText: 'OK',
+            onConfirm: closePopup,
+          });
+        }
+
+        setCategoryMgmtSubmitting(false);
+      },
+    });
   };
-
-  const activeCategoriesForDisplay = useMemo(
-    () => categories.filter((c) => !c.categoryName.startsWith('[ARCHIVED]')).slice(0, 6),
-    [categories]
-  );
-
-  const archivedCategoriesCount = useMemo(
-    () => categories.filter((c) => c.categoryName.startsWith('[ARCHIVED]')).length,
-    [categories]
-  );
-
-  const remainingCategoriesCount = useMemo(
-    () => Math.max(0, categories.length - 6 - archivedCategoriesCount),
-    [categories.length, archivedCategoriesCount]
-  );
-
-  const activeCategoriesForForms = useMemo(
-    () => categories.filter((c) => !c.categoryName.startsWith('[ARCHIVED]')),
-    [categories]
-  );
-
-  const totalVisibleCount = useMemo(() => menuItems.filter((i) => (i.status || '').toLowerCase() !== 'archived').length, [menuItems]);
 
   return (
     <div className="h-screen overflow-hidden" style={{ backgroundColor: BG, color: TEXT }}>
@@ -686,25 +1512,44 @@ export default function MenuPage() {
                 <p className="text-xs text-black/45">Manage categories, items, pricing, and availability.</p>
               </div>
             </div>
-
-
           </header>
 
-          {/* Categories */}
           <section className="rounded-2xl bg-white p-5 shadow">
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-extrabold">Categories</p>
                 <p className="text-xs text-black/45">Tap a category to filter items.</p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryMgmtOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-black/10 bg-[#F7F7F7] px-4 py-2.5 text-xs font-extrabold text-[#1E1E1E] transition hover:bg-black/5"
+                >
+                  <MdEdit className="h-4 w-4 text-[#b80f24]" />
+                  Manage Categories
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsArchivedCategoriesOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-black/10 bg-[#F7F7F7] px-4 py-2.5 text-xs font-extrabold text-[#1E1E1E] transition hover:bg-black/5"
+                >
+                  <MdArchive className="h-4 w-4 text-[#b80f24]" />
+                  Archived Categories
+                  {archivedCategoriesCount > 0 && (
+                    <span className="rounded-full bg-[#b80f24] px-2 py-0.5 text-[10px] font-extrabold text-white">
+                      {archivedCategoriesCount}
+                    </span>
+                  )}
+                </button>
+
                 <PrimaryButton onClick={() => setIsCategoryOpen(true)}>Add New Category</PrimaryButton>
               </div>
             </div>
 
             <div className="flex gap-3 overflow-x-auto pb-2">
-              {/* All */}
               <button
                 type="button"
                 onClick={() => setSelectedCatID('all')}
@@ -727,14 +1572,22 @@ export default function MenuPage() {
                   <div>
                     <p className="text-sm font-extrabold">All</p>
                     <p className={['text-xs', selectedCatID === 'all' ? 'text-white/85' : 'text-black/45'].join(' ')}>
-                      {totalVisibleCount} Items
+                      {selectedMenuType === 'Archived Menu' ? archivedMenuItemsCount : activeMenuItemsCount} Items
                     </p>
                   </div>
                 </div>
               </button>
 
               {activeCategoriesForDisplay.map((c) => {
-                const count = categoryCounts.get(c.categoryID) || 0;
+                const count =
+                  selectedMenuType === 'Archived Menu'
+                    ? menuItems.filter(
+                        (i) =>
+                          i.categoryID === c.categoryID &&
+                          (i.status || '').toLowerCase() === 'archived'
+                      ).length
+                    : categoryCounts.get(c.categoryID) || 0;
+
                 const active = selectedCatID === c.categoryID;
 
                 return (
@@ -767,7 +1620,7 @@ export default function MenuPage() {
               {remainingCategoriesCount > 0 && (
                 <button
                   type="button"
-                  onClick={() => setIsCategoryMgmtOpen(true)}
+                  onClick={() => setIsCategoryListOpen(true)}
                   className="min-w-170px text-left rounded-2xl p-4 shadow-sm ring-1 bg-[#F7F7F7] text-[#1E1E1E] ring-black/5 hover:bg-black/0.03 transition"
                 >
                   <div className="flex items-center gap-3">
@@ -776,9 +1629,7 @@ export default function MenuPage() {
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-extrabold truncate">View All</p>
-                      <p className="text-xs text-black/45">
-                        +{remainingCategoriesCount} more
-                      </p>
+                      <p className="text-xs text-black/45">+{remainingCategoriesCount} more</p>
                     </div>
                   </div>
                 </button>
@@ -786,11 +1637,12 @@ export default function MenuPage() {
             </div>
           </section>
 
-          {/* Items */}
           <section className="rounded-2xl bg-white p-5 shadow">
             <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <p className="text-sm font-extrabold">All Menu Items</p>
+                <p className="text-sm font-extrabold">
+                  {selectedMenuType === 'Archived Menu' ? 'Archived Menu Items' : 'All Menu Items'}
+                </p>
                 <p className="text-xs text-black/45">Search, filter, and manage menu items.</p>
               </div>
 
@@ -833,36 +1685,41 @@ export default function MenuPage() {
                     </select>
                   </div>
 
-                  <PrimaryButton onClick={openAddDrawer}>Add Menu Item</PrimaryButton>
+                  {selectedMenuType === 'Normal Menu' && (
+                    <PrimaryButton onClick={openAddDrawer}>Add Menu Item</PrimaryButton>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Menu Type Tabs */}
             <div className="mb-4 flex gap-2 overflow-x-auto border-b border-black/10">
               {menuTypes.map((type) => {
                 const active = selectedMenuType === type;
+                const count = type === 'Archived Menu' ? archivedMenuItemsCount : activeMenuItemsCount;
+
                 return (
                   <button
                     key={type}
                     type="button"
-                    onClick={() => setSelectedMenuType(type)}
+                    onClick={() => {
+                      setSelectedMenuType(type);
+                      setSelectedCatID('all');
+                    }}
                     className={[
                       'px-4 py-2 text-xs font-extrabold whitespace-nowrap transition',
                       active ? 'border-b-2 text-[#b80f24] bg-[#b80f24]/5' : 'text-black/50 hover:text-[#b80f24]',
                     ].join(' ')}
                     style={active ? { borderColor: PRIMARY } : undefined}
                   >
-                    {type}
+                    {type} ({count})
                   </button>
                 );
               })}
             </div>
 
-            {/* Table */}
             <div className="overflow-hidden rounded-2xl border border-black/10">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-980px">
+                <table className="w-full min-w-[980px]">
                   <thead className="bg-[#FAFAFA]">
                     <tr className="text-left text-[11px] font-extrabold text-black/55 uppercase">
                       <th className="p-3">Product</th>
@@ -978,48 +1835,76 @@ export default function MenuPage() {
 
                           <td className="p-3">
                             <div className="flex justify-end gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleRecipeClick(item)}
-                                className="h-9 w-9 rounded-xl bg-blue-50 grid place-items-center hover:bg-blue-100 transition"
-                                title="Manage Recipe"
-                              >
-                                <MdReceiptLong className="h-4 w-4 text-blue-600" />
-                              </button>
+                              {selectedMenuType === 'Normal Menu' ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRecipeClick(item)}
+                                    className="h-9 w-9 rounded-xl bg-blue-50 grid place-items-center hover:bg-blue-100 transition"
+                                    title="Manage Recipe"
+                                  >
+                                    <MdReceiptLong className="h-4 w-4 text-blue-600" />
+                                  </button>
 
-                              <button
-                                type="button"
-                                onClick={() => handleEditClick(item)}
-                                className="h-9 w-9 rounded-xl bg-black/5 grid place-items-center hover:bg-black/10 transition"
-                                title="Edit"
-                              >
-                                <MdEdit className="h-4 w-4 text-black/70" />
-                              </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditClick(item)}
+                                    className="h-9 w-9 rounded-xl bg-black/5 grid place-items-center hover:bg-black/10 transition"
+                                    title="Edit"
+                                  >
+                                    <MdEdit className="h-4 w-4 text-black/70" />
+                                  </button>
 
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteItem(item)}
-                                className="h-9 w-9 rounded-xl grid place-items-center text-white shadow transition active:scale-[0.99] disabled:opacity-50"
-                                style={{ backgroundColor: PRIMARY }}
-                                onMouseEnter={(e) => {
-                                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = PRIMARY_DARK;
-                                }}
-                                onMouseLeave={(e) => {
-                                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = PRIMARY;
-                                }}
-                                title="Archive"
-                                disabled={isSubmitting}
-                              >
-                                <MdDelete className="h-4 w-4" />
-                              </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteItem(item)}
+                                    className="h-9 w-9 rounded-xl grid place-items-center text-white shadow transition active:scale-[0.99] disabled:opacity-50"
+                                    style={{ backgroundColor: PRIMARY }}
+                                    onMouseEnter={(e) => {
+                                      (e.currentTarget as HTMLButtonElement).style.backgroundColor = PRIMARY_DARK;
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      (e.currentTarget as HTMLButtonElement).style.backgroundColor = PRIMARY;
+                                    }}
+                                    title="Archive or Delete Permanently"
+                                    disabled={isSubmitting}
+                                  >
+                                    <MdDelete className="h-4 w-4" />
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRestoreItem(item)}
+                                    className="h-9 w-9 rounded-xl bg-blue-600 grid place-items-center hover:bg-blue-700 transition text-white"
+                                    title="Restore"
+                                    disabled={isSubmitting}
+                                  >
+                                    <MdRestore className="h-4 w-4" />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => confirmPermanentDeleteItem(item)}
+                                    className="h-9 w-9 rounded-xl grid place-items-center text-white shadow transition active:scale-[0.99] disabled:opacity-50 bg-[#B80F24] hover:brightness-95"
+                                    title="Delete Permanently"
+                                    disabled={isSubmitting}
+                                  >
+                                    <MdDeleteForever className="h-4 w-4" />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={9} className="p-10 text-center text-black/50 text-sm font-bold">
-                          No menu items found.
+                        <td colSpan={8} className="p-10 text-center text-black/50 text-sm font-bold">
+                          {selectedMenuType === 'Archived Menu'
+                            ? 'No archived menu items found.'
+                            : 'No menu items found.'}
                         </td>
                       </tr>
                     )}
@@ -1027,7 +1912,6 @@ export default function MenuPage() {
                 </table>
               </div>
 
-              {/* Footer */}
               <div className="flex items-center justify-between px-4 py-3 bg-[#FAFAFA] border-t border-black/10">
                 <p className="text-xs font-bold text-black/45">
                   Showing <span className="text-black/70">{visibleItems.length}</span> item(s)
@@ -1052,8 +1936,7 @@ export default function MenuPage() {
         </main>
       </div>
 
-      {/* --- ADD CATEGORY DRAWER --- */}
-      <RightDrawer open={isCategoryOpen} title="Add New Category" onClose={() => setIsCategoryOpen(false)}>
+      <RightDrawer open={isCategoryOpen} title="Add New Category" onClose={closeCategoryDrawer}>
         <div className="space-y-5">
           <Field label="Category Name">
             <TextInput
@@ -1073,7 +1956,7 @@ export default function MenuPage() {
           </Field>
 
           <div className="pt-5 flex justify-end gap-2 border-t border-black/10">
-            <GhostButton onClick={() => setIsCategoryOpen(false)}>Cancel</GhostButton>
+            <GhostButton onClick={closeCategoryDrawer}>Cancel</GhostButton>
             <PrimaryButton disabled={categorySubmitting} onClick={handleAddCategory}>
               {categorySubmitting ? 'Saving...' : 'Save Category'}
             </PrimaryButton>
@@ -1081,8 +1964,7 @@ export default function MenuPage() {
         </div>
       </RightDrawer>
 
-      {/* --- ADD MENU ITEM DRAWER --- */}
-      <RightDrawer open={isAddOpen} title="Add New Menu Item" onClose={() => setIsAddOpen(false)}>
+      <RightDrawer open={isAddOpen} title="Add New Menu Item" onClose={closeAddDrawer}>
         <div className="space-y-5">
           <Field label="Product Image (URL)">
             <div className="grid grid-cols-[96px_1fr] gap-4 items-start">
@@ -1144,8 +2026,11 @@ export default function MenuPage() {
           </div>
 
           <Field label="Category">
-            <Select value={form.categoryID} onChange={(e) => setForm({ ...form, categoryID: e.target.value })}>
-              <option value="">None</option>
+            <Select
+              value={form.categoryID}
+              onChange={(e) => setForm({ ...form, categoryID: e.target.value })}
+            >
+              <option value="">Select a category</option>
               {activeCategoriesForForms.map((c) => (
                 <option key={c.categoryID} value={c.categoryID}>
                   {c.categoryName}
@@ -1155,7 +2040,7 @@ export default function MenuPage() {
           </Field>
 
           <div className="pt-5 flex justify-end gap-2 border-t border-black/10">
-            <GhostButton onClick={() => setIsAddOpen(false)}>Cancel</GhostButton>
+            <GhostButton onClick={closeAddDrawer}>Cancel</GhostButton>
             <PrimaryButton disabled={isSubmitting} onClick={handleAddItem}>
               {isSubmitting ? 'Saving...' : 'Save Item'}
             </PrimaryButton>
@@ -1163,8 +2048,7 @@ export default function MenuPage() {
         </div>
       </RightDrawer>
 
-      {/* --- EDIT MENU ITEM DRAWER --- */}
-      <RightDrawer open={isEditOpen} title="Edit Menu Item" onClose={() => setIsEditOpen(false)}>
+      <RightDrawer open={isEditOpen} title="Edit Menu Item" onClose={closeEditDrawer}>
         <div className="space-y-5">
           <Field label="Product Image (URL)">
             <div className="space-y-2">
@@ -1214,8 +2098,11 @@ export default function MenuPage() {
           </div>
 
           <Field label="Category">
-            <Select value={editForm.categoryID} onChange={(e) => setEditForm({ ...editForm, categoryID: e.target.value })}>
-              <option value="">None</option>
+            <Select
+              value={editForm.categoryID}
+              onChange={(e) => setEditForm({ ...editForm, categoryID: e.target.value })}
+            >
+              <option value="">Select a category</option>
               {activeCategoriesForForms.map((c) => (
                 <option key={c.categoryID} value={c.categoryID}>
                   {c.categoryName}
@@ -1229,7 +2116,7 @@ export default function MenuPage() {
           </Field>
 
           <div className="pt-5 flex justify-end gap-2 border-t border-black/10">
-            <GhostButton onClick={() => setIsEditOpen(false)}>Cancel</GhostButton>
+            <GhostButton onClick={closeEditDrawer}>Cancel</GhostButton>
             <PrimaryButton disabled={isSubmitting} onClick={handleUpdateItem}>
               {isSubmitting ? 'Updating...' : 'Update Item'}
             </PrimaryButton>
@@ -1237,15 +2124,73 @@ export default function MenuPage() {
         </div>
       </RightDrawer>
 
-      {/* --- CATEGORY MANAGEMENT MODAL --- */}
+      <RightDrawer
+        open={isCategoryListOpen}
+        title="All Categories"
+        onClose={closeCategoryListDrawer}
+      >
+        <div className="space-y-4">
+          <div>
+            <p className="text-xs font-extrabold text-black/50 mb-3">ALL ACTIVE CATEGORIES</p>
+
+            <div className="space-y-2 max-h-[520px] overflow-y-auto">
+              {activeCategoriesForForms.length === 0 ? (
+                <p className="text-xs text-black/45">No active categories</p>
+              ) : (
+                activeCategoriesForForms.map((c) => {
+                  const activeItemCount = categoryCounts.get(c.categoryID) || 0;
+                  const archivedItemCount = menuItems.filter(
+                    (i) => i.categoryID === c.categoryID && (i.status || '').toLowerCase() === 'archived'
+                  ).length;
+                  const totalItemCount = totalCategoryItemCounts.get(c.categoryID) || 0;
+
+                  return (
+                    <button
+                      key={c.categoryID}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCatID(c.categoryID);
+                        closeCategoryListDrawer();
+                      }}
+                      className="w-full rounded-2xl bg-[#F7F7F7] p-4 text-left transition hover:bg-black/5"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="h-11 w-11 rounded-2xl bg-white text-[#b80f24] grid place-items-center ring-1 ring-black/5">
+                            {getCategoryIcon(c.categoryName)}
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className="text-sm font-extrabold text-[#1E1E1E] truncate">{c.categoryName}</p>
+                            <p className="text-[11px] text-black/45 truncate">
+                              {c.description || 'No description'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 text-right">
+                          <p className="text-xs font-extrabold text-[#1E1E1E]">{totalItemCount} total</p>
+                          <p className="text-[10px] text-black/45">{activeItemCount} active</p>
+                          <p className="text-[10px] text-black/45">{archivedItemCount} archived</p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            <p className="mt-4 text-[11px] text-black/45">
+              Tap a category to filter the menu items table by that category.
+            </p>
+          </div>
+        </div>
+      </RightDrawer>
+
       <RightDrawer
         open={isCategoryMgmtOpen}
         title="Manage Categories"
-        onClose={() => {
-          setIsCategoryMgmtOpen(false);
-          setEditingCategoryID(null);
-          setEditingCategoryForm({ categoryName: '', description: '' });
-        }}
+        onClose={closeCategoryMgmtDrawer}
       >
         <div className="space-y-4">
           {editingCategoryID ? (
@@ -1288,7 +2233,7 @@ export default function MenuPage() {
             <div className="space-y-6">
               <div>
                 <p className="text-xs font-extrabold text-black/50 mb-3">ACTIVE CATEGORIES</p>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
+                <div className="space-y-2 max-h-[420px] overflow-y-auto">
                   {activeCategoriesForForms.length === 0 ? (
                     <p className="text-xs text-black/45">No active categories</p>
                   ) : (
@@ -1314,7 +2259,7 @@ export default function MenuPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleArchiveCategory(c)}
+                              onClick={() => handleCategoryDeleteOptions(c)}
                               className="h-8 w-8 rounded-lg grid place-items-center text-white shadow transition active:scale-[0.99] disabled:opacity-50"
                               style={{ backgroundColor: PRIMARY }}
                               onMouseEnter={(e) => {
@@ -1323,7 +2268,7 @@ export default function MenuPage() {
                               onMouseLeave={(e) => {
                                 (e.currentTarget as HTMLButtonElement).style.backgroundColor = PRIMARY;
                               }}
-                              title="Archive"
+                              title="Archive or Delete Permanently"
                               disabled={categoryMgmtSubmitting}
                             >
                               <MdDelete className="h-4 w-4" />
@@ -1335,43 +2280,66 @@ export default function MenuPage() {
                   )}
                 </div>
               </div>
-
-              {archivedCategoriesCount > 0 && (
-                <div>
-                  <p className="text-xs font-extrabold text-black/50 mb-3">ARCHIVED CATEGORIES ({archivedCategoriesCount})</p>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {categories
-                      .filter((c) => c.categoryName.startsWith('[ARCHIVED]'))
-                      .map((c) => (
-                        <div
-                          key={c.categoryID}
-                          className="flex items-center justify-between p-3 bg-black/5 rounded-xl hover:bg-black/10 transition opacity-60"
-                        >
-                          <div className="min-w-0">
-                            <p className="text-xs font-extrabold text-black/60">{c.categoryName}</p>
-                            <p className="text-[10px] text-black/40">Archived</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleRestoreCategory(c)}
-                            className="h-8 w-8 rounded-lg grid place-items-center text-white shadow transition active:scale-[0.99] disabled:opacity-50 bg-blue-600 hover:bg-blue-700"
-                            title="Restore"
-                            disabled={categoryMgmtSubmitting}
-                          >
-                            <MdCheckCircle className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </div>
       </RightDrawer>
 
-      {/* --- RECIPE MODAL --- */}
-      {isRecipeOpen && activeRecipeItem && (
+      <RightDrawer
+        open={isArchivedCategoriesOpen}
+        title="Archived Categories"
+        onClose={closeArchivedCategoriesDrawer}
+      >
+        <div className="space-y-4">
+          <div>
+            <p className="text-xs font-extrabold text-black/50 mb-3">
+              ARCHIVED CATEGORIES ({archivedCategoriesCount})
+            </p>
+
+            <div className="space-y-2 max-h-[500px] overflow-y-auto">
+              {archivedCategoriesCount === 0 ? (
+                <p className="text-xs text-black/45">No archived categories</p>
+              ) : (
+                archivedCategories.map((c) => (
+                  <div
+                    key={c.categoryID}
+                    className="flex items-center justify-between p-3 bg-black/5 rounded-xl hover:bg-black/10 transition opacity-80"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-extrabold text-black/70">{c.categoryName}</p>
+                      <p className="text-[10px] text-black/45">Archived category</p>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleRestoreCategory(c)}
+                        className="h-8 w-8 rounded-lg grid place-items-center text-white shadow transition active:scale-[0.99] disabled:opacity-50 bg-blue-600 hover:bg-blue-700"
+                        title="Restore"
+                        disabled={categoryMgmtSubmitting}
+                      >
+                        <MdRestore className="h-4 w-4" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => confirmPermanentDeleteCategory(c)}
+                        className="h-8 w-8 rounded-lg grid place-items-center text-white shadow transition active:scale-[0.99] disabled:opacity-50 bg-[#B80F24] hover:brightness-95"
+                        title="Delete Permanently"
+                        disabled={categoryMgmtSubmitting}
+                      >
+                        <MdDeleteForever className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </RightDrawer>
+
+      {isRecipeOpen && activeRecipeItem && selectedMenuType === 'Normal Menu' && (
         <RecipeModal
           menuItem={activeRecipeItem}
           onClose={() => {
@@ -1381,9 +2349,41 @@ export default function MenuPage() {
           onRecipeChange={async () => {
             await syncMenuAvailability();
             await fetchAllData();
+            showPopup({
+              type: 'success',
+              title: 'Recipe updated',
+              message: 'Recipe changes were saved and menu availability was synced.',
+              confirmText: 'OK',
+              onConfirm: closePopup,
+            });
           }}
         />
       )}
+
+      <ActionChoiceModal
+        open={actionChoice.open}
+        title={actionChoice.title}
+        message={actionChoice.message}
+        archiveText={actionChoice.archiveText}
+        deleteText={actionChoice.deleteText}
+        hideArchive={actionChoice.hideArchive}
+        loading={isSubmitting || categoryMgmtSubmitting}
+        onArchive={actionChoice.onArchive}
+        onDelete={actionChoice.onDelete || closeActionChoice}
+        onCancel={closeActionChoice}
+      />
+
+      <PopupModal
+        open={popup.open}
+        type={popup.type}
+        title={popup.title}
+        message={popup.message}
+        confirmText={popup.confirmText}
+        cancelText={popup.cancelText}
+        loading={popup.loading}
+        onConfirm={popup.onConfirm || closePopup}
+        onCancel={popup.onCancel}
+      />
     </div>
   );
 }

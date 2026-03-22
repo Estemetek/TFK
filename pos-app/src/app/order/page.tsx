@@ -345,8 +345,8 @@ function CartPanel({
                 type="button"
               >
                 {discountEnabled
-                  ? 'Senior Citizen Discount Applied'
-                  : 'Apply Senior Citizen Discount'}
+                  ? 'Senior Citizen / PWD Discount Applied'
+                  : 'Apply Senior Citizen / PWD Discount'}
               </button>
             </div>
 
@@ -901,7 +901,7 @@ export default function OrderPage() {
                     ref={searchRef}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search menu (Ctrl/Cmd + K)"
+                    placeholder="Search Menu..."
                     className="w-full outline-none font-bold text-sm text-gray-800 placeholder:text-gray-400"
                   />
                   {search.trim() && (
