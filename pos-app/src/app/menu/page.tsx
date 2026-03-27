@@ -1728,7 +1728,6 @@ export default function MenuPage() {
                       <th className="p-3">Category</th>
                       <th className="p-3">Price</th>
                       <th className="p-3">Availability</th>
-                      <th className="p-3">Actions done</th>
                       <th className="p-3 text-right">Action</th>
                     </tr>
                   </thead>
@@ -1819,18 +1818,6 @@ export default function MenuPage() {
 
                           <td className="p-3">
                             <AvailabilityPill value={item.isAvailable} />
-                          </td>
-
-                          <td className="p-3">
-                            <div className="flex flex-col">
-                              <span className="text-[11px] font-extrabold text-[#1E1E1E]">
-                                {item.UsersAccount?.username || 'Initial Setup'}
-                              </span>
-                              <span className="text-[10px] text-black/45">
-                                {new Date(item.updatedAt).toLocaleDateString()} at{' '}
-                                {new Date(item.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </div>
                           </td>
 
                           <td className="p-3">
