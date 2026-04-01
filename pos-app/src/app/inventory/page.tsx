@@ -144,8 +144,8 @@ export default function InventoryPage() {
 
     const normalized = (data || []).map((item) => ({
       ...item,
-      currentStock: wholeNumber(item.currentStock),
-      reorderLevel: wholeNumber(item.reorderLevel),
+      currentStock: parseFloat(Number(item.currentStock).toFixed(2)),
+      reorderLevel: parseFloat(Number(item.reorderLevel).toFixed(2)),
     }));
 
     setInventoryItems(normalized);
@@ -504,7 +504,7 @@ export default function InventoryPage() {
                       stockDisplay = `Out of stock`;
                       shortageMsg = 'Restock soon to avoid shortages!';
                     } else {
-                      stockDisplay = `${wholeNumber(item.currentStock)} ${item.unit} left`;
+                      stockDisplay = `${parseFloat(Number(item.currentStock).toFixed(2))} ${item.unit} left`;
                       shortageMsg = 'Restock soon to avoid shortages!';
                     }
                     return (
@@ -513,7 +513,7 @@ export default function InventoryPage() {
                           <MdWarning className="text-red-600" size={20} />
                           <span className="text-sm font-semibold truncate">{item.name}</span>
                           <span className="text-xs text-text-muted ml-auto">
-                            {stockDisplay} (Reorder at {wholeNumber(item.reorderLevel)})
+                            {stockDisplay} (Reorder at {parseFloat(Number(item.reorderLevel).toFixed(2))})
                           </span>
                         </div>
                         <span className="text-xs text-red-600 mt-1">{shortageMsg}</span>
@@ -688,8 +688,8 @@ function InventoryRow({
   onDelete: () => void;
   onRestock: () => void;
 }) {
-  const stock = wholeNumber(item.currentStock);
-  const reorder = wholeNumber(item.reorderLevel);
+  const stock = parseFloat(Number(item.currentStock).toFixed(2));
+  const reorder = parseFloat(Number(item.reorderLevel).toFixed(2));
   const isLowStock = stock <= reorder;
 
   return (
@@ -723,7 +723,7 @@ function InventoryRow({
           <p className="text-xs text-text-muted mt-0.5">
             Stock:{' '}
             <span className={cn('font-semibold', isLowStock ? 'text-red-600' : 'text-primary')}>
-              {stock} {item.unit}
+              {stock.toFixed(2)} {item.unit}
             </span>
             <span className="mx-2 text-text-muted/60">•</span>
             Reorder at <span className="font-semibold">{reorder}</span>
@@ -1180,7 +1180,7 @@ function DeleteConfirmModal({
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Current Stock</span>
             <span className="text-sm font-semibold text-foreground">
-              {wholeNumber(item.currentStock)} {item.unit}
+              {parseFloat(Number(item.currentStock).toFixed(2))} {item.unit}
             </span>
           </div>
           <div className="flex items-center justify-between border-t border-black/5 pt-2">

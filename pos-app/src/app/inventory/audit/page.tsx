@@ -60,6 +60,12 @@ function toWholeNumber(value: number) {
   return Math.max(0, Math.floor(Number(value) || 0));
 }
 
+function toDecimal(value: number | string, decimals = 2): number {
+  const parsed = Number(value);
+  if (isNaN(parsed)) return 0;
+  return Math.max(0, parseFloat(parsed.toFixed(decimals)));
+}
+
 export default function EODAuditPage() {
   const router = useRouter();
 
@@ -115,7 +121,7 @@ export default function EODAuditPage() {
 
     const initialCounts: Record<number, number> = {};
     rows.forEach((item) => {
-      initialCounts[item.ingredientID] = Math.floor(item.currentStock);
+      initialCounts[item.ingredientID] = toDecimal(item.currentStock);
     });
     setAuditCounts(initialCounts);
     setLoading(false);
@@ -127,26 +133,20 @@ export default function EODAuditPage() {
 
   const handleInputChange = (id: number, value: string) => {
     const ingredient = ingredients.find((item) => item.ingredientID === id);
-    const systemStock = toWholeNumber(ingredient?.currentStock ?? 0);
+    const systemStock = toDecimal(ingredient?.currentStock ?? 0);
 
     if (value.trim() === "") {
-      setAuditCounts((prev) => ({
-        ...prev,
-        [id]: 0,
-      }));
+      setAuditCounts((prev) => ({ ...prev, [id]: 0 }));
       return;
     }
 
-    const cleaned = value.replace(/[^\d]/g, "");
-    let parsed = cleaned === "" ? 0 : Number(cleaned);
+    if (!/^\d*\.?\d{0,2}$/.test(value)) return;
 
-    if (Number.isNaN(parsed)) parsed = 0;
-    parsed = Math.max(0, Math.min(parsed, systemStock));
+    const parsed = parseFloat(value);
+    if (isNaN(parsed)) return;
 
-    setAuditCounts((prev) => ({
-      ...prev,
-      [id]: parsed,
-    }));
+    const clamped = Math.max(0, Math.min(parsed, systemStock));
+    setAuditCounts((prev) => ({ ...prev, [id]: clamped }));
   };
 
   const filteredIngredients = useMemo(() => {
@@ -167,14 +167,14 @@ export default function EODAuditPage() {
     let overages = 0;
 
     for (const item of ingredients) {
-      const system = toWholeNumber(item.currentStock);
+      const system = toDecimal(item.currentStock);
       const rawPhysical = Number(auditCounts[item.ingredientID] ?? item.currentStock);
-      const physical = Math.max(0, Math.min(toWholeNumber(rawPhysical), system));
-      const variance = physical - system;
-      const usedToday = system - physical;
+      const physical = Math.max(0, Math.min(toDecimal(rawPhysical), system));
+      const variance = parseFloat((physical - system).toFixed(2));
+      const usedToday = parseFloat((system - physical).toFixed(2));
 
       if (variance !== 0) changedItems++;
-      if (usedToday > 0) totalUsage += usedToday;
+      if (usedToday > 0) totalUsage = parseFloat((totalUsage + usedToday).toFixed(2));
       if (variance > 0) overages += 1;
     }
 
@@ -183,9 +183,9 @@ export default function EODAuditPage() {
 
   const hasChanges = useMemo(() => {
     return ingredients.some((item) => {
-      const system = toWholeNumber(item.currentStock);
+      const system = toDecimal(item.currentStock);
       const rawPhysical = Number(auditCounts[item.ingredientID] ?? item.currentStock);
-      const physical = Math.max(0, Math.min(toWholeNumber(rawPhysical), system));
+      const physical = Math.max(0, Math.min(toDecimal(rawPhysical), system));
       return physical !== system;
     });
   }, [ingredients, auditCounts]);
@@ -371,7 +371,7 @@ export default function EODAuditPage() {
               />
               <StatCard
                 title="Total Used Today"
-                value={totals.totalUsage}
+                value={totals.totalUsage.toFixed(2)}
                 subtitle="Based on system minus physical"
                 icon={<MdChecklist size={20} />}
               />
@@ -434,11 +434,11 @@ export default function EODAuditPage() {
 
               <div className="divide-y divide-black/5">
                 {filteredIngredients.map((item) => {
-                  const system = toWholeNumber(item.currentStock);
+                  const system = toDecimal(item.currentStock);
                   const rawPhysical = Number(auditCounts[item.ingredientID] ?? 0);
-                  const physical = Math.max(0, Math.min(toWholeNumber(rawPhysical), system));
-                  const usedToday = system - physical;
-                  const variance = physical - system;
+                  const physical = Math.max(0, Math.min(toDecimal(rawPhysical), system));
+                  const usedToday = parseFloat((system - physical).toFixed(2));
+                  const variance = parseFloat((physical - system).toFixed(2));
 
                   const usedTodayClass =
                     usedToday > 0
@@ -468,7 +468,7 @@ export default function EODAuditPage() {
 
                       <div className="flex items-center md:justify-center">
                         <div className="rounded-xl bg-black/5 px-3 py-2 text-sm font-semibold ring-1 ring-card-border">
-                          {system}{" "}
+                          {system.toFixed(2)}{" "}
                           <span className="text-[10px] font-medium uppercase text-text-muted">
                             {item.unit}
                           </span>
@@ -484,21 +484,20 @@ export default function EODAuditPage() {
                             type="number"
                             min={0}
                             max={system}
-                            step="1"
-                            inputMode="numeric"
+                            step="0.01"
+                            inputMode="decimal"
                             className={INPUT_BASE}
                             value={auditCounts[item.ingredientID] ?? 0}
-                            onChange={(e) =>
-                              handleInputChange(item.ingredientID, e.target.value)
-                            }
+                            onChange={(e) => handleInputChange(item.ingredientID, e.target.value)}
                             onKeyDown={(e) => {
-                              if ([".", ",", "-", "e", "E", "+"].includes(e.key)) {
+                              // Block invalid characters but allow decimal point
+                              if ([",", "-", "e", "E", "+"].includes(e.key)) {
                                 e.preventDefault();
                               }
                             }}
                             onPaste={(e) => {
                               const pasted = e.clipboardData.getData("text");
-                              if (/[^\d]/.test(pasted)) {
+                              if (!/^\d*\.?\d{0,2}$/.test(pasted)) {
                                 e.preventDefault();
                               }
                             }}
@@ -514,7 +513,7 @@ export default function EODAuditPage() {
                           Used Today
                         </span>
                         <span className={cn("text-sm font-semibold", usedTodayClass)}>
-                          {usedToday}{" "}
+                          {usedToday.toFixed(2)}{" "}
                           <span className="text-[10px] uppercase">{item.unit}</span>
                         </span>
                       </div>
@@ -525,7 +524,7 @@ export default function EODAuditPage() {
                         </span>
                         <span className={cn("text-sm font-semibold", varianceClass)}>
                           {variance > 0 ? "+" : ""}
-                          {variance}{" "}
+                          {variance.toFixed(2)}{" "}
                           <span className="text-[10px] uppercase">{item.unit}</span>
                         </span>
                       </div>
