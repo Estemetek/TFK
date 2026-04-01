@@ -2002,14 +2002,6 @@ export default function MenuPage() {
                 placeholder="0.00"
               />
             </Field>
-            <Field label="Regular Price (₱)">
-              <TextInput
-                inputMode="decimal"
-                value={form.regularPrice}
-                onChange={(e) => setForm({ ...form, regularPrice: handlePriceInput(e.target.value) })}
-                placeholder="0.00"
-              />
-            </Field>
           </div>
 
           <Field label="Category">
@@ -2073,13 +2065,6 @@ export default function MenuPage() {
                 inputMode="decimal"
                 value={editForm.price}
                 onChange={(e) => setEditForm({ ...editForm, price: handlePriceInput(e.target.value) })}
-              />
-            </Field>
-            <Field label="Regular Price (₱)">
-              <TextInput
-                inputMode="decimal"
-                value={editForm.regularPrice}
-                onChange={(e) => setEditForm({ ...editForm, regularPrice: handlePriceInput(e.target.value) })}
               />
             </Field>
           </div>
