@@ -42,6 +42,7 @@ type Staff = {
 };
 
 type PopupType = 'success' | 'error' | 'info' | 'warning';
+type UserRole = 'Superadmin' | 'Manager' | 'Staff';
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
@@ -357,6 +358,10 @@ export default function StaffPage() {
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserName, setCurrentUserName] = useState<string>('');
+  const [currentUserInitials, setCurrentUserInitials] = useState<string>('');
 
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<'name' | 'role' | 'newest'>('name');
@@ -458,6 +463,55 @@ export default function StaffPage() {
     });
 
   useEffect(() => {
+    const fetchCurrentUserRole = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          router.push('/login');
+          return;
+        }
+
+        setCurrentUserId(user.id);
+
+        const { data, error } = await supabase
+          .from('UsersAccount')
+          .select('roleID, firstName, lastName, Role!inner(roleName)')
+          .eq('userID', user.id)
+          .single();
+
+        if (error || !data) {
+          console.error('Failed to fetch user role:', error);
+          return;
+        }
+
+        let roleName: UserRole = 'Staff';
+        if (data.Role) {
+          const roleData = data.Role as any;
+          if (Array.isArray(roleData)) {
+            roleName = (roleData[0]?.roleName || 'Staff') as UserRole;
+          } else if (roleData.roleName) {
+            roleName = roleData.roleName as UserRole;
+          }
+        }
+
+        // Set current user name and calculate initials
+        const firstName = data.firstName || '';
+        const lastName = data.lastName || '';
+        const fullName = `${firstName} ${lastName}`.trim();
+        const initials = `${firstName[0] || ''}${lastName[0] || ''}`.toUpperCase() || 'NA';
+        
+        setCurrentUserName(fullName);
+        setCurrentUserInitials(initials);
+        setUserRole(roleName);
+      } catch (err) {
+        console.error('Error fetching user role:', err);
+      }
+    };
+
+    fetchCurrentUserRole();
+  }, [router]);
+
+  useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError(null);
@@ -514,6 +568,17 @@ export default function StaffPage() {
   }, [pathname]);
 
   const handleDeleteStaff = (staffToDelete: Staff) => {
+    if (userRole !== 'Superadmin') {
+      showPopup({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Only Superadmins can delete staff members.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
+      return;
+    }
+
     showPopup({
       type: 'warning',
       title: 'Deactivate user?',
@@ -581,7 +646,161 @@ export default function StaffPage() {
     });
   };
 
+  const handleEditStaff = async () => {
+    if (!selectedStaff) return;
+
+    if (userRole !== 'Superadmin') {
+      showPopup({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Only Superadmins can edit staff information.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
+      return;
+    }
+
+    if (!form.fullName || !form.email || !form.phone) {
+      showPopup({
+        type: 'warning',
+        title: 'Incomplete form',
+        message: 'Please fill in all required fields.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(form.email.trim())) {
+      showPopup({
+        type: 'warning',
+        title: 'Invalid email',
+        message: 'Please enter a valid email address.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const [firstName, ...lastNameParts] = form.fullName.trim().split(' ');
+      const lastName = lastNameParts.join(' ') || '';
+      const email = form.email.trim().toLowerCase();
+
+      const { data: roleData, error: roleError } = await supabase
+        .from('Role')
+        .select('roleID')
+        .eq('roleName', form.role)
+        .single();
+
+      if (roleError) {
+        showPopup({
+          type: 'error',
+          title: 'Role not found',
+          message: roleError.message,
+          confirmText: 'Close',
+          onConfirm: closePopup,
+        });
+        setLoading(false);
+        return;
+      }
+
+      const roleID = roleData?.roleID || 1;
+
+      const { error: updateError } = await supabase
+        .from('UsersAccount')
+        .update({
+          firstName,
+          lastName,
+          email,
+          phone: form.phone.trim(),
+          dob: form.dob,
+          address: form.address.trim(),
+          roleID,
+        })
+        .eq('userID', selectedStaff.id);
+
+      if (updateError) {
+        showPopup({
+          type: 'error',
+          title: 'Failed to update staff',
+          message: updateError.message,
+          confirmText: 'Close',
+          onConfirm: closePopup,
+        });
+        setLoading(false);
+        return;
+      }
+
+      setOpenEdit(false);
+
+      const [usersRes, rolesRes] = await Promise.all([
+        supabase
+          .from('UsersAccount')
+          .select('userID, roleID, email, firstName, lastName, phone, dob, address, isActive')
+          .order('firstName', { ascending: true }),
+        supabase.from('Role').select('roleID, roleName'),
+      ]);
+
+      const roleMap: Record<number, string> = {};
+      rolesRes.data?.forEach((r: any) => {
+        roleMap[r.roleID] = r.roleName;
+      });
+
+      const mapped =
+        usersRes.data?.map((r: any) => ({
+          id: r.userID,
+          code: r.userID?.slice(0, 6) ?? '',
+          name: `${r.firstName} ${r.lastName}`.trim(),
+          role: roleMap[r.roleID] ?? 'Unknown',
+          email: r.email ?? '',
+          phone: r.phone ?? '',
+          dob: r.dob ?? '',
+          address: r.address ?? '',
+          avatarInitials:
+            `${r.firstName?.[0] ?? ''}${r.lastName?.[0] ?? ''}`.toUpperCase() || 'NA',
+          isActive: r.isActive ?? true,
+        })) ?? [];
+
+      setStaffList(mapped);
+      setSelectedStaff(mapped.find((s) => s.id === selectedStaff.id) ?? null);
+
+      showPopup({
+        type: 'success',
+        title: 'Staff updated',
+        message: 'Staff information updated successfully.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
+
+      setLoading(false);
+    } catch (e: any) {
+      showPopup({
+        type: 'error',
+        title: 'Error',
+        message: e.message,
+        confirmText: 'Close',
+        onConfirm: closePopup,
+      });
+      setLoading(false);
+    }
+  };
+
   const handleBulkDelete = () => {
+    if (userRole !== 'Superadmin') {
+      showPopup({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Only Superadmins can delete staff members.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
+      return;
+    }
+
     if (selectedIds.size === 0) return;
 
     showPopup({
@@ -679,6 +898,17 @@ export default function StaffPage() {
   };
 
   const handleAddStaff = async () => {
+    if (userRole !== 'Superadmin' && userRole !== 'Manager') {
+      showPopup({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'You do not have permission to add staff.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
+      return;
+    }
+
     if (!form.fullName || !form.email || !form.phone || !form.password) {
       showPopup({
         type: 'warning',
@@ -1039,10 +1269,11 @@ export default function StaffPage() {
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => router.push('/profile')}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[12px] font-extrabold text-[#B80F24] shadow-sm ring-1 ring-card-border"
+                  className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white text-[12px] font-extrabold text-[#B80F24] shadow-sm ring-1 ring-card-border hover:shadow-md transition"
                   aria-label="Open profile"
+                  title={`${currentUserName} (${userRole || 'Loading...'})`}
                 >
-                  AC
+                  {currentUserInitials}
                 </button>
               </div>
             </div>
@@ -1075,12 +1306,14 @@ export default function StaffPage() {
                   </button>
 
                   <div className="mt-4 grid gap-2">
-                    <button
-                      onClick={() => openEditModal(selectedStaff)}
-                      className="w-full rounded-xl bg-[#B80F24] px-4 py-3 text-[12px] font-extrabold text-white shadow-sm ring-1 ring-[#B80F24]/30 transition hover:brightness-95"
-                    >
-                      Edit profile
-                    </button>
+                    {userRole === 'Superadmin' && (
+                      <button
+                        onClick={() => openEditModal(selectedStaff)}
+                        className="w-full rounded-xl bg-[#B80F24] px-4 py-3 text-[12px] font-extrabold text-white shadow-sm ring-1 ring-[#B80F24]/30 transition hover:brightness-95"
+                      >
+                        Edit profile
+                      </button>
+                    )}
                   </div>
                 </section>
               </div>
@@ -1122,12 +1355,14 @@ export default function StaffPage() {
                 <section className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-card-border">
                   <p className="mb-3 text-[12px] font-extrabold text-[#1E1E1E]">Quick Actions</p>
                   <div className="grid gap-2">
-                    <button
-                      onClick={() => handleDeleteStaff(selectedStaff)}
-                      className="rounded-xl bg-white px-4 py-3 text-[12px] font-extrabold text-[#B80F24] shadow-sm ring-1 ring-[#B80F24]/25 transition hover:bg-[#B80F24]/5"
-                    >
-                      Delete profile
-                    </button>
+                    {userRole === 'Superadmin' && (
+                      <button
+                        onClick={() => handleDeleteStaff(selectedStaff)}
+                        className="rounded-xl bg-white px-4 py-3 text-[12px] font-extrabold text-[#B80F24] shadow-sm ring-1 ring-[#B80F24]/25 transition hover:bg-[#B80F24]/5"
+                      >
+                        Delete profile
+                      </button>
+                    )}
                   </div>
                 </section>
               </div>
@@ -1175,25 +1410,29 @@ export default function StaffPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center justify-end gap-2">
-                  <button
-                    onClick={openAddModal}
-                    className="rounded-xl bg-[#B80F24] px-4 py-2.5 text-[12px] font-extrabold text-white shadow-sm ring-1 ring-[#B80F24]/30 transition hover:brightness-95"
-                  >
-                    Add Staff
-                  </button>
+                  {(userRole === 'Manager' || userRole === 'Superadmin') && (
+                    <button
+                      onClick={openAddModal}
+                      className="rounded-xl bg-[#B80F24] px-4 py-2.5 text-[12px] font-extrabold text-white shadow-sm ring-1 ring-[#B80F24]/30 transition hover:brightness-95"
+                    >
+                      Add Staff
+                    </button>
+                  )}
 
-                  <button
-                    disabled={selectedIds.size === 0}
-                    onClick={handleBulkDelete}
-                    className={cn(
-                      'rounded-xl px-4 py-2.5 text-[12px] font-extrabold shadow-sm ring-1 transition',
-                      selectedIds.size === 0
-                        ? 'bg-white text-[#B8B8B8] ring-black/5'
-                        : 'bg-white text-[#B80F24] ring-[#B80F24]/20 hover:bg-[#B80F24]/5'
-                    )}
-                  >
-                    Delete selected ({selectedIds.size})
-                  </button>
+                  {userRole === 'Superadmin' && (
+                    <button
+                      disabled={selectedIds.size === 0}
+                      onClick={handleBulkDelete}
+                      className={cn(
+                        'rounded-xl px-4 py-2.5 text-[12px] font-extrabold shadow-sm ring-1 transition',
+                        selectedIds.size === 0
+                          ? 'bg-white text-[#B8B8B8] ring-black/5'
+                          : 'bg-white text-[#B80F24] ring-[#B80F24]/20 hover:bg-[#B80F24]/5'
+                      )}
+                    >
+                      Delete selected ({selectedIds.size})
+                    </button>
+                  )}
                 </div>
               </section>
 
@@ -1282,9 +1521,11 @@ export default function StaffPage() {
                               <MdVisibility className="h-4 w-4" />
                             </ActionIcon>
 
-                            <ActionIcon label="Delete" variant="danger" onClick={() => handleDeleteStaff(s)}>
-                              <MdDelete className="h-4 w-4" />
-                            </ActionIcon>
+                            {userRole === 'Superadmin' && (
+                              <ActionIcon label="Delete" variant="danger" onClick={() => handleDeleteStaff(s)}>
+                                <MdDelete className="h-4 w-4" />
+                              </ActionIcon>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -1317,9 +1558,11 @@ export default function StaffPage() {
                               <ActionIcon label="View details" variant="soft" onClick={() => goDetails(s)}>
                                 <MdVisibility className="h-4 w-4" />
                               </ActionIcon>
-                              <ActionIcon label="Delete" variant="danger" onClick={() => handleDeleteStaff(s)}>
-                                <MdDelete className="h-4 w-4" />
-                              </ActionIcon>
+                              {userRole === 'Superadmin' && (
+                                <ActionIcon label="Delete" variant="danger" onClick={() => handleDeleteStaff(s)}>
+                                  <MdDelete className="h-4 w-4" />
+                                </ActionIcon>
+                              )}
                             </div>
                           </div>
 
@@ -1426,7 +1669,7 @@ export default function StaffPage() {
               label="Role"
               value={form.role}
               onChange={(v) => setForm((p) => ({ ...p, role: v }))}
-              options={['Manager', 'Staff']}
+              options={userRole === 'Superadmin' ? ['Superadmin', 'Manager', 'Staff'] : ['Manager', 'Staff']}
             />
             <Field
               label="Phone number"
@@ -1499,7 +1742,7 @@ export default function StaffPage() {
               label="Role"
               value={form.role}
               onChange={(v) => setForm((p) => ({ ...p, role: v }))}
-              options={['Manager', 'Staff']}
+              options={['Superadmin', 'Manager', 'Staff']}
             />
             <Field
               label="Phone number"
@@ -1535,7 +1778,7 @@ export default function StaffPage() {
               Cancel
             </button>
             <button
-              onClick={() => setOpenEdit(false)}
+              onClick={handleEditStaff}
               className="rounded-xl bg-[#B80F24] px-5 py-2 text-[12px] font-extrabold text-white shadow-sm ring-1 ring-[#B80F24]/30 transition hover:brightness-95"
             >
               Confirm

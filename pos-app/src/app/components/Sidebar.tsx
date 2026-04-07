@@ -14,7 +14,7 @@ import {
   MdLogout,
 } from 'react-icons/md';
 
-type UserRole = 'Manager' | 'Staff';
+type UserRole = 'Superadmin' | 'Manager' | 'Staff';
 type NavItem = { name: string; path?: string };
 
 const iconMap: Record<string, React.ReactNode> = {
@@ -36,6 +36,7 @@ const allNavItems: NavItem[] = [
 ];
 
 const roleBasedNav: Record<UserRole, string[]> = {
+  Superadmin: ['Dashboard', 'Menu', 'User Management', 'Inventory', 'Reports', 'Order'],
   Manager: ['Dashboard', 'Menu', 'User Management', 'Inventory', 'Reports', 'Order'],
   Staff: ['Dashboard', 'Menu', 'Inventory', 'Order'],
 };
