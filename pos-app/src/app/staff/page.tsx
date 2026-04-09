@@ -14,6 +14,7 @@ import {
   MdShoppingCart,
   MdDelete,
   MdVisibility,
+  MdVisibilityOff,
   MdKeyboardArrowLeft,
   MdClose,
   MdMenu,
@@ -374,6 +375,10 @@ export default function StaffPage() {
 
   const [openAdd, setOpenAdd] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
+  const [openResetPassword, setOpenResetPassword] = useState(false);
+  const [resetPasswordStaff, setResetPasswordStaff] = useState<Staff | null>(null);
+  const [resetPasswordInput, setResetPasswordInput] = useState('');
+  const [showResetPassword, setShowResetPassword] = useState(false);
 
   const [popup, setPopup] = useState<{
     open: boolean;
@@ -646,6 +651,82 @@ export default function StaffPage() {
     });
   };
 
+  const handleReactivateStaff = (staffToReactivate: Staff) => {
+    if (userRole !== 'Superadmin') {
+      showPopup({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Only Superadmins can reactivate staff members.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
+      return;
+    }
+
+    showPopup({
+      type: 'warning',
+      title: 'Reactivate user?',
+      message: `Are you sure you want to reactivate ${staffToReactivate.name}? They will be able to access the system again.`,
+      confirmText: 'Reactivate',
+      cancelText: 'Cancel',
+      onCancel: closePopup,
+      onConfirm: async () => {
+        closePopup();
+
+        try {
+          setLoading(true);
+
+          const { error } = await supabase
+            .from('UsersAccount')
+            .update({ isActive: true })
+            .eq('userID', staffToReactivate.id);
+
+          if (error) {
+            console.error('Error reactivating staff:', error);
+            showPopup({
+              type: 'error',
+              title: 'Failed to reactivate user',
+              message: 'Please try again.',
+              confirmText: 'Close',
+              onConfirm: closePopup,
+            });
+            setLoading(false);
+            return;
+          }
+
+          setStaffList((prev) =>
+            prev.map((s) =>
+              s.id === staffToReactivate.id ? { ...s, isActive: true } : s
+            )
+          );
+
+          if (selectedStaff?.id === staffToReactivate.id) {
+            setSelectedStaff({ ...selectedStaff, isActive: true });
+          }
+
+          showPopup({
+            type: 'success',
+            title: 'User reactivated',
+            message: `${staffToReactivate.name} has been reactivated successfully.`,
+            confirmText: 'OK',
+            onConfirm: closePopup,
+          });
+          setLoading(false);
+        } catch (err) {
+          console.error('Error:', err);
+          showPopup({
+            type: 'error',
+            title: 'Something went wrong',
+            message: 'An error occurred while reactivating the user.',
+            confirmText: 'Close',
+            onConfirm: closePopup,
+          });
+          setLoading(false);
+        }
+      },
+    });
+  };
+
   const handleEditStaff = async () => {
     if (!selectedStaff) return;
 
@@ -873,6 +954,82 @@ export default function StaffPage() {
     await logout();
   };
 
+  const handleResetPassword = async () => {
+    if (!resetPasswordStaff) return;
+
+    if (!resetPasswordInput || resetPasswordInput.trim().length === 0) {
+      showPopup({
+        type: 'warning',
+        title: 'Empty password',
+        message: 'Please enter a new password.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
+      return;
+    }
+
+    if (resetPasswordInput.trim().length < 6) {
+      showPopup({
+        type: 'warning',
+        title: 'Invalid password',
+        message: 'Password must be at least 6 characters long.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const pwResponse = await fetch('/api/admin/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: resetPasswordStaff.id,
+          newPassword: resetPasswordInput.trim(),
+        }),
+      });
+
+      const pwData = await pwResponse.json();
+
+      if (!pwResponse.ok) {
+        showPopup({
+          type: 'error',
+          title: 'Password reset failed',
+          message: pwData.error || 'Failed to reset password',
+          confirmText: 'Close',
+          onConfirm: closePopup,
+        });
+        setLoading(false);
+        return;
+      }
+
+      setOpenResetPassword(false);
+      setResetPasswordInput('');
+      setResetPasswordStaff(null);
+
+      showPopup({
+        type: 'success',
+        title: 'Password reset',
+        message: 'Password updated successfully. User should log out and log back in to use the new password.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
+
+      setLoading(false);
+    } catch (err: any) {
+      showPopup({
+        type: 'error',
+        title: 'Password reset error',
+        message: err.message || 'An error occurred while resetting password',
+        confirmText: 'Close',
+        onConfirm: closePopup,
+      });
+      setLoading(false);
+    }
+  };
+
   const openAddModal = () => {
     resetAddForm();
     setOpenAdd(true);
@@ -890,6 +1047,13 @@ export default function StaffPage() {
       password: '',
     });
     setOpenEdit(true);
+  };
+
+  const openResetPasswordModal = (s: Staff) => {
+    setResetPasswordStaff(s);
+    setResetPasswordInput('');
+    setShowResetPassword(false);
+    setOpenResetPassword(true);
   };
 
   const goDetails = (s: Staff) => {
@@ -1306,6 +1470,22 @@ export default function StaffPage() {
                   </button>
 
                   <div className="mt-4 grid gap-2">
+                    {selectedStaff && !selectedStaff.isActive && userRole === 'Superadmin' && (
+                      <button
+                        onClick={() => handleReactivateStaff(selectedStaff)}
+                        className="w-full rounded-xl bg-green-600 px-4 py-3 text-[12px] font-extrabold text-white shadow-sm ring-1 ring-green-600/30 transition hover:brightness-95"
+                      >
+                        Reactivate Account
+                      </button>
+                    )}
+                    {(userRole === 'Superadmin' || userRole === 'Manager') && selectedStaff?.isActive && (
+                      <button
+                        onClick={() => openResetPasswordModal(selectedStaff)}
+                        className="w-full rounded-xl bg-yellow-600 px-4 py-3 text-[12px] font-extrabold text-white shadow-sm ring-1 ring-yellow-600/30 transition hover:brightness-95"
+                      >
+                        Reset Password
+                      </button>
+                    )}
                     {userRole === 'Superadmin' && (
                       <button
                         onClick={() => openEditModal(selectedStaff)}
@@ -1755,13 +1935,6 @@ export default function StaffPage() {
               onChange={(v) => setForm((p) => ({ ...p, dob: v }))}
               type="date"
             />
-            <Field
-              label="Password (leave empty to keep current)"
-              placeholder="Enter new password"
-              value={form.password}
-              onChange={(v) => setForm((p) => ({ ...p, password: v }))}
-              type="password"
-            />
           </div>
 
           <Field
@@ -1782,6 +1955,66 @@ export default function StaffPage() {
               className="rounded-xl bg-[#B80F24] px-5 py-2 text-[12px] font-extrabold text-white shadow-sm ring-1 ring-[#B80F24]/30 transition hover:brightness-95"
             >
               Confirm
+            </button>
+          </div>
+        </div>
+      </ModalRight>
+
+      <ModalRight open={openResetPassword} title="Reset Password" onClose={() => setOpenResetPassword(false)}>
+        <div className="space-y-5">
+          <div className="rounded-2xl bg-blue-50 p-4 ring-1 ring-blue-200">
+            <p className="text-sm font-semibold text-blue-900">
+              {resetPasswordStaff ? `Resetting password for ${resetPasswordStaff.name}` : 'Reset Password'}
+            </p>
+            <p className="mt-2 text-[12px] text-blue-800">
+              Email: {resetPasswordStaff?.email}
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-[#1E1E1E] mb-2">
+                New Password
+              </label>
+              <div className="flex items-center gap-2 rounded-2xl bg-[#F7F7F7] px-3 py-2.5 ring-1 ring-black/10 transition focus-within:bg-white focus-within:ring-2 focus-within:ring-[#B80F24]/20">
+                <input
+                  type={showResetPassword ? 'text' : 'password'}
+                  value={resetPasswordInput}
+                  onChange={(e) => setResetPasswordInput(e.target.value)}
+                  placeholder="Enter new password (minimum 6 characters)"
+                  className="w-full bg-transparent text-[13px] font-semibold text-[#1E1E1E] outline-none placeholder:text-[#B8B8B8] disabled:opacity-70"
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowResetPassword((s) => !s)}
+                  className="grid h-9 w-9 place-items-center rounded-full bg-white/70 text-[#6D6D6D] ring-1 ring-black/5 transition hover:bg-white"
+                  aria-label={showResetPassword ? 'Hide password' : 'Show password'}
+                  disabled={loading}
+                >
+                  {showResetPassword ? <MdVisibilityOff className="h-5 w-5" /> : <MdVisibility className="h-5 w-5" />}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-4">
+            <button
+              onClick={() => {
+                setOpenResetPassword(false);
+                setShowResetPassword(false);
+              }}
+              className="rounded-xl bg-transparent px-4 py-2 text-[12px] font-extrabold text-[#1E1E1E]"
+              disabled={loading}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleResetPassword}
+              className="rounded-xl bg-[#B80F24] px-5 py-2 text-[12px] font-extrabold text-white shadow-sm ring-1 ring-[#B80F24]/30 transition hover:brightness-95 disabled:opacity-50"
+              disabled={!resetPasswordInput || resetPasswordInput.trim().length < 6 || loading}
+            >
+              {loading ? 'Resetting...' : 'Confirm Reset'}
             </button>
           </div>
         </div>

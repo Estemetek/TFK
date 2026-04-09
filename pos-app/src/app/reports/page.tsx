@@ -28,6 +28,7 @@ import {
   MdChecklist,
   MdTrendingUp,
   MdWarningAmber,
+  MdLock,
 } from 'react-icons/md';
 
 /* ----------------------------- Types ----------------------------- */
@@ -380,22 +381,91 @@ function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => v
   const [showVoidConfirm, setShowVoidConfirm] = useState(false);
   const [showVoidSuccess, setShowVoidSuccess] = useState(false);
   const [isVoiding, setIsVoiding] = useState(false);
+  const [showSuperadminVerification, setShowSuperadminVerification] = useState(false);
+  const [adminUsername, setAdminUsername] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [verificationError, setVerificationError] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
 
-  const handleConfirmVoid = async () => {
+  const handleVerifySuperadmin = async () => {
+    setVerificationError('');
+    setIsVerifying(true);
+
+    try {
+      // Verify Superadmin credentials by attempting login
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: adminUsername,
+        password: adminPassword,
+      });
+
+      if (error) {
+        setVerificationError('Invalid credentials. Please try again.');
+        setIsVerifying(false);
+        return;
+      }
+
+      // Check if the user is a Superadmin
+      const { data: userAccount, error: accountError } = await supabase
+        .from('UsersAccount')
+        .select('roleID')
+        .eq('userID', data.user.id)
+        .single();
+
+      if (accountError || !userAccount) {
+        setVerificationError('User account not found.');
+        setIsVerifying(false);
+        return;
+      }
+
+      const { data: roleData } = await supabase
+        .from('Role')
+        .select('roleName')
+        .eq('roleID', userAccount.roleID)
+        .single();
+
+      if (roleData?.roleName !== 'Superadmin') {
+        setVerificationError('Only Superadmin can approve void receipts.');
+        setIsVerifying(false);
+        return;
+      }
+
+      // Verification successful, proceed with void
+      setShowSuperadminVerification(false);
+      setAdminUsername('');
+      setAdminPassword('');
+      setVerificationError('');
+      setIsVerifying(false);
+      
+      // Now proceed with the actual void
+      await performVoid();
+    } catch (err) {
+      console.error('Verification error:', err);
+      setVerificationError('An error occurred. Please try again.');
+      setIsVerifying(false);
+    }
+  };
+
+  const performVoid = async () => {
     setIsVoiding(true);
     try {
       await supabase
         .from('Order')
         .update({ status: 'voided' })
         .eq('orderID', order.orderID);
-      onVoid(); // refresh the receipts list in parent
+      onVoid();
       setShowVoidConfirm(false);
-      setShowVoidSuccess(true); // show success instead of closing immediately
+      setShowVoidSuccess(true);
     } catch (err) {
       console.error('Void error:', err);
     } finally {
       setIsVoiding(false);
     }
+  };
+
+  const handleConfirmVoid = async () => {
+    // Instead of voiding directly, show Superadmin verification modal
+    setShowVoidConfirm(false);
+    setShowSuperadminVerification(true);
   };
 
   const pm = paymentMeta(order?.paymentmethod);
@@ -626,6 +696,84 @@ function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => v
                   className={classNames(BTN_SUBTLE, 'w-full')}
                 >
                   DONE
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SUPERADMIN VERIFICATION MODAL */}
+        {showSuperadminVerification && (
+          <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 p-6 rounded-2xl">
+            <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+              <div className="text-center mb-6">
+                <div className="mx-auto h-16 w-16 rounded-full bg-blue-50 flex items-center justify-center mb-4">
+                  <MdLock className="text-3xl text-blue-600" />
+                </div>
+                <h3 className="text-lg font-extrabold text-gray-900">Verify Superadmin</h3>
+                <p className="text-sm font-bold text-gray-500 mt-2">
+                  Enter your Superadmin credentials to authorize receipt void.
+                </p>
+              </div>
+
+              {verificationError && (
+                <div className="mb-4 rounded-2xl bg-red-50 border border-red-200 p-3">
+                  <p className="text-sm font-bold text-red-600">{verificationError}</p>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                {/* Email Input */}
+                <div>
+                  <label className="block text-sm font-extrabold text-gray-700 mb-2">Email Address</label>
+                  <input
+                    type="email"
+                    value={adminUsername}
+                    onChange={(e) => setAdminUsername(e.target.value)}
+                    placeholder="superadmin@example.com"
+                    className="w-full rounded-2xl border border-gray-300 px-4 py-3 text-sm font-bold placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                    disabled={isVerifying}
+                  />
+                </div>
+
+                {/* Password Input */}
+                <div>
+                  <label className="block text-sm font-extrabold text-gray-700 mb-2">Password</label>
+                  <input
+                    type="password"
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full rounded-2xl border border-gray-300 px-4 py-3 text-sm font-bold placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                    disabled={isVerifying}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-3">
+                <button
+                  onClick={handleVerifySuperadmin}
+                  disabled={isVerifying || !adminUsername || !adminPassword}
+                  className={classNames(
+                    'w-full rounded-2xl py-3 text-sm font-extrabold transition',
+                    isVerifying ? 'bg-blue-300 text-white cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'
+                  )}
+                  type="button"
+                >
+                  {isVerifying ? 'VERIFYING...' : 'AUTHORIZE'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowSuperadminVerification(false);
+                    setAdminUsername('');
+                    setAdminPassword('');
+                    setVerificationError('');
+                  }}
+                  disabled={isVerifying}
+                  className="w-full rounded-2xl py-3 text-sm font-extrabold text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition"
+                  type="button"
+                >
+                  CANCEL
                 </button>
               </div>
             </div>
