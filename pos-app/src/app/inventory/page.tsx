@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { syncMenuAvailability } from '../lib/syncMenuAvailability';
 import { Sidebar } from '../components/Sidebar';
 import { useRouter } from 'next/navigation';
 import {
@@ -191,26 +192,6 @@ export default function InventoryPage() {
 
     return sorted;
   }, [inventoryItems, query, showOnlyLow, sort]);
-
-  const syncMenuAvailability = async () => {
-    const { data: menuItems, error: menuError } = await supabase.from('MenuItem').select('menuItemID');
-
-    if (menuError) {
-      console.error('Error fetching menu items:', menuError);
-      return;
-    }
-
-    for (const menu of menuItems) {
-      const { data: recipeIngredients } = await supabase
-        .from('MenuIngredient')
-        .select('ingredientID')
-        .eq('menuItemID', menu.menuItemID);
-
-      const isAvailable = recipeIngredients && recipeIngredients.length > 0;
-
-      await supabase.from('MenuItem').update({ isAvailable }).eq('menuItemID', menu.menuItemID);
-    }
-  };
 
   const handleRestock = async (ingredient: InventoryItem, quantity: number, unitCost: number) => {
     const safeQuantity = wholeNumber(quantity);

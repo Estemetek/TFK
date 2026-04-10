@@ -423,8 +423,8 @@ function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => v
         .eq('roleID', userAccount.roleID)
         .single();
 
-      if (roleData?.roleName !== 'Superadmin') {
-        setVerificationError('Only Superadmin can approve void receipts.');
+      if (roleData?.roleName !== 'Superadmin' && roleData?.roleName !== 'Manager') {
+        setVerificationError('Only Manager or Superadmin can approve void receipts.');
         setIsVerifying(false);
         return;
       }
@@ -609,13 +609,18 @@ function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => v
             <button
               className={classNames(
                 BTN_SUBTLE,
-                'flex-1 border-[#B80F24] text-[#B80F24] hover:bg-[#B80F24] hover:text-black hover:border-[#B80F24]'
+                'flex-1 border-[#B80F24] text-[#B80F24] hover:border-[#B80F24]',
+                order.status === 'voided'
+                  ? 'opacity-50 cursor-not-allowed hover:bg-white hover:text-[#B80F24]'
+                  : 'hover:bg-[#B80F24] hover:text-black'
               )}
-              onClick={() => setShowVoidConfirm(true)}
+              onClick={() => order.status !== 'voided' && setShowVoidConfirm(true)}
+              disabled={order.status === 'voided'}
               type="button"
+              title={order.status === 'voided' ? 'This receipt is already voided' : 'Void this receipt'}
             >
               <MdCancel className="h-4 w-4" />
-              Void Receipt
+              {order.status === 'voided' ? 'Voided' : 'Void Receipt'}
             </button>
           </div>
         </div>
@@ -710,9 +715,9 @@ function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => v
                 <div className="mx-auto h-16 w-16 rounded-full bg-blue-50 flex items-center justify-center mb-4">
                   <MdLock className="text-3xl text-blue-600" />
                 </div>
-                <h3 className="text-lg font-extrabold text-gray-900">Verify Superadmin</h3>
+                <h3 className="text-lg font-extrabold text-gray-900">Verify Authorization</h3>
                 <p className="text-sm font-bold text-gray-500 mt-2">
-                  Enter your Superadmin credentials to authorize receipt void.
+                  Enter Manager or Superadmin credentials to authorize receipt void.
                 </p>
               </div>
 
@@ -801,6 +806,7 @@ export default function ReportsPage() {
   }, [collapsed]);
 
   const [tab, setTab] = useState<ReportTab>('Sales Income');
+  const [userRole, setUserRole] = useState<'Superadmin' | 'Manager' | 'Staff' | null>(null);
 
   const [purchases, setPurchases] = useState<any[]>([]);
   const [purchasesLoading, setPurchasesLoading] = useState(false);
@@ -835,6 +841,46 @@ export default function ReportsPage() {
 
   const [purchasesPage, setPurchasesPage] = useState(1);
   const PURCHASES_PAGE_SIZE = 10;
+
+  const fetchCurrentUserRole = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push('/login');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('UsersAccount')
+        .select('roleID, Role!inner(roleName)')
+        .eq('userID', user.id)
+        .single();
+
+      if (error || !data) {
+        console.error('Failed to fetch user role:', error);
+        return;
+      }
+
+      let roleName: 'Superadmin' | 'Manager' | 'Staff' = 'Staff';
+      if (data.Role) {
+        const roleData = data.Role as any;
+        if (Array.isArray(roleData)) {
+          roleName = (roleData[0]?.roleName || 'Staff') as 'Superadmin' | 'Manager' | 'Staff';
+        } else if (roleData.roleName) {
+          roleName = roleData.roleName as 'Superadmin' | 'Manager' | 'Staff';
+        }
+      }
+
+      setUserRole(roleName);
+    } catch (err) {
+      console.error('Error fetching user role:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchCurrentUserRole();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (tab === 'Sales Income') {
@@ -1312,18 +1358,31 @@ export default function ReportsPage() {
 
         <section className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Tab active={tab === 'Inventory Audit'} onClick={() => setTab('Inventory Audit')}>
-              Inventory Audit
-            </Tab>
+            {/* Only show Inventory Audit for Superadmin and Manager */}
+            {(userRole === 'Superadmin' || userRole === 'Manager') && (
+              <Tab active={tab === 'Inventory Audit'} onClick={() => setTab('Inventory Audit')}>
+                Inventory Audit
+              </Tab>
+            )}
+            
+            {/* Sales Income available to all roles */}
             <Tab active={tab === 'Sales Income'} onClick={() => setTab('Sales Income')}>
               Sales Income
             </Tab>
-            <Tab active={tab === 'Purchase Expenses'} onClick={() => setTab('Purchase Expenses')}>
-              Purchase Expenses
-            </Tab>
-            <Tab active={tab === 'Net Profit'} onClick={() => setTab('Net Profit')}>
-              Net Profit
-            </Tab>
+            
+            {/* Only show Purchase Expenses for Superadmin and Manager */}
+            {(userRole === 'Superadmin' || userRole === 'Manager') && (
+              <Tab active={tab === 'Purchase Expenses'} onClick={() => setTab('Purchase Expenses')}>
+                Purchase Expenses
+              </Tab>
+            )}
+            
+            {/* Only show Net Profit for Superadmin and Manager */}
+            {(userRole === 'Superadmin' || userRole === 'Manager') && (
+              <Tab active={tab === 'Net Profit'} onClick={() => setTab('Net Profit')}>
+                Net Profit
+              </Tab>
+            )}
           </div>
         </section>
 

@@ -38,7 +38,7 @@ const allNavItems: NavItem[] = [
 const roleBasedNav: Record<UserRole, string[]> = {
   Superadmin: ['Dashboard', 'Menu', 'User Management', 'Inventory', 'Reports', 'Order'],
   Manager: ['Dashboard', 'Menu', 'User Management', 'Inventory', 'Reports', 'Order'],
-  Staff: ['Dashboard', 'Menu', 'Inventory', 'Order'],
+  Staff: ['Dashboard', 'Menu', 'Inventory', 'Reports', 'Order'],
 };
 
 export function Sidebar({

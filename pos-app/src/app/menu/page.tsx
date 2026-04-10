@@ -915,6 +915,7 @@ export default function MenuPage() {
       });
     } else {
       setIsAddOpen(false);
+      await syncMenuAvailability();
       await fetchAllData();
 
       showPopup({
@@ -1000,6 +1001,7 @@ export default function MenuPage() {
     } else {
       setIsEditOpen(false);
       setEditingItemID(null);
+      await syncMenuAvailability();
       await fetchAllData();
 
       showPopup({
