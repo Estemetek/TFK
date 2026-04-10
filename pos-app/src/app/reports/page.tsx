@@ -570,6 +570,18 @@ function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => v
                 <span className="font-extrabold text-[#6D6D6D]">Subtotal</span>
                 <span className="font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(subtotal)}</span>
               </div>
+              {order.discountApplied && (
+                <>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-extrabold text-[#6D6D6D]">VAT Exemption (12%)</span>
+                    <span className="font-extrabold text-green-600">-{fmtMoneyPhp(order.amount * 0.15)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-extrabold text-[#6D6D6D]">Senior Citizen / PWD Discount (20%)</span>
+                    <span className="font-extrabold text-green-600">-{fmtMoneyPhp(order.amount * 0.25)}</span>
+                  </div>
+                </>
+              )}
               <div className="flex items-center justify-between text-[11px]">
                 <span className="font-extrabold text-[#6D6D6D]">Amount Paid</span>
                 <span className="font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(paid)}</span>

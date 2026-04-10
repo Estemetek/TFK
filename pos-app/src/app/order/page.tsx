@@ -799,6 +799,7 @@ export default function OrderPage() {
             amountPaid: finalAmountPaid,
             change: finalChange,
             paymentmethod: paymentMethod,
+            discountApplied: discountEnabled,
           },
         ])
         .select()
