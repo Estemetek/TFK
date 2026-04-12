@@ -71,3 +71,73 @@ export async function logout() {
     }
   }
 }
+
+/**
+ * Send password reset email to user
+ * @param email User's email address
+ * @returns Promise with success status
+ */
+export async function sendPasswordResetEmail(email: string) {
+  try {
+    const trimmedEmail = email.trim();
+
+    // 1. Check if user exists in UsersAccount table
+    const { data: userAccount, error: accountError } = await supabase
+      .from('UsersAccount')
+      .select('isActive')
+      .eq('email', trimmedEmail)
+      .single();
+
+    if (accountError || !userAccount) {
+      throw new Error('No account found with this email address. Please check the email or contact your administrator.');
+    }
+
+    // 2. Check if account is active
+    if (!userAccount.isActive) {
+      throw new Error('This account has been disabled by an administrator. Please contact your manager to regain access.');
+    }
+
+    // 3. If user exists and active, send reset email
+    const { error } = await supabase.auth.resetPasswordForEmail(
+      trimmedEmail,
+      {
+        redirectTo: `${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}/auth/callback?type=recovery`,
+      }
+    );
+
+    if (error) {
+      throw new Error(error.message || 'Failed to send password reset email');
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Password reset email error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update password with recovery token (after user clicks reset link)
+ * @param newPassword New password
+ * @returns Promise with success status
+ */
+export async function updatePasswordWithToken(newPassword: string) {
+  try {
+    if (newPassword.length < 6) {
+      throw new Error('Password must be at least 6 characters long');
+    }
+
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) {
+      throw new Error(error.message || 'Failed to update password');
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Password update error:', error);
+    throw error;
+  }
+}
