@@ -223,7 +223,7 @@ function PopupModal({
         : 'bg-[#1E1E1E] text-white ring-black/10 hover:bg-black/90';
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-90 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
         onClick={() => {
@@ -309,7 +309,7 @@ function ActionChoiceModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[95] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-95 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
         onClick={() => {
@@ -1721,7 +1721,7 @@ export default function MenuPage() {
 
             <div className="overflow-hidden rounded-2xl border border-black/10">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[980px]">
+                <table className="w-full min-w-980px">
                   <thead className="bg-[#FAFAFA]">
                     <tr className="text-left text-[11px] font-extrabold text-black/55 uppercase">
                       <th className="p-3">Product</th>
@@ -2107,7 +2107,7 @@ export default function MenuPage() {
           <div>
             <p className="text-xs font-extrabold text-black/50 mb-3">ALL ACTIVE CATEGORIES</p>
 
-            <div className="space-y-2 max-h-[520px] overflow-y-auto">
+            <div className="space-y-2 max-h-520px overflow-y-auto">
               {activeCategoriesForForms.length === 0 ? (
                 <p className="text-xs text-black/45">No active categories</p>
               ) : (
@@ -2207,7 +2207,7 @@ export default function MenuPage() {
             <div className="space-y-6">
               <div>
                 <p className="text-xs font-extrabold text-black/50 mb-3">ACTIVE CATEGORIES</p>
-                <div className="space-y-2 max-h-[420px] overflow-y-auto">
+                <div className="space-y-2 max-h-420px overflow-y-auto">
                   {activeCategoriesForForms.length === 0 ? (
                     <p className="text-xs text-black/45">No active categories</p>
                   ) : (
@@ -2270,7 +2270,7 @@ export default function MenuPage() {
               ARCHIVED CATEGORIES ({archivedCategoriesCount})
             </p>
 
-            <div className="space-y-2 max-h-[500px] overflow-y-auto">
+            <div className="space-y-2 max-h-500px overflow-y-auto">
               {archivedCategoriesCount === 0 ? (
                 <p className="text-xs text-black/45">No archived categories</p>
               ) : (

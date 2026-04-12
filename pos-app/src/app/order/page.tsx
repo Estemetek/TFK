@@ -57,7 +57,7 @@ function SuccessModal({
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
+    <div className="fixed inset-0 z-200 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
       <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-2xl flex flex-col items-center text-center">
 
         <div
@@ -96,7 +96,7 @@ function Toast({
 }) {
   if (!show) return null;
   return (
-    <div className="fixed z-[999] left-1/2 top-5 -translate-x-1/2">
+    <div className="fixed z-999 left-1/2 top-5 -translate-x-1/2">
       <div className="flex items-center gap-2 rounded-2xl bg-gray-900 text-white px-4 py-3 shadow-xl border border-white/10">
         <span className="text-sm font-bold">{text}</span>
         <button
@@ -224,7 +224,7 @@ function CartPanel({
               <MdReceipt size={34} className="opacity-30" />
             </div>
             <p className="text-sm font-black">No items selected</p>
-            <p className="text-[11px] font-bold text-gray-400 mt-1 text-center max-w-[220px]">
+            <p className="text-[11px] font-bold text-gray-400 mt-1 text-center max-w-220px">
               Tap a menu item to add it here.
             </p>
           </div>
@@ -513,7 +513,7 @@ function CartPanel({
 
       {/* CONFIRMATION MODAL OVERLAY */}
       {showConfirmPrompt && (
-        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
+        <div className="absolute inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
           <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="text-center">
               <div 
@@ -990,7 +990,7 @@ export default function OrderPage() {
                     disabled={!item.isAvailable}
                     className={[
                       'group relative flex flex-col rounded-2xl bg-white border shadow-sm overflow-hidden text-left transition',
-                      'hover:-translate-y-[2px] hover:shadow-lg',
+                      'hover:-translate-y-2px hover:shadow-lg',
                       item.isAvailable ? 'border-gray-100' : 'border-gray-100 opacity-55 grayscale',
                     ].join(' ')}
                   >
@@ -1096,7 +1096,7 @@ export default function OrderPage() {
         </div>
 
         {/* RIGHT: CART (Desktop) */}
-        <div className="hidden lg:block w-[420px] h-full min-h-0 overflow-hidden border-l shadow-2xl z-10 bg-white">
+        <div className="hidden lg:block w-420px h-full min-h-0 overflow-hidden border-l shadow-2xl z-10 bg-white">
           <CartPanel
             cart={cart}
             cartCount={cartCount}
@@ -1128,7 +1128,7 @@ export default function OrderPage() {
         {showCartMobile && (
           <div className="lg:hidden fixed inset-0 z-50">
             <div className="absolute inset-0 bg-black/40" onClick={() => setShowCartMobile(false)} />
-            <div className="absolute right-0 top-0 h-full w-[92%] max-w-[420px] overflow-hidden shadow-2xl bg-white">
+            <div className="absolute right-0 top-0 h-full w-[92%] max-w-420px overflow-hidden shadow-2xl bg-white">
               <CartPanel
                 compact
                 cart={cart}

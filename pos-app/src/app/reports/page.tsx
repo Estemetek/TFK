@@ -639,7 +639,7 @@ function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => v
 
         {/* VOID CONFIRMATION PROMPT */}
         {showVoidConfirm && (
-          <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 p-6 rounded-2xl">
+          <div className="absolute inset-0 z-60 flex items-center justify-center bg-black/60 p-6 rounded-2xl">
             <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
               <div className="text-center">
                 <div className="mx-auto h-16 w-16 rounded-full bg-red-50 flex items-center justify-center mb-4">
@@ -675,7 +675,7 @@ function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => v
 
         {/* VOID SUCCESS MODAL */}
         {showVoidSuccess && (
-          <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 p-6 rounded-2xl">
+          <div className="absolute inset-0 z-60 flex items-center justify-center bg-black/60 p-6 rounded-2xl">
             <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-2xl flex flex-col items-center text-center">
               <div className="h-20 w-20 rounded-full bg-gray-100 flex items-center justify-center mb-5 shadow-inner">
                 <MdCancel className="text-4xl text-gray-500" />
@@ -721,7 +721,7 @@ function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => v
 
         {/* SUPERADMIN VERIFICATION MODAL */}
         {showSuperadminVerification && (
-          <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 p-6 rounded-2xl">
+          <div className="absolute inset-0 z-60 flex items-center justify-center bg-black/60 p-6 rounded-2xl">
             <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
               <div className="text-center mb-6">
                 <div className="mx-auto h-16 w-16 rounded-full bg-blue-50 flex items-center justify-center mb-4">

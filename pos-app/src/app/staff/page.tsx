@@ -177,7 +177,7 @@ const PopupDialog = ({
       : 'bg-[#1E1E1E] text-white ring-black/10 hover:bg-black/90';
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-80 flex items-center justify-center p-4">
       <button
         type="button"
         aria-label="Close dialog"
