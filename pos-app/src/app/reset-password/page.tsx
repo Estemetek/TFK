@@ -42,7 +42,22 @@ export default function ResetPasswordPage() {
           return;
         }
 
-        // Session exists, user can proceed with password reset
+        // Check if user role is Manager or Superadmin (role-based access control during recovery)
+        const { data: profile } = await supabase
+          .from('UsersAccount')
+          .select('Role(roleName)')
+          .eq('userID', session.user.id)
+          .single();
+
+        const role = (profile?.Role as any)?.roleName;
+        if (role !== 'Manager' && role !== 'Superadmin') {
+          // Staff account detected, sign out and redirect
+          await supabase.auth.signOut();
+          router.replace('/login');
+          return;
+        }
+
+        // Session exists and user is authorized, can proceed with password reset
         setCheckingSession(false);
       } catch (err) {
         console.error('Recovery session check error:', err);

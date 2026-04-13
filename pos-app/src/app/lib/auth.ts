@@ -81,10 +81,10 @@ export async function sendPasswordResetEmail(email: string) {
   try {
     const trimmedEmail = email.trim();
 
-    // 1. Check if user exists in UsersAccount table
+    // 1. Check if user exists and get their isActive status and roleID
     const { data: userAccount, error: accountError } = await supabase
       .from('UsersAccount')
-      .select('isActive')
+      .select('userID, isActive, roleID')
       .eq('email', trimmedEmail)
       .single();
 
@@ -97,7 +97,13 @@ export async function sendPasswordResetEmail(email: string) {
       throw new Error('This account has been disabled by an administrator. Please contact your manager to regain access.');
     }
 
-    // 3. If user exists and active, send reset email
+    // 3. Check if user role is Manager (roleID 1) or Superadmin (roleID 3)
+    // Staff is roleID 2 and cannot reset password
+    if (userAccount.roleID !== 1 && userAccount.roleID !== 3) {
+      throw new Error('Staff accounts cannot reset their own password. Please contact your manager for assistance.');
+    }
+
+    // 4. If user exists, active, and authorized, send reset email
     const { error } = await supabase.auth.resetPasswordForEmail(
       trimmedEmail,
       {
