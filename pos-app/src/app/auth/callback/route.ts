@@ -8,12 +8,11 @@ const supabase = createClient(
 
 /**
  * Handle OAuth and recovery callbacks from Supabase
- * Exchanges the recovery code for a session and redirects to password reset page
+ * Supabase automatically exchanges recovery tokens detected in URL via detectSessionInUrl
  */
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const code = searchParams.get('code');
     const type = searchParams.get('type');
     const error = searchParams.get('error');
     const errorDescription = searchParams.get('error_description');
@@ -26,22 +25,21 @@ export async function GET(request: Request) {
       );
     }
 
-    // Handle recovery token
-    if (code && type === 'recovery') {
-      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-
-      if (exchangeError) {
-        console.error('Code exchange error:', exchangeError);
-        return NextResponse.redirect(
-          new URL(`/forgot-password?error=${encodeURIComponent('Invalid or expired recovery link')}`, request.url)
-        );
+    // Handle recovery flow
+    // Note: Supabase client detects recovery tokens in URL and auto-exchanges them
+    // We just need to check if type=recovery and user has a session
+    if (type === 'recovery') {
+      // Check if user was authenticated via recovery token
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        // User has a recovery session, send them to reset-password
+        // where they can set their new password
+        return NextResponse.redirect(new URL('/reset-password', request.url));
       }
-
-      // Successfully exchanged code for session, redirect to password reset
-      return NextResponse.redirect(new URL('/reset-password', request.url));
     }
 
-    // Fallback: if no code or unexpected type, go back to login
+    // Fallback: if no recovery session or unexpected type, go to login
     return NextResponse.redirect(new URL('/login', request.url));
   } catch (err) {
     console.error('Callback error:', err);

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
-import { updatePasswordWithToken } from '../lib/auth';
+import { updatePasswordWithToken, logout } from '../lib/auth';
 import { MdLock, MdVisibility, MdVisibilityOff, MdCheckCircle, MdWarning, MdArrowForward } from 'react-icons/md';
 
 function cn(...classes: Array<string | false | null | undefined>) {
@@ -30,28 +30,26 @@ export default function ResetPasswordPage() {
     return passwordValid && passwordsMatch && !loading;
   }, [passwordValid, passwordsMatch, loading]);
 
-  // Check if user has a valid session with recovery token
+  // Check if user has recovery session (established by Supabase via detectSessionInUrl)
   useEffect(() => {
-    const checkSession = async () => {
+    const checkRecoverySession = async () => {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        const { data: { session } } = await supabase.auth.getSession();
 
-        // Check if user has the right auth context (recovery token)
         if (!session) {
           // No session, redirect to forgot password
           router.replace('/forgot-password');
           return;
         }
 
+        // Session exists, user can proceed with password reset
         setCheckingSession(false);
       } catch (err) {
-        console.error('Session check error:', err);
+        console.error('Recovery session check error:', err);
         router.replace('/forgot-password');
       }
     };
-    checkSession();
+    checkRecoverySession();
   }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -62,13 +60,15 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     try {
+      // User is already authenticated via recovery token (exchanged by Supabase client)
+      // We only need to update the password
       await updatePasswordWithToken(password);
+
       setSuccess(true);
 
-      // Redirect to login after 2 seconds
-      setTimeout(() => {
-        router.replace('/login');
-      }, 2000);
+      // Use the logout function to properly clear session and redirect
+      // This handles signOut(), storage cleanup, and redirect to login
+      await logout();
     } catch (err: any) {
       setError(err?.message || 'Failed to reset password. Please try again.');
       setLoading(false);

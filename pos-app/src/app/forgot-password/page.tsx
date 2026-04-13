@@ -17,6 +17,7 @@ export default function ForgotPasswordPage() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [isAuthorized, setIsAuthorized] = useState(false);
   const router = useRouter();
 
   const canSubmit = useMemo(() => {
@@ -24,20 +25,41 @@ export default function ForgotPasswordPage() {
     return e.length > 0 && !loading && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
   }, [email, loading]);
 
-  // Check if user is already logged in
+  // Check if user is already logged in and has permission to reset password
   useEffect(() => {
     const checkSession = async () => {
       try {
         const {
           data: { session },
         } = await supabase.auth.getSession();
+        
         if (session) {
-          router.replace('/dashboard');
+          // User is logged in, check their role
+          const { data: profile } = await supabase
+            .from('UsersAccount')
+            .select('Role(roleName)')
+            .eq('userID', session.user.id)
+            .single();
+
+          const role = (profile?.Role as any)?.roleName;
+
+          // Only Superadmin and Manager can use forgot password
+          if (role === 'Manager' || role === 'Superadmin') {
+            setIsAuthorized(true);
+            setCheckingSession(false);
+          } else {
+            // Staff cannot use forgot password
+            setIsAuthorized(false);
+            setCheckingSession(false);
+          }
         } else {
+          // Not logged in, allow access to forgot password
+          setIsAuthorized(true);
           setCheckingSession(false);
         }
       } catch (err) {
         console.error('Session check error:', err);
+        setIsAuthorized(true);
         setCheckingSession(false);
       }
     };
@@ -71,6 +93,30 @@ export default function ForgotPasswordPage() {
           <div className="mt-3 h-10 w-full rounded-xl bg-black/5" />
           <div className="mt-6 h-11 w-full rounded-xl bg-black/5" />
           <p className="mt-4 text-sm font-semibold text-[#6D6D6D]">Loading…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If not authorized (Staff), show access denied
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen bg-[#F3F3F3] font-sans flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="rounded-3xl bg-white p-6 shadow-[0_18px_45px_rgba(0,0,0,0.10)] ring-1 ring-black/5">
+            <div className="mb-5 rounded-2xl bg-[#F7F7F7] p-4 text-center ring-1 ring-black/5">
+              <p className="text-lg font-extrabold text-[#1E1E1E]">Access Denied</p>
+              <p className="mt-1 text-[12px] font-semibold text-[#6D6D6D]">
+                Staff accounts cannot reset their own password. Please contact your manager for assistance.
+              </p>
+            </div>
+            <Link
+              href="/login"
+              className="w-full rounded-2xl bg-[#B80F24] px-4 py-3 text-center text-[13px] font-extrabold text-white shadow-sm ring-1 ring-[#B80F24]/30 transition hover:brightness-95 inline-block"
+            >
+              Back to Login
+            </Link>
+          </div>
         </div>
       </div>
     );

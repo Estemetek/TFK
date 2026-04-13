@@ -101,7 +101,7 @@ export async function sendPasswordResetEmail(email: string) {
     const { error } = await supabase.auth.resetPasswordForEmail(
       trimmedEmail,
       {
-        redirectTo: `${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}/auth/callback?type=recovery`,
+        redirectTo: `${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}/reset-password`,
       }
     );
 
