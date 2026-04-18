@@ -541,6 +541,25 @@ export default function MenuPage() {
     imageUrl: '',
   });
 
+  // Role-based access control
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  // Fetch user role on component mount
+  useEffect(() => {
+    async function fetchUserRole() {
+      const { data: auth } = await supabase.auth.getUser();
+      const user = auth?.user;
+      if (user?.user_metadata?.role) {
+        setUserRole(user.user_metadata.role);
+        console.log('👤 [USER ROLE]', user.user_metadata.role);
+      }
+    }
+    fetchUserRole();
+  }, []);
+
+  // Check if user can edit/delete menu items
+  const canEditMenuItems = userRole === 'manager' || userRole === 'superadmin';
+
   const [isRecipeOpen, setIsRecipeOpen] = useState(false);
   const [activeRecipeItem, setActiveRecipeItem] = useState<MenuItem | null>(null);
 
@@ -1570,7 +1589,9 @@ export default function MenuPage() {
                   )}
                 </button>
 
-                <PrimaryButton onClick={() => setIsCategoryOpen(true)}>Add New Category</PrimaryButton>
+                {canEditMenuItems && (
+                  <PrimaryButton onClick={() => setIsCategoryOpen(true)}>Add New Category</PrimaryButton>
+                )}
               </div>
             </div>
 
@@ -1710,7 +1731,7 @@ export default function MenuPage() {
                     </select>
                   </div>
 
-                  {selectedMenuType === 'Normal Menu' && (
+                  {selectedMenuType === 'Normal Menu' && canEditMenuItems && (
                     <PrimaryButton onClick={openAddDrawer}>Add Menu Item</PrimaryButton>
                   )}
                 </div>
@@ -1858,31 +1879,35 @@ export default function MenuPage() {
                                     <MdReceiptLong className="h-4 w-4 text-blue-600" />
                                   </button>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleEditClick(item)}
-                                    className="h-9 w-9 rounded-xl bg-black/5 grid place-items-center hover:bg-black/10 transition"
-                                    title="Edit"
-                                  >
-                                    <MdEdit className="h-4 w-4 text-black/70" />
-                                  </button>
+                                  {canEditMenuItems && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleEditClick(item)}
+                                        className="h-9 w-9 rounded-xl bg-black/5 grid place-items-center hover:bg-black/10 transition"
+                                        title="Edit"
+                                      >
+                                        <MdEdit className="h-4 w-4 text-black/70" />
+                                      </button>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteItem(item)}
-                                    className="h-9 w-9 rounded-xl grid place-items-center text-white shadow transition active:scale-[0.99] disabled:opacity-50"
-                                    style={{ backgroundColor: PRIMARY }}
-                                    onMouseEnter={(e) => {
-                                      (e.currentTarget as HTMLButtonElement).style.backgroundColor = PRIMARY_DARK;
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      (e.currentTarget as HTMLButtonElement).style.backgroundColor = PRIMARY;
-                                    }}
-                                    title="Archive or Delete Permanently"
-                                    disabled={isSubmitting}
-                                  >
-                                    <MdDelete className="h-4 w-4" />
-                                  </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteItem(item)}
+                                        className="h-9 w-9 rounded-xl grid place-items-center text-white shadow transition active:scale-[0.99] disabled:opacity-50"
+                                        style={{ backgroundColor: PRIMARY }}
+                                        onMouseEnter={(e) => {
+                                          (e.currentTarget as HTMLButtonElement).style.backgroundColor = PRIMARY_DARK;
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          (e.currentTarget as HTMLButtonElement).style.backgroundColor = PRIMARY;
+                                        }}
+                                        title="Archive or Delete Permanently"
+                                        disabled={isSubmitting}
+                                      >
+                                        <MdDelete className="h-4 w-4" />
+                                      </button>
+                                    </>
+                                  )}
                                 </>
                               ) : (
                                 <>
@@ -2343,6 +2368,7 @@ export default function MenuPage() {
             setIsRecipeOpen(false);
             setActiveRecipeItem(null);
           }}
+          canEdit={canEditMenuItems}
           onRecipeChange={async () => {
             await fetch('/api/sync-all', { method: 'POST' });
             console.log('⏳ [AFTER RECIPE CHANGE] Waiting 1.5 seconds for database replication...');

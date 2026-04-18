@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { MdClose, MdDelete, MdAdd } from 'react-icons/md';
 
-export function RecipeModal({ menuItem, onClose, onRecipeChange }: { menuItem: any, onClose: () => void, onRecipeChange?: () => void }) {
+export function RecipeModal({ menuItem, onClose, onRecipeChange, canEdit = true }: { menuItem: any, onClose: () => void, onRecipeChange?: () => void, canEdit?: boolean }) {
   const [availableIngredients, setAvailableIngredients] = useState<any[]>([]);
   const [recipeItems, setRecipeItems] = useState<any[]>([]);
   const [selectedIngredientId, setSelectedIngredientId] = useState('');
@@ -184,7 +184,7 @@ export function RecipeModal({ menuItem, onClose, onRecipeChange }: { menuItem: a
           <button
             onClick={addIngredient}
             className="bg-black text-white rounded-lg flex items-center justify-center gap-2 font-bold disabled:bg-gray-300"
-            disabled={!selectedIngredientId || isLoading}
+            disabled={!selectedIngredientId || isLoading || !canEdit}
           >
             <MdAdd /> {isLoading ? 'Wait...' : 'Add'}
           </button>
@@ -205,7 +205,7 @@ export function RecipeModal({ menuItem, onClose, onRecipeChange }: { menuItem: a
               <button 
                 onClick={() => removeIngredient(item.menuIngredientID)} 
                 className="text-red-500 hover:bg-red-50 p-1 rounded transition-colors disabled:opacity-50"
-                disabled={isLoading}
+                disabled={isLoading || !canEdit}
               >
                 <MdDelete size={18} />
               </button>
