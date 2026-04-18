@@ -547,18 +547,38 @@ export default function MenuPage() {
   // Fetch user role on component mount
   useEffect(() => {
     async function fetchUserRole() {
-      const { data: auth } = await supabase.auth.getUser();
-      const user = auth?.user;
-      if (user?.user_metadata?.role) {
-        setUserRole(user.user_metadata.role);
-        console.log('👤 [USER ROLE]', user.user_metadata.role);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        // Fetch role from database (same as staff page)
+        const { data: profile, error } = await supabase
+          .from('UsersAccount')
+          .select('Role(roleName)')
+          .eq('userID', session.user.id)
+          .single();
+
+        if (error || !profile) {
+          console.error('Failed to fetch user role:', error);
+          return;
+        }
+
+        const roleData = (profile as any)?.Role;
+        const roleName = Array.isArray(roleData) ? roleData[0]?.roleName : roleData?.roleName;
+        
+        if (roleName) {
+          setUserRole(roleName);
+          console.log('👤 [USER ROLE]', roleName);
+        }
+      } catch (err) {
+        console.error('Error fetching user role:', err);
       }
     }
     fetchUserRole();
   }, []);
 
   // Check if user can edit/delete menu items
-  const canEditMenuItems = userRole === 'manager' || userRole === 'superadmin';
+  const canEditMenuItems = userRole === 'Manager' || userRole === 'Superadmin';
 
   const [isRecipeOpen, setIsRecipeOpen] = useState(false);
   const [activeRecipeItem, setActiveRecipeItem] = useState<MenuItem | null>(null);
