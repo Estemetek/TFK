@@ -27,7 +27,6 @@ import {
   MdRestore,
 } from 'react-icons/md';
 import { RecipeModal } from '../components/RecipeModal';
-import { syncMenuAvailability } from '../lib/syncMenuAvailability';
 
 // --- TYPES ---
 type Category = {
@@ -691,6 +690,7 @@ export default function MenuPage() {
 
   const fetchAllData = useCallback(async () => {
     setLoading(true);
+    console.log('📥 [FETCH ALL DATA] Starting fetch from database...');
 
     const [{ data: catData, error: catErr }, { data: menuData, error: menuErr }] = await Promise.all([
       supabase.from('Category').select('*').order('categoryName'),
@@ -700,17 +700,40 @@ export default function MenuPage() {
         .order('name'),
     ]);
 
-    if (catErr) console.error(catErr);
-    if (menuErr) console.error(menuErr);
+    if (catErr) {
+      console.error('❌ [FETCH ERROR - Categories]', catErr);
+    }
+    if (menuErr) {
+      console.error('❌ [FETCH ERROR - MenuItems]', menuErr);
+    }
 
     if (catData) setCategories(catData as Category[]);
-    if (menuData) setMenuItems((menuData as any) || []);
+    
+    if (menuData) {
+      // Log the fetched data to see isAvailable values
+      console.log('📊 [FETCHED MENU DATA] Total items:', menuData.length);
+      const item1pc = menuData.find((m: any) => m.menuItemID === 2);
+      if (item1pc) {
+        console.log(`📌 [1pc Chicken w/ Rice] ID: 2, isAvailable: ${item1pc.isAvailable}`);
+      }
+      menuData.forEach((item: any) => {
+        if (item.menuItemID <= 5) {
+          console.log(`  📦 ${item.name}: isAvailable = ${item.isAvailable}`);
+        }
+      });
+      setMenuItems((menuData as any) || []);
+      console.log('✅ [FETCH COMPLETE] Menu items updated in state');
+    }
     setLoading(false);
   }, []);
 
   useEffect(() => {
     async function runSyncAndFetch() {
-      await syncMenuAvailability();
+      await fetch('/api/sync-all', { method: 'POST' });
+      console.log('⏳ [AFTER SYNC] Waiting 1.5 seconds for database replication...');
+      // Wait for Supabase to replicate changes to all nodes
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      console.log('✅ [REPLICATION COMPLETE] Now fetching fresh data...');
       await fetchAllData();
     }
     runSyncAndFetch();
@@ -915,7 +938,7 @@ export default function MenuPage() {
       });
     } else {
       setIsAddOpen(false);
-      await syncMenuAvailability();
+      await fetch('/api/sync-all', { method: 'POST' });
       await fetchAllData();
 
       showPopup({
@@ -1001,7 +1024,7 @@ export default function MenuPage() {
     } else {
       setIsEditOpen(false);
       setEditingItemID(null);
-      await syncMenuAvailability();
+      await fetch('/api/sync-all', { method: 'POST' });
       await fetchAllData();
 
       showPopup({
@@ -2321,7 +2344,11 @@ export default function MenuPage() {
             setActiveRecipeItem(null);
           }}
           onRecipeChange={async () => {
-            await syncMenuAvailability();
+            await fetch('/api/sync-all', { method: 'POST' });
+            console.log('⏳ [AFTER RECIPE CHANGE] Waiting 1.5 seconds for database replication...');
+            // Wait for Supabase to replicate changes to all nodes
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            console.log('✅ [REPLICATION COMPLETE] Now fetching fresh data...');
             await fetchAllData();
             showPopup({
               type: 'success',
