@@ -768,11 +768,12 @@ export default function MenuPage() {
 
   useEffect(() => {
     async function runSyncAndFetch() {
-      await fetch('/api/sync-all', { method: 'POST' });
-      console.log('⏳ [AFTER SYNC] Waiting 1.5 seconds for database replication...');
-      // Wait for Supabase to replicate changes to all nodes
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      console.log('✅ [REPLICATION COMPLETE] Now fetching fresh data...');
+      // Disabled sync for defense demo - no inventory integration needed
+      // await fetch('/api/sync-all', { method: 'POST' });
+      // console.log('⏳ [AFTER SYNC] Waiting 1.5 seconds for database replication...');
+      // // Wait for Supabase to replicate changes to all nodes
+      // await new Promise(resolve => setTimeout(resolve, 1500));
+      // console.log('✅ [REPLICATION COMPLETE] Now fetching fresh data...');
       await fetchAllData();
     }
     runSyncAndFetch();
