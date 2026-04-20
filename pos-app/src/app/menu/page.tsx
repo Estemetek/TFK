@@ -543,6 +543,7 @@ export default function MenuPage() {
 
   // Role-based access control
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [currentUserID, setCurrentUserID] = useState<string | null>(null);
 
   // Fetch user role on component mount
   useEffect(() => {
@@ -550,6 +551,9 @@ export default function MenuPage() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
+
+        setCurrentUserID(session.user.id);
+        console.log('[MENU PAGE] Logged-in user UUID:', session.user.id);
 
         // Fetch role from database (same as staff page)
         const { data: profile, error } = await supabase
@@ -2390,6 +2394,7 @@ export default function MenuPage() {
             setActiveRecipeItem(null);
           }}
           canEdit={canEditMenuItems}
+          currentUserID={currentUserID}
           onRecipeChange={async () => {
             await fetch('/api/sync-all', { method: 'POST' });
             console.log('⏳ [AFTER RECIPE CHANGE] Waiting 1.5 seconds for database replication...');
