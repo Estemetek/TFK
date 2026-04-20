@@ -1693,41 +1693,7 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-12">
-          <div className="xl:col-span-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-black text-xs text-text-muted uppercase tracking-widest flex items-center gap-2">
-                <MdInsights /> Trending Items
-              </h3>
-              <span className="text-[10px] font-black px-2 py-1 rounded-full bg-white/70 ring-1 ring-card-border">Latest menu items</span>
-            </div>
 
-            <div className="space-y-3">
-              {popularDishes.length > 0 ? (
-                popularDishes.map((d) => <DishRow key={d.id} dish={d} />)
-              ) : (
-                <div className="p-10 text-center text-xs opacity-50 bg-card/70 rounded-2xl ring-1 ring-card-border">No Menu Data</div>
-              )}
-            </div>
-          </div>
-
-          <div className="xl:col-span-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-black text-xs text-text-muted uppercase tracking-widest flex items-center gap-2">
-                <MdTrendingUp /> Recent Sales
-              </h3>
-              <span className="text-[10px] font-black px-2 py-1 rounded-full bg-white/70 ring-1 ring-card-border">Latest transactions</span>
-            </div>
-
-            <div className="space-y-3">
-              {recentOrders.length > 0 ? (
-                recentOrders.map((d) => <DishRow key={d.id} dish={d} />)
-              ) : (
-                <div className="p-10 text-center text-xs opacity-50 bg-card/70 rounded-2xl ring-1 ring-card-border">No Recent Orders</div>
-              )}
-            </div>
-          </div>
-        </section>
 
         <section className="space-y-4">
           <div className="flex items-center justify-between">
