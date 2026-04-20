@@ -198,11 +198,16 @@ export default function InventoryPage() {
 
     if (!ingredient || safeQuantity <= 0 || unitCost <= 0) return;
 
+    if (!currentUserID) {
+      alert('Unable to record restock: no logged-in user found. Please refresh and try again.');
+      return;
+    }
+
     setLoading(true);
     try {
       const { data: purchase, error: purchaseError } = await supabase
         .from('Purchase')
-        .insert([{ totalCost: safeQuantity * unitCost }])
+        .insert([{ totalCost: safeQuantity * unitCost, updatedBy: currentUserID,}])
         .select()
         .single();
 
@@ -269,6 +274,7 @@ export default function InventoryPage() {
             costPerUnit: parseFloat(formData.price),
             currentStock: 0,
             updatedAt: new Date().toISOString(),
+            updatedBy: currentUserID,
           })
           .select()
           .single();
