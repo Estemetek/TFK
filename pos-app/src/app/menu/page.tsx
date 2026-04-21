@@ -1591,31 +1591,33 @@ export default function MenuPage() {
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => setIsCategoryMgmtOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-xl border border-black/10 bg-[#F7F7F7] px-4 py-2.5 text-xs font-extrabold text-[#1E1E1E] transition hover:bg-black/5"
-                >
-                  <MdEdit className="h-4 w-4 text-[#b80f24]" />
-                  Manage Categories
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsArchivedCategoriesOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-xl border border-black/10 bg-[#F7F7F7] px-4 py-2.5 text-xs font-extrabold text-[#1E1E1E] transition hover:bg-black/5"
-                >
-                  <MdArchive className="h-4 w-4 text-[#b80f24]" />
-                  Archived Categories
-                  {archivedCategoriesCount > 0 && (
-                    <span className="rounded-full bg-[#b80f24] px-2 py-0.5 text-[10px] font-extrabold text-white">
-                      {archivedCategoriesCount}
-                    </span>
-                  )}
-                </button>
-
                 {canEditMenuItems && (
-                  <PrimaryButton onClick={() => setIsCategoryOpen(true)}>Add New Category</PrimaryButton>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setIsCategoryMgmtOpen(true)}
+                      className="inline-flex items-center gap-2 rounded-xl border border-black/10 bg-[#F7F7F7] px-4 py-2.5 text-xs font-extrabold text-[#1E1E1E] transition hover:bg-black/5"
+                    >
+                      <MdEdit className="h-4 w-4 text-[#b80f24]" />
+                      Manage Categories
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsArchivedCategoriesOpen(true)}
+                      className="inline-flex items-center gap-2 rounded-xl border border-black/10 bg-[#F7F7F7] px-4 py-2.5 text-xs font-extrabold text-[#1E1E1E] transition hover:bg-black/5"
+                    >
+                      <MdArchive className="h-4 w-4 text-[#b80f24]" />
+                      Archived Categories
+                      {archivedCategoriesCount > 0 && (
+                        <span className="rounded-full bg-[#b80f24] px-2 py-0.5 text-[10px] font-extrabold text-white">
+                          {archivedCategoriesCount}
+                        </span>
+                      )}
+                    </button>
+
+                    <PrimaryButton onClick={() => setIsCategoryOpen(true)}>Add New Category</PrimaryButton>
+                  </>
                 )}
               </div>
             </div>
