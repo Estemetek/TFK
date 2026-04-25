@@ -86,6 +86,8 @@ function wholeNumber(value: number | string | null | undefined) {
   return Math.max(0, Math.floor(Number(value) || 0));
 }
 
+const DEFAULT_UNIT_OPTIONS = ['pcs', 'kg', 'g', 'mg', 'ml', 'l', 'pack', 'bottle'];
+
 export default function InventoryPage() {
   const router = useRouter();
 
@@ -123,6 +125,7 @@ export default function InventoryPage() {
   const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null);
 
   const [currentUserID, setCurrentUserID] = useState<string | null>(null);
+  const [menuIngredientUnits, setMenuIngredientUnits] = useState<string[]>([]);
 
   useEffect(() => {
     const getUser = async () => {
@@ -156,6 +159,49 @@ export default function InventoryPage() {
   useEffect(() => {
     fetchInventory();
   }, [fetchInventory]);
+
+  const fetchMenuIngredientUnits = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('MenuIngredient')
+      .select('Ingredient!inner(unit)');
+
+    if (error) {
+      console.error('Error fetching menu ingredient units:', error);
+      return;
+    }
+
+    const units = Array.from(
+      new Set(
+        (data || [])
+          .map((row: any) => row?.Ingredient?.unit)
+          .filter((unit: unknown): unit is string => typeof unit === 'string')
+          .map((unit) => unit.trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+
+    setMenuIngredientUnits(units);
+  }, []);
+
+  useEffect(() => {
+    fetchMenuIngredientUnits();
+  }, [fetchMenuIngredientUnits]);
+
+  const unitOptions = useMemo(() => {
+    const merged = [
+      ...DEFAULT_UNIT_OPTIONS,
+      ...menuIngredientUnits,
+      ...inventoryItems.map((item) => item.unit).filter(Boolean),
+    ];
+
+    return Array.from(
+      new Set(
+        merged
+          .map((unit) => unit.trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+  }, [menuIngredientUnits, inventoryItems]);
 
   const lowStockItems = useMemo(
     () => inventoryItems.filter((i) => wholeNumber(i.currentStock) <= wholeNumber(i.reorderLevel)),
@@ -617,6 +663,7 @@ export default function InventoryPage() {
         open={showAddModal || showEditModal}
         title={showEditModal ? 'Edit Ingredient' : 'Add New Ingredient'}
         initialData={editItem}
+        unitOptions={unitOptions}
         onClose={() => {
           setShowAddModal(false);
           setShowEditModal(false);
@@ -1032,7 +1079,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 /* --------------------------- Add/Edit Side Sheet -------------------------- */
 
-function AddIngredientModal({ open, onClose, onSave, title, initialData }: any) {
+function AddIngredientModal({ open, onClose, onSave, title, initialData, unitOptions }: any) {
   const [formData, setFormData] = useState({
     name: '',
     quantity: 0,
@@ -1099,12 +1146,17 @@ function AddIngredientModal({ open, onClose, onSave, title, initialData }: any) 
                 <input type="number" className={INPUT_DISABLED} value={wholeNumber(formData.quantity)} disabled />
               </Field>
               <Field label="Unit">
-                <input
+                <select
                   className={INPUT_BASE}
                   value={formData.unit}
                   onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                  placeholder="kg / pcs / bottle"
-                />
+                >
+                  {unitOptions.map((unit: string) => (
+                    <option key={unit} value={unit}>
+                      {unit}
+                    </option>
+                  ))}
+                </select>
               </Field>
             </div>
 

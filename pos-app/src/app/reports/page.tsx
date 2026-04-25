@@ -824,7 +824,7 @@ export default function ReportsPage() {
   const [purchasesLoading, setPurchasesLoading] = useState(false);
 
   const [purchaseQuery, setPurchaseQuery] = useState('');
-  const [purchaseDateFilter, setPurchaseDateFilter] = useState<'all' | 'today' | '7d' | '30d'>('7d');
+  const [purchaseDateFilter, setPurchaseDateFilter] = useState<'all' | 'today' | '7d' | '30d'>('today');
   const [purchaseMin, setPurchaseMin] = useState('');
   const [purchaseMax, setPurchaseMax] = useState('');
 
@@ -834,10 +834,10 @@ export default function ReportsPage() {
 
   const [receiptQuery, setReceiptQuery] = useState('');
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'cash' | 'gcash' | 'bank'>('all');
-  const [dateFilter, setDateFilter] = useState<'all' | 'today' | '7d' | '30d'>('7d');
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | '7d' | '30d'>('today');
 
   const [netProfitQuery, setNetProfitQuery] = useState('');
-  const [netProfitDateFilter, setNetProfitDateFilter] = useState<'all' | 'today' | '7d' | '30d'>('7d');
+  const [netProfitDateFilter, setNetProfitDateFilter] = useState<'all' | 'today' | '7d' | '30d'>('today');
   const [netProfitPage, setNetProfitPage] = useState(1);
   const NET_PROFIT_PAGE_SIZE = 10;
 
@@ -1674,7 +1674,7 @@ export default function ReportsPage() {
               <div className="bg-[#F7F7F7] px-6 py-4 border-b border-black/5">
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                   <SummaryCard
-                    title="Gross Sales"
+                    title="Sales"
                     value={fmtMoneyPhp(netProfitSummary.totalSales)}
                     subtitle={`${netProfitSummary.salesCount} sale record(s)`}
                     icon={<MdReceiptLong className="h-5 w-5" />}

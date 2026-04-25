@@ -1266,78 +1266,6 @@ export default function MenuPage() {
     });
   };
 
-  const confirmPermanentDeleteItem = (item: MenuItem) => {
-    showPopup({
-      type: 'error',
-      title: 'Delete menu item permanently?',
-      message: (
-        <>
-          <p>
-            Permanently delete <span className="font-extrabold text-[#1E1E1E]">"{item.name}"</span>?
-          </p>
-          <p className="mt-2">This action cannot be undone.</p>
-        </>
-      ),
-      confirmText: 'Delete Permanently',
-      cancelText: 'Cancel',
-      onCancel: closePopup,
-      onConfirm: async () => {
-        closePopup();
-        setIsSubmitting(true);
-
-        const { error } = await supabase.from('MenuItem').delete().eq('menuItemID', item.menuItemID);
-
-        if (error) {
-          showPopup({
-            type: 'error',
-            title: 'Permanent delete failed',
-            message: error.message,
-            confirmText: 'Close',
-            onConfirm: closePopup,
-          });
-        } else {
-          await fetchAllData();
-
-          showPopup({
-            type: 'success',
-            title: 'Item deleted permanently',
-            message: `"${item.name}" has been deleted permanently.`,
-            confirmText: 'OK',
-            onConfirm: closePopup,
-          });
-        }
-
-        setIsSubmitting(false);
-      },
-    });
-  };
-
-  const handleDeleteItem = (item: MenuItem) => {
-    showActionChoice({
-      title: 'Choose action for menu item',
-      message: (
-        <>
-          <p>
-            What do you want to do with <span className="font-extrabold text-[#1E1E1E]">"{item.name}"</span>?
-          </p>
-          <p className="mt-2">
-            Archive will move it to the archived menu tab. Delete permanently will remove it completely from the database.
-          </p>
-        </>
-      ),
-      archiveText: 'Archive Item',
-      deleteText: 'Delete Item Permanently',
-      onArchive: () => {
-        closeActionChoice();
-        confirmArchiveItem(item);
-      },
-      onDelete: () => {
-        closeActionChoice();
-        confirmPermanentDeleteItem(item);
-      },
-    });
-  };
-
   const handleRecipeClick = (item: MenuItem) => {
     setActiveRecipeItem(item);
     setIsRecipeOpen(true);
@@ -2009,7 +1937,7 @@ export default function MenuPage() {
 
                                       <button
                                         type="button"
-                                        onClick={() => handleDeleteItem(item)}
+                                        onClick={() => confirmArchiveItem(item)}
                                         className="h-9 w-9 rounded-xl grid place-items-center text-white shadow transition active:scale-[0.99] disabled:opacity-50"
                                         style={{ backgroundColor: PRIMARY }}
                                         onMouseEnter={(e) => {
@@ -2018,10 +1946,10 @@ export default function MenuPage() {
                                         onMouseLeave={(e) => {
                                           (e.currentTarget as HTMLButtonElement).style.backgroundColor = PRIMARY;
                                         }}
-                                        title="Archive or Delete Permanently"
+                                        title="Archive"
                                         disabled={isSubmitting}
                                       >
-                                        <MdDelete className="h-4 w-4" />
+                                        <MdArchive className="h-4 w-4" />
                                       </button>
                                     </>
                                   )}
@@ -2036,16 +1964,6 @@ export default function MenuPage() {
                                     disabled={isSubmitting}
                                   >
                                     <MdRestore className="h-4 w-4" />
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => confirmPermanentDeleteItem(item)}
-                                    className="h-9 w-9 rounded-xl grid place-items-center text-white shadow transition active:scale-[0.99] disabled:opacity-50 bg-[#B80F24] hover:brightness-95"
-                                    title="Delete Permanently"
-                                    disabled={isSubmitting}
-                                  >
-                                    <MdDeleteForever className="h-4 w-4" />
                                   </button>
                                 </>
                               )}
