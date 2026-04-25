@@ -16,6 +16,8 @@ import {
   MdArrowDropDown,
   MdRefresh,
   MdChecklist,
+  MdAddShoppingCart,
+  MdInfoOutline,
 } from 'react-icons/md';
 import React from 'react';
 
@@ -107,10 +109,7 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(false);
 
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showRestockModal, setShowRestockModal] = useState(false);
-  const [restockItem, setRestockItem] = useState<InventoryItem | null>(null);
-  const [restockQuantity, setRestockQuantity] = useState(0);
-  const [restockUnitCost, setRestockUnitCost] = useState(0);
+  const [showBulkRestockModal, setShowBulkRestockModal] = useState(false);
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
@@ -238,56 +237,61 @@ export default function InventoryPage() {
     return sorted;
   }, [inventoryItems, query, showOnlyLow, sort]);
 
-  const handleRestock = async (ingredient: InventoryItem, quantity: number, unitCost: number) => {
-    const safeQuantity = wholeNumber(quantity);
-
-    if (!ingredient || safeQuantity <= 0 || unitCost <= 0) return;
-
+  // Bulk restock: items is an array of { ingredient, quantity, unitCost }
+  const handleBulkRestock = async (
+    items: Array<{ ingredient: InventoryItem; quantity: number; unitCost: number }>,
+    supplier: string
+  ) => {
     if (!currentUserID) {
       alert('Unable to record restock: no logged-in user found. Please refresh and try again.');
       return;
     }
 
+    const validItems = items.filter((r) => wholeNumber(r.quantity) > 0 && r.unitCost > 0);
+    if (validItems.length === 0) return;
+
     setLoading(true);
     try {
+      const totalCost = validItems.reduce(
+        (sum, r) => sum + wholeNumber(r.quantity) * r.unitCost,
+        0
+      );
+
       const { data: purchase, error: purchaseError } = await supabase
         .from('Purchase')
-        .insert([{ totalCost: safeQuantity * unitCost, updatedBy: currentUserID,}])
+        .insert([{ totalCost, updatedBy: currentUserID, supplier: supplier.trim() || null }])
         .select()
         .single();
 
       if (purchaseError) throw purchaseError;
 
-      const { error: itemError } = await supabase.from('PurchaseItem').insert([
-        {
-          purchaseID: purchase.purchaseID,
-          ingredientID: ingredient.ingredientID,
-          quantity: safeQuantity,
-          cost: unitCost,
-        },
-      ]);
+      const purchaseItems = validItems.map((r) => ({
+        purchaseID: purchase.purchaseID,
+        ingredientID: r.ingredient.ingredientID,
+        quantity: wholeNumber(r.quantity),
+        cost: r.unitCost,
+      }));
 
+      const { error: itemError } = await supabase.from('PurchaseItem').insert(purchaseItems);
       if (itemError) throw itemError;
 
-      const newStock = wholeNumber(ingredient.currentStock) + safeQuantity;
-
-      const { error: updateError } = await supabase
-        .from('Ingredient')
-        .update({
-          currentStock: newStock,
-          costPerUnit: unitCost,
-          updatedAt: new Date().toISOString(),
-          updatedBy: currentUserID,
-        })
-        .eq('ingredientID', ingredient.ingredientID);
-
-      if (updateError) throw updateError;
+      // Update each ingredient's stock and unit cost
+      await Promise.all(
+        validItems.map((r) =>
+          supabase
+            .from('Ingredient')
+            .update({
+              currentStock: wholeNumber(r.ingredient.currentStock) + wholeNumber(r.quantity),
+              costPerUnit: r.unitCost,
+              updatedAt: new Date().toISOString(),
+              updatedBy: currentUserID,
+            })
+            .eq('ingredientID', r.ingredient.ingredientID)
+        )
+      );
 
       await fetchInventory();
-      setShowRestockModal(false);
-      setRestockItem(null);
-      setRestockQuantity(0);
-      setRestockUnitCost(0);
+      setShowBulkRestockModal(false);
     } catch (err: any) {
       alert('Restock failed: ' + err.message);
     }
@@ -406,6 +410,15 @@ export default function InventoryPage() {
                   >
                     <MdChecklist size={18} />
                     EOD Audit
+                  </button>
+
+                  <button
+                    onClick={() => setShowBulkRestockModal(true)}
+                    className={BTN_NEUTRAL}
+                    title="Restock Ingredients"
+                  >
+                    <MdAddShoppingCart size={18} />
+                    Restock
                   </button>
 
                   <button onClick={() => setShowAddModal(true)} className={BTN_PRIMARY}>
@@ -579,12 +592,6 @@ export default function InventoryPage() {
                         setShowEditModal(true);
                       }}
                       onDelete={() => handleDeleteClick(item)}
-                      onRestock={() => {
-                        setRestockItem(item);
-                        setRestockQuantity(0);
-                        setRestockUnitCost(Number(item.costPerUnit || 0));
-                        setShowRestockModal(true);
-                      }}
                     />
                   ))}
                 </div>
@@ -599,12 +606,6 @@ export default function InventoryPage() {
                         setShowEditModal(true);
                       }}
                       onDelete={() => handleDeleteClick(item)}
-                      onRestock={() => {
-                        setRestockItem(item);
-                        setRestockQuantity(0);
-                        setRestockUnitCost(Number(item.costPerUnit || 0));
-                        setShowRestockModal(true);
-                      }}
                     />
                   ))}
                 </div>
@@ -614,20 +615,11 @@ export default function InventoryPage() {
         </main>
       </div>
 
-      <RestockModal
-        open={showRestockModal}
-        ingredient={restockItem}
-        quantity={restockQuantity}
-        setQuantity={setRestockQuantity}
-        unitCost={restockUnitCost}
-        setUnitCost={setRestockUnitCost}
-        onClose={() => {
-          setShowRestockModal(false);
-          setRestockItem(null);
-          setRestockQuantity(0);
-          setRestockUnitCost(0);
-        }}
-        onRestock={() => restockItem && handleRestock(restockItem, restockQuantity, restockUnitCost)}
+      <BulkRestockModal
+        open={showBulkRestockModal}
+        ingredients={inventoryItems}
+        onClose={() => setShowBulkRestockModal(false)}
+        onSubmit={handleBulkRestock}
         loading={loading}
       />
 
@@ -714,12 +706,10 @@ function InventoryRow({
   item,
   onEdit,
   onDelete,
-  onRestock,
 }: {
   item: InventoryItem;
   onEdit: () => void;
   onDelete: () => void;
-  onRestock: () => void;
 }) {
   const stock = parseFloat(Number(item.currentStock).toFixed(2));
   const reorder = parseFloat(Number(item.reorderLevel).toFixed(2));
@@ -780,9 +770,6 @@ function InventoryRow({
             <p className="text-sm font-semibold">{new Date(item.updatedAt).toLocaleDateString()}</p>
           </div>
         </div>
-        <button className={cn(BTN_PRIMARY, 'px-3 py-1.5 text-xs')} onClick={onRestock}>
-          Restock
-        </button>
         <IconButton onClick={onEdit} label="Edit">
           <MdEdit size={18} />
         </IconButton>
@@ -798,12 +785,10 @@ function InventoryCard({
   item,
   onEdit,
   onDelete,
-  onRestock,
 }: {
   item: InventoryItem;
   onEdit: () => void;
   onDelete: () => void;
-  onRestock: () => void;
 }) {
   const stock = wholeNumber(item.currentStock);
   const reorder = wholeNumber(item.reorderLevel);
@@ -849,20 +834,6 @@ function InventoryCard({
           <p className="text-[10px] uppercase tracking-wide text-text-muted font-bold">Updated</p>
           <p className="text-sm font-semibold">{new Date(item.updatedAt).toLocaleDateString()}</p>
         </div>
-      </div>
-
-      <div className="mt-4 flex gap-2">
-        <button
-          onClick={onRestock}
-          className={cn(
-            'flex-1 rounded-xl px-3 py-2 text-xs font-semibold border-2 transition focus:outline-none focus:ring-4',
-            isLowStock
-              ? 'bg-primary text-white border-transparent hover:brightness-95 focus:ring-primary/20'
-              : 'bg-white border-black/15 hover:bg-black/3 focus:ring-black/10'
-          )}
-        >
-          Restock
-        </button>
       </div>
     </div>
   );
@@ -911,131 +882,342 @@ function SkeletonRow() {
   );
 }
 
-/* ----------------------------- Restock Modal ----------------------------- */
+/* ----------------------------- Bulk Restock Modal ----------------------------- */
 
-function RestockModal({
+type RestockRow = { quantity: string; unitCost: string };
+
+function BulkRestockModal({
   open,
-  ingredient,
-  quantity,
-  setQuantity,
-  unitCost,
-  setUnitCost,
+  ingredients,
   onClose,
-  onRestock,
+  onSubmit,
   loading,
-}: any) {
-  if (!open || !ingredient) return null;
+}: {
+  open: boolean;
+  ingredients: InventoryItem[];
+  onClose: () => void;
+  onSubmit: (items: Array<{ ingredient: InventoryItem; quantity: number; unitCost: number }>, supplier: string) => void;
+  loading: boolean;
+}) {
+  const [rows, setRows] = useState<Record<number, RestockRow>>({});
+  const [query, setQuery] = useState('');
+  const [supplier, setSupplier] = useState('');
+  const [showConfirm, setShowConfirm] = useState(false);
 
-  const stock = wholeNumber(ingredient.currentStock);
-  const reorder = wholeNumber(ingredient.reorderLevel);
+  // Reset rows when modal opens
+  useEffect(() => {
+    if (open) {
+      const initial: Record<number, RestockRow> = {};
+      ingredients.forEach((ing) => {
+        initial[ing.ingredientID] = {
+          quantity: '',
+          unitCost: Number(ing.costPerUnit || 0).toFixed(2),
+        };
+      });
+      setRows(initial);
+      setQuery('');
+      setSupplier('');
+      setShowConfirm(false);
+    }
+  }, [open, ingredients]);
+
+  const filteredIngredients = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return ingredients;
+    return ingredients.filter(
+      (i) => i.name.toLowerCase().includes(q) || i.unit.toLowerCase().includes(q)
+    );
+  }, [ingredients, query]);
+
+  const filledItems = useMemo(
+    () =>
+      ingredients.filter((ing) => {
+        const r = rows[ing.ingredientID];
+        return r && wholeNumber(r.quantity) > 0 && parseFloat(r.unitCost) > 0;
+      }),
+    [ingredients, rows]
+  );
+
+  const totalCost = useMemo(
+    () =>
+      filledItems.reduce((sum, ing) => {
+        const r = rows[ing.ingredientID];
+        return sum + wholeNumber(r.quantity) * parseFloat(r.unitCost || '0');
+      }, 0),
+    [filledItems, rows]
+  );
+
+  const handleChange = (
+    id: number,
+    field: 'quantity' | 'unitCost',
+    value: string
+  ) => {
+    setRows((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], [field]: value },
+    }));
+  };
+
+  const handleConfirmSubmit = () => {
+    const items = filledItems.map((ing) => ({
+      ingredient: ing,
+      quantity: wholeNumber(rows[ing.ingredientID].quantity),
+      unitCost: parseFloat(rows[ing.ingredientID].unitCost),
+    }));
+    onSubmit(items, supplier);
+  };
+
+  if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl ring-2 ring-card-border"
+        className="absolute right-0 top-0 h-full w-full max-w-3xl bg-white shadow-2xl ring-2 ring-card-border flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="h-full p-6 flex flex-col">
-          <div className="flex items-start justify-between gap-3 pb-4 border-b">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-6 pt-6 pb-4 border-b shrink-0">
+          <div className="flex items-start gap-3">
+            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-primary/10 text-primary ring-1 ring-card-border shrink-0">
+              <MdAddShoppingCart size={22} />
+            </div>
             <div>
-              <p className="text-[11px] uppercase tracking-wide text-text-muted">Restock</p>
-              <h3 className="text-lg font-semibold">{ingredient.name}</h3>
-              <p className="text-xs text-text-muted mt-1">
-                Current: <span className="font-semibold">{stock}</span> {ingredient.unit} • Reorder:{' '}
-                <span className="font-semibold">{reorder}</span>
+              <p className="text-[11px] uppercase tracking-wide text-text-muted">Purchase Order</p>
+              <h3 className="text-lg font-semibold">Restock Ingredients</h3>
+              <p className="text-xs text-text-muted mt-0.5">
+                Enter quantities and costs for the ingredients you want to restock. Leave blank to skip.
               </p>
             </div>
-            <button
-              onClick={onClose}
-              className={cn(
-                'grid h-10 w-10 place-items-center rounded-xl border-2 border-black/10',
-                ' hover:bg-black/3 transition focus:outline-none focus:ring-4 focus:ring-black/10'
-              )}
-              aria-label="Close"
-            >
-              <MdClose size={22} />
-            </button>
           </div>
+          <button
+            onClick={onClose}
+            className="grid h-10 w-10 place-items-center rounded-xl border-2 border-black/10 hover:bg-black/3 transition focus:outline-none focus:ring-4 focus:ring-black/10 shrink-0"
+            aria-label="Close"
+          >
+            <MdClose size={22} />
+          </button>
+        </div>
 
-          <div className="mt-5 flex-1 overflow-y-auto overflow-x-hidden pr-3">
-            <div className="space-y-4">
-              <Field label="Ingredient Name">
-                <input className={INPUT_DISABLED} value={ingredient.name} disabled />
-              </Field>
+        {/* Supplier + Search */}
+        <div className="px-6 py-3 border-b shrink-0 space-y-2">
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+              Supplier
+            </label>
+            <input
+              value={supplier}
+              onChange={(e) => setSupplier(e.target.value)}
+              placeholder="e.g. SM Supermarket, Gaisano Mall…"
+              className={INPUT_BASE}
+            />
+          </div>
+          <div className="relative">
+            <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={18} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search ingredient or unit..."
+              className={cn(INPUT_BASE, 'pl-10')}
+            />
+          </div>
+        </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Current Stock">
-                  <input className={INPUT_DISABLED} value={stock} disabled />
-                </Field>
-                <Field label="Unit">
-                  <input className={INPUT_DISABLED} value={ingredient.unit} disabled />
-                </Field>
+        {/* Table header */}
+        <div className="hidden md:grid grid-cols-[1.5fr_0.6fr_0.8fr_0.8fr_0.8fr] gap-3 border-b bg-black/3 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-text-muted shrink-0">
+          <div>Ingredient</div>
+          <div className="text-center">Current Stock</div>
+          <div>Qty to Add</div>
+          <div>Unit Cost (₱)</div>
+          <div className="text-right">Subtotal</div>
+        </div>
+
+        {/* Scrollable rows */}
+        <div className="flex-1 overflow-y-auto divide-y divide-black/5">
+          {filteredIngredients.length === 0 ? (
+            <div className="p-10 text-center">
+              <p className="text-sm font-semibold">No ingredients found</p>
+              <p className="text-xs text-text-muted mt-1">Try changing your search keyword.</p>
+            </div>
+          ) : (
+            filteredIngredients.map((item) => {
+              const r = rows[item.ingredientID] ?? { quantity: '', unitCost: '0.00' };
+              const qty = wholeNumber(r.quantity);
+              const cost = parseFloat(r.unitCost || '0');
+              const subtotal = qty > 0 && cost > 0 ? qty * cost : 0;
+              const isLow = wholeNumber(item.currentStock) <= wholeNumber(item.reorderLevel);
+              const hasFill = qty > 0;
+
+              return (
+                <div
+                  key={item.ingredientID}
+                  className={cn(
+                    'grid gap-3 px-4 py-3 md:grid-cols-[1.5fr_0.6fr_0.8fr_0.8fr_0.8fr] md:px-5 md:items-center',
+                    hasFill && 'bg-primary/[0.03]'
+                  )}
+                >
+                  {/* Name */}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold truncate">{item.name}</p>
+                      {isLow && (
+                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700 ring-1 ring-red-200">
+                          Low
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-text-muted mt-0.5">Unit: <span className="font-medium">{item.unit}</span></p>
+                  </div>
+
+                  {/* Current stock */}
+                  <div className="flex items-center md:justify-center">
+                    <div className="rounded-xl bg-black/5 px-3 py-2 text-sm font-semibold ring-1 ring-card-border">
+                      {parseFloat(Number(item.currentStock).toFixed(2))}{' '}
+                      <span className="text-[10px] font-medium uppercase text-text-muted">{item.unit}</span>
+                    </div>
+                  </div>
+
+                  {/* Qty to add */}
+                  <div>
+                    <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-text-muted md:hidden">
+                      Qty to Add
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      inputMode="numeric"
+                      placeholder="0"
+                      className={INPUT_BASE}
+                      value={r.quantity}
+                      onChange={(e) => handleChange(item.ingredientID, 'quantity', e.target.value)}
+                      onKeyDown={(e) => {
+                        if (['.', ',', '-', 'e', 'E', '+'].includes(e.key)) e.preventDefault();
+                      }}
+                    />
+                  </div>
+
+                  {/* Unit cost */}
+                  <div>
+                    <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-text-muted md:hidden">
+                      Unit Cost (₱)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      className={INPUT_BASE}
+                      value={r.unitCost}
+                      onChange={(e) => handleChange(item.ingredientID, 'unitCost', e.target.value)}
+                      onKeyDown={(e) => {
+                        if ([',', '-', 'e', 'E', '+'].includes(e.key)) e.preventDefault();
+                      }}
+                    />
+                  </div>
+
+                  {/* Subtotal */}
+                  <div className="flex items-center justify-between md:justify-end">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted md:hidden">Subtotal</span>
+                    <span className={cn('text-sm font-semibold', subtotal > 0 ? 'text-primary' : 'text-text-muted')}>
+                      {subtotal > 0 ? `₱${subtotal.toFixed(2)}` : '—'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Footer summary + actions */}
+        <div className="px-6 py-4 border-t bg-white shrink-0">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-text-muted font-bold">Items to Restock</p>
+                <p className="text-lg font-semibold">{filledItems.length}</p>
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Reorder Level">
-                  <input className={INPUT_DISABLED} value={reorder} disabled />
-                </Field>
-                <Field label="Unit Cost">
-                  <input
-                    className={INPUT_BASE}
-                    type="number"
-                    value={unitCost}
-                    min={0.01}
-                    step={0.01}
-                    onChange={(e) => setUnitCost(Number(e.target.value))}
-                    placeholder="Enter unit cost"
-                  />
-                </Field>
-              </div>
-
-              <Field label="Add Quantity">
-                <input
-                  type="number"
-                  className={INPUT_BASE}
-                  value={quantity}
-                  min={1}
-                  step={1}
-                  inputMode="numeric"
-                  onChange={(e) => setQuantity(wholeNumber(e.target.value))}
-                  onKeyDown={(e) => {
-                    if (['.', ',', '-', 'e', 'E', '+'].includes(e.key)) {
-                      e.preventDefault();
-                    }
-                  }}
-                  placeholder="Enter quantity to add"
-                  autoFocus
-                />
-              </Field>
-
-              <div className="rounded-2xl border border-black/10 bg-white px-4 py-4 shadow-sm">
-                <p className="text-xs text-text-muted">Estimated added cost</p>
-                <p className="mt-1 text-lg font-semibold">
-                  ₱
-                  {isNaN(wholeNumber(quantity) * unitCost)
-                    ? '0.00'
-                    : (wholeNumber(quantity) * unitCost).toFixed(2)}
-                </p>
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-text-muted font-bold">Total Purchase Cost</p>
+                <p className="text-lg font-semibold text-primary">₱{totalCost.toFixed(2)}</p>
               </div>
             </div>
+            {filledItems.length > 0 && (
+              <div className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 ring-1 ring-primary/20">
+                <MdInfoOutline size={16} className="text-primary" />
+                <span className="text-xs font-semibold text-primary">
+                  {filledItems.length} ingredient{filledItems.length !== 1 ? 's' : ''} will be updated
+                </span>
+              </div>
+            )}
           </div>
 
-          <div className="pt-4 border-t flex gap-3">
-            <button onClick={onClose} className={BTN_NEUTRAL}>
+          <div className="flex gap-3">
+            <button onClick={onClose} className={BTN_NEUTRAL} disabled={loading}>
               Cancel
             </button>
             <button
-              onClick={() => {
-                if (wholeNumber(quantity) > 0 && unitCost > 0 && !loading) onRestock();
-              }}
-              className={cn(BTN_PRIMARY, 'disabled:opacity-60')}
-              disabled={wholeNumber(quantity) <= 0 || unitCost <= 0 || loading}
+              onClick={() => setShowConfirm(true)}
+              className={cn(BTN_PRIMARY, 'flex-1 justify-center disabled:opacity-60')}
+              disabled={filledItems.length === 0 || loading}
             >
-              {loading ? 'Processing...' : 'Confirm'}
+              <MdAddShoppingCart size={18} />
+              {loading ? 'Processing...' : `Confirm Restock (${filledItems.length})`}
             </button>
           </div>
         </div>
       </div>
+
+      {/* Confirm overlay */}
+      {showConfirm && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowConfirm(false)}
+        >
+          <div
+            className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl ring-1 ring-black/5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 text-primary mb-4">
+              <div className="p-2 bg-primary/10 rounded-xl">
+                <MdInfoOutline size={24} />
+              </div>
+              <h2 className="text-xl font-bold text-foreground">Confirm Restock</h2>
+            </div>
+            <p className="text-sm text-text-muted leading-relaxed">
+              You are about to add stock for <strong>{filledItems.length} ingredient{filledItems.length !== 1 ? 's' : ''}</strong> with a total purchase cost of{' '}
+              <strong>₱{totalCost.toFixed(2)}</strong>.
+            </p>
+            <div className="mt-5 space-y-2 bg-black/5 p-4 rounded-2xl border border-black/5 max-h-48 overflow-y-auto">
+              {filledItems.map((ing) => {
+                const r = rows[ing.ingredientID];
+                return (
+                  <div key={ing.ingredientID} className="flex justify-between text-xs font-medium">
+                    <span className="text-text-muted truncate mr-3">{ing.name}</span>
+                    <span>+{wholeNumber(r.quantity)} {ing.unit} @ ₱{parseFloat(r.unitCost).toFixed(2)}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-8 grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setShowConfirm(false)}
+                className={BTN_NEUTRAL}
+                disabled={loading}
+              >
+                Go Back
+              </button>
+              <button
+                onClick={handleConfirmSubmit}
+                className={BTN_PRIMARY}
+                disabled={loading}
+              >
+                {loading ? 'Processing...' : 'Confirm & Submit'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

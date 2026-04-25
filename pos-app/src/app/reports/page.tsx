@@ -377,7 +377,7 @@ function LineAreaChart() {
 
 /* ----------------------------- Receipt Modal ----------------------------- */
 
-function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => void; onVoid: () => void }) {
+function ReceiptModal({ order, onClose, onVoid, issuer }: { order: any; onClose: () => void; onVoid: () => void; issuer?: string }) {
   const [showVoidConfirm, setShowVoidConfirm] = useState(false);
   const [showVoidSuccess, setShowVoidSuccess] = useState(false);
   const [isVoiding, setIsVoiding] = useState(false);
@@ -522,9 +522,15 @@ function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => v
         </div>
 
         <div className="max-h-[60vh] overflow-auto px-6 py-5">
-          <div className="rounded-2xl bg-[#F7F7F7] p-4 ring-1 ring-black/5">
-            <div className="text-[10px] font-extrabold text-[#6D6D6D]">Date & Time</div>
-            <div className="mt-1 text-[12px] font-extrabold text-[#1E1E1E]">{formatDateTime(order?.createdAt)}</div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-2xl bg-[#F7F7F7] p-4 ring-1 ring-black/5">
+              <div className="text-[10px] font-extrabold text-[#6D6D6D]">Date &amp; Time</div>
+              <div className="mt-1 text-[12px] font-extrabold text-[#1E1E1E]">{formatDateTime(order?.createdAt)}</div>
+            </div>
+            <div className="rounded-2xl bg-[#F7F7F7] p-4 ring-1 ring-black/5">
+              <div className="text-[10px] font-extrabold text-[#6D6D6D]">Issued By</div>
+              <div className="mt-1 text-[12px] font-extrabold text-[#1E1E1E]">{issuer || '—'}</div>
+            </div>
           </div>
 
           <div className="mt-4">
@@ -801,6 +807,134 @@ function ReceiptModal({ order, onClose, onVoid }: { order: any; onClose: () => v
   );
 }
 
+/* ----------------------------- Purchase Detail Modal ----------------------------- */
+
+function PurchaseDetailModal({ purchase, onClose, issuer }: { purchase: any; onClose: () => void; issuer?: string }) {
+  const items: any[] = Array.isArray(purchase?.items) ? purchase.items : [];
+  const totalCost = Number(purchase?.totalCost || 0);
+  const supplier = purchase?.supplier || null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4" onClick={onClose}>
+      <div
+        className="relative max-h-[92vh] w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/10"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="relative bg-linear-to-b from-[#B80F24] to-[#7E0012] px-6 py-5 text-white">
+          <button
+            onClick={onClose}
+            className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-xl bg-white/15 ring-1 ring-white/20 transition hover:bg-white/25"
+            aria-label="Close"
+            type="button"
+          >
+            <MdClose className="h-5 w-5" />
+          </button>
+
+          <div className="flex items-center gap-3">
+            <img src="/TFK.png" alt="TFK Logo" className="h-12 w-12 rounded-2xl bg-white p-1 shadow" />
+            <div>
+              <div className="text-[14px] font-extrabold">Taiwan Fried Kitchen</div>
+              <div className="text-[10px] font-bold text-white/85">Purchase Order</div>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/15">
+              <div className="text-[10px] font-extrabold text-white/80">Purchase</div>
+              <div className="text-[12px] font-extrabold">#{purchase?.purchaseID}</div>
+            </div>
+            <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/15">
+              <div className="text-[10px] font-extrabold text-white/80">Items</div>
+              <div className="text-[12px] font-extrabold">{items.length}</div>
+            </div>
+            <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/15 text-right">
+              <div className="text-[10px] font-extrabold text-white/80">Total Cost</div>
+              <div className="text-[12px] font-extrabold">{fmtMoneyPhp(totalCost)}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="max-h-[60vh] overflow-auto px-6 py-5">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-2xl bg-[#F7F7F7] p-4 ring-1 ring-black/5">
+              <div className="text-[10px] font-extrabold text-[#6D6D6D]">Date &amp; Time</div>
+              <div className="mt-1 text-[12px] font-extrabold text-[#1E1E1E]">{formatDateTime(purchase?.createdAt)}</div>
+            </div>
+            <div className="rounded-2xl bg-[#F7F7F7] p-4 ring-1 ring-black/5">
+              <div className="text-[10px] font-extrabold text-[#6D6D6D]">Issued By</div>
+              <div className="mt-1 text-[12px] font-extrabold text-[#1E1E1E]">{issuer || '—'}</div>
+            </div>
+          </div>
+
+          {supplier && (
+            <div className="mt-3 rounded-2xl bg-[#F7F7F7] p-4 ring-1 ring-black/5">
+              <div className="text-[10px] font-extrabold text-[#6D6D6D]">Supplier</div>
+              <div className="mt-1 text-[12px] font-extrabold text-[#1E1E1E]">{supplier}</div>
+            </div>
+          )}
+
+          <div className="mt-4">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-[11px] font-extrabold text-[#1E1E1E] uppercase">Ingredients Restocked</div>
+              <div className="text-[10px] font-extrabold text-[#6D6D6D]">{items.length} line(s)</div>
+            </div>
+
+            <div className="rounded-2xl bg-white ring-1 ring-black/5 overflow-hidden">
+              {items.length === 0 ? (
+                <div className="px-4 py-6 text-center text-[11px] font-bold text-[#6D6D6D]">No items</div>
+              ) : (
+                <div className="divide-y divide-black/5">
+                  {items.map((it: any, idx: number) => {
+                    const qty = Number(it?.quantity || 0);
+                    const unitCost = Number(it?.cost || 0);
+                    const line = qty * unitCost;
+                    const name = it?.Ingredient?.name || 'Unknown Ingredient';
+                    const unit = it?.Ingredient?.unit || '';
+
+                    return (
+                      <div key={idx} className="px-4 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-[12px] font-extrabold text-[#1E1E1E] truncate">{name}</div>
+                            <div className="mt-1 text-[10px] font-bold text-[#6D6D6D]">
+                              {qty} {unit} @ {fmtMoneyPhp(unitCost)}
+                            </div>
+                          </div>
+                          <div className="text-[12px] font-extrabold text-[#1E1E1E] shrink-0">{fmtMoneyPhp(line)}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-2xl bg-[#F7F7F7] p-4 ring-1 ring-black/5">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="font-extrabold text-[#6D6D6D]">Total Items</span>
+              <span className="font-extrabold text-[#1E1E1E]">{items.length}</span>
+            </div>
+            <div className="mt-2 border-t border-dashed border-black/15 pt-2 flex items-center justify-between">
+              <span className="text-[12px] font-extrabold text-[#B80F24]">Total Purchase Cost</span>
+              <span className="text-[12px] font-extrabold text-[#B80F24]">{fmtMoneyPhp(totalCost)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-black/5 bg-white px-6 py-4">
+          <button onClick={onClose} className={classNames(BTN_SUBTLE, 'w-full')} type="button">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ----------------------------- Main Page ----------------------------- */
 
 export default function ReportsPage() {
@@ -819,6 +953,7 @@ export default function ReportsPage() {
 
   const [tab, setTab] = useState<ReportTab>('Sales Income');
   const [userRole, setUserRole] = useState<'Superadmin' | 'Manager' | 'Staff' | null>(null);
+  const [currentUserName, setCurrentUserName] = useState<string>('');
 
   const [purchases, setPurchases] = useState<any[]>([]);
   const [purchasesLoading, setPurchasesLoading] = useState(false);
@@ -831,6 +966,7 @@ export default function ReportsPage() {
   const [receipts, setReceipts] = useState<OrderRow[]>([]);
   const [receiptsLoading, setReceiptsLoading] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
+  const [selectedPurchase, setSelectedPurchase] = useState<any | null>(null);
 
   const [receiptQuery, setReceiptQuery] = useState('');
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'cash' | 'gcash' | 'bank'>('all');
@@ -864,7 +1000,7 @@ export default function ReportsPage() {
 
       const { data, error } = await supabase
         .from('UsersAccount')
-        .select('roleID, Role!inner(roleName)')
+        .select('roleID, firstName, lastName, Role!inner(roleName)')
         .eq('userID', user.id)
         .single();
 
@@ -883,6 +1019,8 @@ export default function ReportsPage() {
         }
       }
 
+      const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim();
+      setCurrentUserName(fullName);
       setUserRole(roleName);
     } catch (err) {
       console.error('Error fetching user role:', err);
@@ -956,7 +1094,7 @@ export default function ReportsPage() {
     try {
       const { data: purchasesData, error: purchaseErr } = await supabase
         .from('Purchase')
-        .select('*')
+        .select('*, UpdatedByUser:updatedBy(firstName, lastName)')
         .order('createdAt', { ascending: false });
       if (purchaseErr) throw purchaseErr;
 
@@ -983,7 +1121,10 @@ export default function ReportsPage() {
   const fetchReceipts = async () => {
     setReceiptsLoading(true);
     try {
-      const { data: orders, error: orderErr } = await supabase.from('Order').select('*').order('createdAt', { ascending: false });
+      const { data: orders, error: orderErr } = await supabase
+        .from('Order')
+        .select('*, ProcessedByUser:processedBy(firstName, lastName)')
+        .order('createdAt', { ascending: false });
 
       if (orderErr) throw orderErr;
 
@@ -1144,7 +1285,8 @@ export default function ReportsPage() {
         String(p.purchaseID).includes(q) ||
         formatDateTime(p.createdAt).toLowerCase().includes(q) ||
         String(p.totalCost ?? '').toLowerCase().includes(q) ||
-        itemsText.includes(q);
+        itemsText.includes(q) ||
+        (p.supplier || '').toLowerCase().includes(q);
 
       const matchDate =
         purchaseDateFilter === 'all'
@@ -1344,7 +1486,8 @@ export default function ReportsPage() {
 
   return (
     <div className="h-screen overflow-hidden bg-[#F3F3F3] text-[#1E1E1E] lg:flex">
-      {selectedOrder && <ReceiptModal order={selectedOrder} onClose={() => setSelectedOrder(null)} onVoid={fetchReceipts} />}
+      {selectedOrder && <ReceiptModal order={selectedOrder} onClose={() => setSelectedOrder(null)} onVoid={fetchReceipts} issuer={selectedOrder.ProcessedByUser ? `${selectedOrder.ProcessedByUser.firstName || ''} ${selectedOrder.ProcessedByUser.lastName || ''}`.trim() : undefined} />}
+      {selectedPurchase && <PurchaseDetailModal purchase={selectedPurchase} onClose={() => setSelectedPurchase(null)} issuer={selectedPurchase.UpdatedByUser ? `${selectedPurchase.UpdatedByUser.firstName || ''} ${selectedPurchase.UpdatedByUser.lastName || ''}`.trim() : undefined} />}
 
       <div className="hidden lg:block">
         <div className={classNames('h-screen transition-all duration-300', collapsed ? 'w-24' : 'w-64')}>
@@ -1407,7 +1550,7 @@ export default function ReportsPage() {
                 </span>
                 <div>
                   <div className="text-[14px] font-extrabold text-white">Purchase Expenses</div>
-                  <div className="text-[10px] font-bold text-white/80">Review purchases and item breakdown</div>
+                  <div className="text-[10px] font-bold text-white/80">Click a row to view purchase details</div>
                 </div>
               </div>
 
@@ -1500,11 +1643,11 @@ export default function ReportsPage() {
               </div>
             ) : (
               <>
-                <div className="hidden md:grid grid-cols-[160px_1.1fr_160px_1.6fr] gap-3 px-6 py-3 text-[10px] font-extrabold text-[#6D6D6D] bg-white">
+                <div className="hidden md:grid grid-cols-[160px_1.4fr_160px_120px] gap-3 px-6 py-3 text-[10px] font-extrabold text-[#6D6D6D] bg-white">
                   <div>Purchase</div>
-                  <div>Date</div>
+                  <div>Date / Supplier</div>
                   <div className="text-center">Total Cost</div>
-                  <div className="text-center">Items</div>
+                  <div />
                 </div>
 
                 <div className="divide-y divide-black/5">
@@ -1517,8 +1660,13 @@ export default function ReportsPage() {
                       .join(', ');
 
                     return (
-                      <div key={purchase.purchaseID} className="px-6 py-4 bg-white hover:bg-[#FAFAFA] transition">
-                        <div className="hidden md:grid grid-cols-[160px_1.1fr_160px_1.6fr] gap-3 items-start">
+                      <div
+                        key={purchase.purchaseID}
+                        onClick={() => setSelectedPurchase(purchase)}
+                        className="group cursor-pointer px-6 py-4 bg-white hover:bg-[#FAFAFA] transition"
+                      >
+                        {/* Desktop */}
+                        <div className="hidden md:grid grid-cols-[160px_1.4fr_160px_120px] gap-3 items-center">
                           <div>
                             <div className="text-[10px] font-extrabold text-[#B80F24]">Purchase ID</div>
                             <div className="text-[13px] font-extrabold text-[#1E1E1E]">#{purchase.purchaseID}</div>
@@ -1540,6 +1688,11 @@ export default function ReportsPage() {
                                 {items.length > 2 ? '…' : ''}
                               </span>
                             </div>
+                            {purchase.supplier && (
+                              <div className="mt-1 text-[10px] font-bold text-[#6D6D6D] truncate">
+                                🏪 {purchase.supplier}
+                              </div>
+                            )}
                           </div>
 
                           <div className="flex flex-col items-center text-center">
@@ -1547,22 +1700,39 @@ export default function ReportsPage() {
                             <div className="text-[13px] font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(purchase.totalCost || 0)}</div>
                           </div>
 
-                          <div className="text-[11px] font-normal text-[#1E1E1E] text-center">
-                            {items.length > 0 ? (
-                              <ul className="list-disc list-inside w-fit mx-auto">
-                                {items.map((item: any, i: number) => (
-                                  <li key={i} className="mb-1">
-                                    <span className="font-extrabold">{item.Ingredient?.name || 'Unknown'}</span>
-                                    {item.quantity ? ` × ${item.quantity}` : ''}
-                                    {item.Ingredient?.unit ? ` ${item.Ingredient.unit}` : ''}
-                                    {item.cost ? ` @ ${fmtMoneyPhp(item.cost)}` : ''}
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <span className="text-gray-500">No items</span>
-                            )}
+                          <div className="flex items-center justify-end">
+                            <span className="inline-flex items-center gap-1 rounded-xl bg-[#FEF2F2] px-3 py-1.5 text-[10px] font-extrabold text-[#B80F24] ring-1 ring-[#B80F24]/15 group-hover:bg-[#B80F24] group-hover:text-white transition">
+                              <MdVisibility className="h-3.5 w-3.5" />
+                              View
+                            </span>
                           </div>
+                        </div>
+
+                        {/* Mobile */}
+                        <div className="md:hidden space-y-2">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-extrabold text-[#B80F24]">Purchase #{purchase.purchaseID}</div>
+                              <div className="mt-1 text-[11px] font-bold text-[#6D6D6D]">{formatDateTime(purchase.createdAt)}</div>
+                              {purchase.supplier && (
+                                <div className="mt-0.5 text-[10px] font-bold text-[#6D6D6D]">🏪 {purchase.supplier}</div>
+                              )}
+                              <div className="mt-2 flex items-center gap-2">
+                                <StatusChip status={purchase.status || 'Completed'} />
+                                <span className="text-[10px] font-extrabold text-[#6D6D6D]">
+                                  {items.length} item{items.length !== 1 ? 's' : ''}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <div className="text-[10px] font-extrabold text-[#B80F24]">Total Cost</div>
+                              <div className="text-[13px] font-extrabold text-[#1E1E1E]">{fmtMoneyPhp(purchase.totalCost || 0)}</div>
+                            </div>
+                          </div>
+                          <button className={classNames(BTN_PRIMARY, 'w-full')} type="button">
+                            <MdVisibility className="h-4 w-4" />
+                            View Details
+                          </button>
                         </div>
                       </div>
                     );

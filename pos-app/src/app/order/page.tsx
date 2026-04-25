@@ -491,15 +491,15 @@ function CartPanel({
             className={[
               'w-full rounded-2xl py-4 font-black shadow-lg transition-all',
               cart.length === 0 ||
-              isSubmitting ||
-              (paymentMethod === 'cash' ? amountPaid < cartTotal : !paymentConfirmed)
+                isSubmitting ||
+                (paymentMethod === 'cash' ? amountPaid < cartTotal : !paymentConfirmed)
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : 'text-white hover:brightness-95',
             ].join(' ')}
             style={
               cart.length === 0 ||
-              isSubmitting ||
-              (paymentMethod === 'cash' ? amountPaid < cartTotal : !paymentConfirmed)
+                isSubmitting ||
+                (paymentMethod === 'cash' ? amountPaid < cartTotal : !paymentConfirmed)
                 ? undefined
                 : { backgroundColor: BRAND }
             }
@@ -514,7 +514,7 @@ function CartPanel({
         <div className="absolute inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
           <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="text-center">
-              <div 
+              <div
                 className="mx-auto h-16 w-16 rounded-full flex items-center justify-center mb-4"
                 style={{ backgroundColor: `${BRAND}15` }}
               >
@@ -537,7 +537,7 @@ function CartPanel({
               >
                 YES, PROCEED
               </button>
-              
+
               <button
                 onClick={() => setShowConfirmPrompt(false)}
                 className="w-full rounded-2xl py-3 text-sm font-black text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition"
@@ -558,6 +558,7 @@ export default function OrderPage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [lastOrderChange, setLastOrderChange] = useState<number>(0);
   const [currentUserLabel, setCurrentUserLabel] = useState<string>('');
+  const [currentUserID, setCurrentUserID] = useState<string | null>(null);
 
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -581,8 +582,11 @@ export default function OrderPage() {
 
         if (!user) {
           setCurrentUserLabel('');
+          setCurrentUserID(null);
           return;
         }
+
+        setCurrentUserID(user.id);
 
         const { data: profile, error: profErr } = await supabase
           .from('UsersAccount')
@@ -605,6 +609,7 @@ export default function OrderPage() {
       } catch (err) {
         console.error('Failed to fetch current user:', err);
         setCurrentUserLabel('');
+        setCurrentUserID(null);
       }
     };
 
@@ -719,7 +724,7 @@ export default function OrderPage() {
   // ✨ Solution 1: Realtime subscription to MenuItem availability changes
   useEffect(() => {
     console.log('🔄 [REALTIME] Subscribing to MenuItem table changes (Order page)...');
-    
+
     const subscription = supabase
       .channel('public:MenuItem-order')
       .on(
@@ -861,6 +866,7 @@ export default function OrderPage() {
             change: finalChange,
             paymentmethod: paymentMethod,
             discountApplied: discountEnabled,
+            processedBy: currentUserID,
           },
         ])
         .select()
@@ -1059,95 +1065,95 @@ export default function OrderPage() {
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5">
               {loading
                 ? Array.from({ length: 12 }).map((_, idx) => (
-                    <div
-                      key={idx}
-                      className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden animate-pulse"
-                    >
-                      <div className="h-32 w-full bg-gray-200" />
-                      <div className="p-4 space-y-3">
-                        <div className="h-3 w-24 rounded bg-gray-200" />
-                        <div className="h-4 w-40 rounded bg-gray-200" />
-                        <div className="flex items-center justify-between pt-1">
-                          <div className="h-5 w-20 rounded bg-gray-200" />
-                          <div className="h-11 w-11 rounded-2xl bg-gray-200" />
-                        </div>
+                  <div
+                    key={idx}
+                    className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden animate-pulse"
+                  >
+                    <div className="h-32 w-full bg-gray-200" />
+                    <div className="p-4 space-y-3">
+                      <div className="h-3 w-24 rounded bg-gray-200" />
+                      <div className="h-4 w-40 rounded bg-gray-200" />
+                      <div className="flex items-center justify-between pt-1">
+                        <div className="h-5 w-20 rounded bg-gray-200" />
+                        <div className="h-11 w-11 rounded-2xl bg-gray-200" />
                       </div>
                     </div>
-                  ))
+                  </div>
+                ))
                 : filtered.map((item) => {
-                    const inCart = qtyInCart.get(item.menuItemID) || 0;
+                  const inCart = qtyInCart.get(item.menuItemID) || 0;
 
-                    return (
-                      <button
-                        key={item.menuItemID}
-                        onClick={() => addToCart(item)}
-                        className={[
-                          'group relative flex flex-col rounded-2xl bg-white border shadow-sm overflow-hidden text-left transition',
-                          'hover:-translate-y-2px hover:shadow-lg',
-                          'border-gray-100',
-                        ].join(' ')}
-                      >
-                        <div className="h-32 w-full bg-gray-100 overflow-hidden relative">
-                          {item.imageUrl ? (
-                            <img
-                              src={item.imageUrl}
-                              alt={item.name}
-                              className="h-full w-full object-cover group-hover:scale-[1.03] transition-transform"
-                            />
-                          ) : (
-                            <div className="h-full w-full grid place-items-center">
-                              <div className="h-12 w-12 rounded-2xl bg-white/70 grid place-items-center border border-white/60">
-                                <MdRestaurantMenu className="text-2xl text-gray-400" />
-                              </div>
+                  return (
+                    <button
+                      key={item.menuItemID}
+                      onClick={() => addToCart(item)}
+                      className={[
+                        'group relative flex flex-col rounded-2xl bg-white border shadow-sm overflow-hidden text-left transition',
+                        'hover:-translate-y-2px hover:shadow-lg',
+                        'border-gray-100',
+                      ].join(' ')}
+                    >
+                      <div className="h-32 w-full bg-gray-100 overflow-hidden relative">
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt={item.name}
+                            className="h-full w-full object-cover group-hover:scale-[1.03] transition-transform"
+                          />
+                        ) : (
+                          <div className="h-full w-full grid place-items-center">
+                            <div className="h-12 w-12 rounded-2xl bg-white/70 grid place-items-center border border-white/60">
+                              <MdRestaurantMenu className="text-2xl text-gray-400" />
                             </div>
-                          )}
+                          </div>
+                        )}
 
-                          {inCart > 0 && (
-                            <div className="absolute top-3 right-3">
-                              <span
-                                className="text-[10px] font-black px-3 py-1 rounded-2xl text-white shadow-md"
-                                style={{ backgroundColor: BRAND }}
-                              >
-                                {inCart} in cart
-                              </span>
-                            </div>
-                          )}
-                        </div>
+                        {inCart > 0 && (
+                          <div className="absolute top-3 right-3">
+                            <span
+                              className="text-[10px] font-black px-3 py-1 rounded-2xl text-white shadow-md"
+                              style={{ backgroundColor: BRAND }}
+                            >
+                              {inCart} in cart
+                            </span>
+                          </div>
+                        )}
+                      </div>
 
-                        <div className="p-4">
-                          <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: BRAND }}>
-                            {item.categoryName}
-                          </p>
-                          <h3 className="text-sm font-black text-gray-900 mt-1 line-clamp-1">{item.name}</h3>
+                      <div className="p-4">
+                        <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: BRAND }}>
+                          {item.categoryName}
+                        </p>
+                        <h3 className="text-sm font-black text-gray-900 mt-1 line-clamp-1">{item.name}</h3>
 
-                          <div className="mt-3 flex items-center justify-between">
-                            <span className="text-lg font-black text-gray-900">{money(Number(item.price))}</span>
+                        <div className="mt-3 flex items-center justify-between">
+                          <span className="text-lg font-black text-gray-900">{money(Number(item.price))}</span>
 
-                            <div className="h-11 w-11 rounded-2xl grid place-items-center border-2 bg-gray-50 border-gray-100 transition">
-                              <div
-                                className="h-11 w-11 rounded-2xl grid place-items-center transition-colors"
+                          <div className="h-11 w-11 rounded-2xl grid place-items-center border-2 bg-gray-50 border-gray-100 transition">
+                            <div
+                              className="h-11 w-11 rounded-2xl grid place-items-center transition-colors"
+                              style={{
+                                backgroundColor: inCart > 0 ? `${BRAND}12` : 'transparent',
+                              }}
+                            >
+                              <MdAdd
+                                className="text-xl transition-colors"
                                 style={{
-                                  backgroundColor: inCart > 0 ? `${BRAND}12` : 'transparent',
+                                  color: inCart > 0 ? BRAND : '#111827',
                                 }}
-                              >
-                                <MdAdd
-                                  className="text-xl transition-colors"
-                                  style={{
-                                    color: inCart > 0 ? BRAND : '#111827',
-                                  }}
-                                />
-                              </div>
+                              />
                             </div>
                           </div>
                         </div>
+                      </div>
 
-                        <div
-                          className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition"
-                          style={{ boxShadow: `inset 0 0 0 2px ${BRAND}` }}
-                        />
-                      </button>
-                    );
-                  })}
+                      <div
+                        className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition"
+                        style={{ boxShadow: `inset 0 0 0 2px ${BRAND}` }}
+                      />
+                    </button>
+                  );
+                })}
             </div>
           </div>
 
