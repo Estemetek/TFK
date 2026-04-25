@@ -680,6 +680,39 @@ export default function OrderPage() {
     loadStoreData();
   }, []);
 
+  // ✨ Solution 1: Realtime subscription to MenuItem availability changes
+  useEffect(() => {
+    console.log('🔄 [REALTIME] Subscribing to MenuItem table changes (Order page)...');
+    
+    const subscription = supabase
+      .channel('public:MenuItem-order')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'MenuItem',
+        },
+        (payload) => {
+          console.log('🔄 [REALTIME UPDATE] MenuItem availability changed:', payload.new.name);
+          // Update the specific menu item in state
+          setMenuItems((prev) =>
+            prev.map((item) =>
+              item.menuItemID === payload.new.menuItemID
+                ? { ...item, isAvailable: payload.new.isAvailable }
+                : item
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('🔄 [REALTIME] Unsubscribing from MenuItem table changes (Order page)');
+      subscription.unsubscribe();
+    };
+  }, []);
+
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim().toLowerCase()), 200);
     return () => window.clearTimeout(t);

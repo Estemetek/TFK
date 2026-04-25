@@ -25,6 +25,7 @@ import {
   MdArchive,
   MdDeleteForever,
   MdRestore,
+  MdRefresh,
 } from 'react-icons/md';
 import { RecipeModal } from '../components/RecipeModal';
 
@@ -501,6 +502,7 @@ export default function MenuPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [selectedCatID, setSelectedCatID] = useState<number | 'all'>('all');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const menuTypes: MenuType[] = ['Normal Menu', 'Archived Menu'];
   const [selectedMenuType, setSelectedMenuType] = useState<MenuType>('Normal Menu');
@@ -783,6 +785,39 @@ export default function MenuPage() {
     runSyncAndFetch();
   }, [fetchAllData]);
 
+  // ✨ Solution 1: Realtime subscription to MenuItem changes
+  useEffect(() => {
+    console.log('🔄 [REALTIME] Subscribing to MenuItem table changes...');
+    
+    const subscription = supabase
+      .channel('public:MenuItem')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'MenuItem',
+        },
+        (payload) => {
+          console.log('🔄 [REALTIME UPDATE] MenuItem changed:', payload.new.name);
+          // Update the specific menu item in state
+          setMenuItems((prev) =>
+            prev.map((item) =>
+              item.menuItemID === payload.new.menuItemID
+                ? { ...item, isAvailable: payload.new.isAvailable }
+                : item
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('🔄 [REALTIME] Unsubscribing from MenuItem table changes');
+      subscription.unsubscribe();
+    };
+  }, []);
+
   const categoryCounts = useMemo(() => {
     const map = new Map<number, number>();
     for (const item of menuItems) {
@@ -886,6 +921,41 @@ export default function MenuPage() {
 
   const handlePriceInput = (value: string): string => {
     return value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
+  };
+
+  // ✨ Solution 3: Manual refresh handler
+  const handleRefreshAvailability = async () => {
+    setIsRefreshing(true);
+    console.log('🔄 [REFRESH] User manually triggering availability sync...');
+    try {
+      const response = await fetch('/api/sync-all', { method: 'POST' });
+      if (!response.ok) throw new Error('Sync failed');
+      
+      // Wait for sync to complete
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      
+      console.log('✅ [REFRESH] Sync complete, fetching fresh data...');
+      await fetchAllData();
+      
+      showPopup({
+        type: 'success',
+        title: 'Availability refreshed',
+        message: 'Menu availability has been updated based on current inventory.',
+        confirmText: 'OK',
+        onConfirm: closePopup,
+      });
+    } catch (err: any) {
+      console.error('❌ [REFRESH ERROR]', err);
+      showPopup({
+        type: 'error',
+        title: 'Refresh failed',
+        message: err.message || 'Failed to refresh availability.',
+        confirmText: 'Close',
+        onConfirm: closePopup,
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const handleAddCategory = async () => {
@@ -1759,7 +1829,27 @@ export default function MenuPage() {
                   </div>
 
                   {selectedMenuType === 'Normal Menu' && canEditMenuItems && (
-                    <PrimaryButton onClick={openAddDrawer}>Add Menu Item</PrimaryButton>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleRefreshAvailability}
+                        disabled={isRefreshing || loading}
+                        className="grid h-10 w-10 place-items-center rounded-xl bg-white ring-1 ring-black/10 hover:bg-black/3 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Refresh menu availability based on current inventory"
+                      >
+                        <MdRefresh className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                      </button>
+                      <PrimaryButton onClick={openAddDrawer}>Add Menu Item</PrimaryButton>
+                    </div>
+                  )}
+                  {selectedMenuType === 'Archived Menu' && canEditMenuItems && (
+                    <button
+                      onClick={handleRefreshAvailability}
+                      disabled={isRefreshing || loading}
+                      className="grid h-10 w-10 place-items-center rounded-xl bg-white ring-1 ring-black/10 hover:bg-black/3 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Refresh menu availability based on current inventory"
+                    >
+                      <MdRefresh className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    </button>
                   )}
                 </div>
               </div>

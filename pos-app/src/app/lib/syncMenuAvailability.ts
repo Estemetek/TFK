@@ -149,3 +149,98 @@ export async function syncMenuAvailability(supabaseClient?: SupabaseClient) {
   
   console.log('\n✨ [SYNC END] syncMenuAvailability completed at', new Date().toISOString());
 }
+
+// ✨ Solution 2: Targeted sync - only sync specific menu items that use a given ingredient
+export async function syncSpecificMenuItems(
+  menuItemIds: number[],
+  supabaseClient?: SupabaseClient
+) {
+  const supabase = supabaseClient || defaultSupabase;
+  
+  if (!menuItemIds || menuItemIds.length === 0) {
+    console.log('⏭️ [TARGETED SYNC] No menu items to sync');
+    return;
+  }
+
+  console.log(`🎯 [TARGETED SYNC START] Syncing ${menuItemIds.length} specific menu item(s) at ${new Date().toISOString()}`);
+
+  const { data: menuItems, error: menuError } = await supabase
+    .from('MenuItem')
+    .select('menuItemID, name')
+    .in('menuItemID', menuItemIds);
+
+  if (menuError) {
+    console.error('❌ [TARGETED SYNC ERROR]', menuError);
+    return;
+  }
+
+  if (!menuItems || menuItems.length === 0) {
+    console.warn('⚠️ [TARGETED SYNC] No menu items found');
+    return;
+  }
+
+  // Use same sync logic as full sync, but only for these items
+  await Promise.all(
+    menuItems.map(async (menu) => {
+      const menuIdValue = menu.menuItemID;
+
+      const { data: recipeIngredients, error: recipeError } = await supabase
+        .from('MenuIngredient')
+        .select('ingredientID')
+        .eq('menuItemID', menuIdValue);
+
+      if (recipeError) {
+        console.error(`❌ [TARGETED SYNC] Recipe error for ${menu.name}:`, recipeError);
+        return;
+      }
+
+      if (!recipeIngredients || recipeIngredients.length === 0) {
+        const { error: updateError } = await supabase
+          .from('MenuItem')
+          .update({ isAvailable: false })
+          .eq('menuItemID', menuIdValue);
+        
+        if (!updateError) {
+          console.log(`✅ [TARGETED SYNC] ${menu.name} marked UNAVAILABLE (no ingredients)`);
+        }
+        return;
+      }
+
+      const ingredientIds = recipeIngredients.map((r) => r.ingredientID);
+      const { data: ingredients, error: ingredientError } = await supabase
+        .from('Ingredient')
+        .select('ingredientID, name, currentStock, reorderLevel')
+        .in('ingredientID', ingredientIds);
+
+      if (ingredientError) {
+        console.error(`❌ [TARGETED SYNC] Ingredient error for ${menu.name}:`, ingredientError);
+        return;
+      }
+
+      if (!ingredients || ingredients.length === 0) {
+        const { error: updateError } = await supabase
+          .from('MenuItem')
+          .update({ isAvailable: false })
+          .eq('menuItemID', menuIdValue);
+        
+        if (!updateError) {
+          console.log(`✅ [TARGETED SYNC] ${menu.name} marked UNAVAILABLE (no ingredient data)`);
+        }
+        return;
+      }
+
+      const allStockOk = ingredients.every((ing) => ing.currentStock > ing.reorderLevel);
+      const { error: updateError } = await supabase
+        .from('MenuItem')
+        .update({ isAvailable: allStockOk })
+        .eq('menuItemID', menuIdValue);
+
+      if (!updateError) {
+        const status = allStockOk ? 'IN STOCK' : 'UNAVAILABLE';
+        console.log(`✅ [TARGETED SYNC] ${menu.name} marked ${status}`);
+      }
+    })
+  );
+
+  console.log(`\n✨ [TARGETED SYNC END] Completed at ${new Date().toISOString()}`);
+}

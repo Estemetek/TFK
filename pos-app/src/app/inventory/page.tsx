@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { syncMenuAvailability } from '../lib/syncMenuAvailability';
+import { syncMenuAvailability, syncSpecificMenuItems } from '../lib/syncMenuAvailability';
 import { Sidebar } from '../components/Sidebar';
 import { useRouter } from 'next/navigation';
 import {
@@ -238,8 +238,22 @@ export default function InventoryPage() {
 
       if (updateError) throw updateError;
 
+      // ✨ Solution 2: Targeted sync - find menu items using this ingredient and sync only those
+      console.log(`🎯 [INVENTORY] Finding menu items that use ingredient: ${ingredient.name}`);
+      const { data: affectedMenuItems } = await supabase
+        .from('MenuIngredient')
+        .select('menuItemID')
+        .eq('ingredientID', ingredient.ingredientID);
+
+      if (affectedMenuItems && affectedMenuItems.length > 0) {
+        const menuItemIds = affectedMenuItems.map((m) => m.menuItemID);
+        console.log(`🎯 [INVENTORY] Found ${menuItemIds.length} menu item(s) to sync`);
+        await syncSpecificMenuItems(menuItemIds);
+      } else {
+        console.log(`🎯 [INVENTORY] No menu items use this ingredient`);
+      }
+
       await fetchInventory();
-      await syncMenuAvailability();
       setShowRestockModal(false);
       setRestockItem(null);
       setRestockQuantity(0);
@@ -264,7 +278,21 @@ export default function InventoryPage() {
             updatedBy: currentUserID,
           })
           .eq('ingredientID', editItem.ingredientID);
+
+        // ✨ Solution 2: Targeted sync for ingredient edit
+        console.log(`🎯 [INVENTORY] Finding menu items that use edited ingredient`);
+        const { data: affectedMenuItems } = await supabase
+          .from('MenuIngredient')
+          .select('menuItemID')
+          .eq('ingredientID', editItem.ingredientID);
+
+        if (affectedMenuItems && affectedMenuItems.length > 0) {
+          const menuItemIds = affectedMenuItems.map((m) => m.menuItemID);
+          console.log(`🎯 [INVENTORY] Syncing ${menuItemIds.length} affected menu item(s)`);
+          await syncSpecificMenuItems(menuItemIds);
+        }
       } else {
+        // Creating new ingredient - no menu items use it yet
         const { error } = await supabase
           .from('Ingredient')
           .insert({
@@ -283,7 +311,6 @@ export default function InventoryPage() {
       }
 
       await fetchInventory();
-      await syncMenuAvailability();
       setShowAddModal(false);
       setShowEditModal(false);
       setEditItem(null);
