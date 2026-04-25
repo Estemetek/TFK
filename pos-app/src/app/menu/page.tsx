@@ -17,17 +17,12 @@ import {
   MdImage,
   MdSearch,
   MdTune,
-  MdReceiptLong,
-  MdCheckCircle,
-  MdCancel,
   MdWarningAmber,
   MdInfo,
   MdArchive,
   MdDeleteForever,
   MdRestore,
-  MdRefresh,
 } from 'react-icons/md';
-import { RecipeModal } from '../components/RecipeModal';
 
 // --- TYPES ---
 type Category = {
@@ -42,7 +37,6 @@ type MenuItem = {
   description?: string;
   price: number;
   regularPrice: number;
-  isAvailable: boolean;
   status: string;
   categoryID: number;
   imageUrl?: string;
@@ -74,18 +68,6 @@ const getCategoryIcon = (name: string) => {
   if (n.includes('bev') || n.includes('drink')) return <MdLocalCafe className="h-6 w-6" />;
   return <MdGridView className="h-6 w-6" />;
 };
-
-const AvailabilityPill = ({ value }: { value: boolean }) => (
-  <span
-    className={[
-      'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-extrabold',
-      value ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700',
-    ].join(' ')}
-  >
-    {value ? <MdCheckCircle className="h-4 w-4" /> : <MdCancel className="h-4 w-4" />}
-    {value ? 'In Stock' : 'Unavailable'}
-  </span>
-);
 
 function RightDrawer({
   open,
@@ -502,7 +484,6 @@ export default function MenuPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [selectedCatID, setSelectedCatID] = useState<number | 'all'>('all');
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const menuTypes: MenuType[] = ['Normal Menu', 'Archived Menu'];
   const [selectedMenuType, setSelectedMenuType] = useState<MenuType>('Normal Menu');
@@ -510,7 +491,6 @@ export default function MenuPage() {
   const [loading, setLoading] = useState(true);
 
   const [query, setQuery] = useState('');
-  const [availabilityFilter, setAvailabilityFilter] = useState<'all' | 'in' | 'out'>('all');
   const [sortBy, setSortBy] = useState<'name' | 'price_asc' | 'price_desc' | 'updated_desc'>('name');
 
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
@@ -585,9 +565,6 @@ export default function MenuPage() {
 
   // Check if user can edit/delete menu items
   const canEditMenuItems = userRole === 'Manager' || userRole === 'Superadmin';
-
-  const [isRecipeOpen, setIsRecipeOpen] = useState(false);
-  const [activeRecipeItem, setActiveRecipeItem] = useState<MenuItem | null>(null);
 
   const [isCategoryListOpen, setIsCategoryListOpen] = useState(false);
   const [isCategoryMgmtOpen, setIsCategoryMgmtOpen] = useState(false);
@@ -866,9 +843,6 @@ export default function MenuPage() {
       });
     }
 
-    if (availabilityFilter === 'in') items = items.filter((i) => i.isAvailable);
-    if (availabilityFilter === 'out') items = items.filter((i) => !i.isAvailable);
-
     const sorted = [...items];
     sorted.sort((a, b) => {
       if (sortBy === 'name') return a.name.localeCompare(b.name);
@@ -879,7 +853,7 @@ export default function MenuPage() {
     });
 
     return sorted;
-  }, [menuItems, selectedCatID, selectedMenuType, query, availabilityFilter, sortBy]);
+  }, [menuItems, selectedCatID, selectedMenuType, query, sortBy]);
 
   const activeCategoriesForForms = useMemo(
     () => categories.filter((c) => !c.categoryName.startsWith('[ARCHIVED]')),
@@ -921,41 +895,6 @@ export default function MenuPage() {
 
   const handlePriceInput = (value: string): string => {
     return value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
-  };
-
-  // ✨ Solution 3: Manual refresh handler
-  const handleRefreshAvailability = async () => {
-    setIsRefreshing(true);
-    console.log('🔄 [REFRESH] User manually triggering availability sync...');
-    try {
-      const response = await fetch('/api/sync-all', { method: 'POST' });
-      if (!response.ok) throw new Error('Sync failed');
-      
-      // Wait for sync to complete
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-      console.log('✅ [REFRESH] Sync complete, fetching fresh data...');
-      await fetchAllData();
-      
-      showPopup({
-        type: 'success',
-        title: 'Availability refreshed',
-        message: 'Menu availability has been updated based on current inventory.',
-        confirmText: 'OK',
-        onConfirm: closePopup,
-      });
-    } catch (err: any) {
-      console.error('❌ [REFRESH ERROR]', err);
-      showPopup({
-        type: 'error',
-        title: 'Refresh failed',
-        message: err.message || 'Failed to refresh availability.',
-        confirmText: 'Close',
-        onConfirm: closePopup,
-      });
-    } finally {
-      setIsRefreshing(false);
-    }
   };
 
   const handleAddCategory = async () => {
@@ -1264,11 +1203,6 @@ export default function MenuPage() {
         setIsSubmitting(false);
       },
     });
-  };
-
-  const handleRecipeClick = (item: MenuItem) => {
-    setActiveRecipeItem(item);
-    setIsRecipeOpen(true);
   };
 
   const handleEditCategory = (cat: Category) => {
@@ -1730,19 +1664,6 @@ export default function MenuPage() {
 
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-2 rounded-xl bg-[#F3F3F3] px-3 py-2">
-                    <MdTune className="h-5 w-5 text-black/40" />
-                    <select
-                      value={availabilityFilter}
-                      onChange={(e) => setAvailabilityFilter(e.target.value as any)}
-                      className="bg-transparent text-xs font-bold outline-none"
-                    >
-                      <option value="all">All</option>
-                      <option value="in">In Stock</option>
-                      <option value="out">Out of Stock</option>
-                    </select>
-                  </div>
-
-                  <div className="flex items-center gap-2 rounded-xl bg-[#F3F3F3] px-3 py-2">
                     <span className="text-xs font-extrabold text-black/50">Sort</span>
                     <select
                       value={sortBy}
@@ -1758,26 +1679,8 @@ export default function MenuPage() {
 
                   {selectedMenuType === 'Normal Menu' && canEditMenuItems && (
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleRefreshAvailability}
-                        disabled={isRefreshing || loading}
-                        className="grid h-10 w-10 place-items-center rounded-xl bg-white ring-1 ring-black/10 hover:bg-black/3 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Refresh menu availability based on current inventory"
-                      >
-                        <MdRefresh className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                      </button>
                       <PrimaryButton onClick={openAddDrawer}>Add Menu Item</PrimaryButton>
                     </div>
-                  )}
-                  {selectedMenuType === 'Archived Menu' && canEditMenuItems && (
-                    <button
-                      onClick={handleRefreshAvailability}
-                      disabled={isRefreshing || loading}
-                      className="grid h-10 w-10 place-items-center rounded-xl bg-white ring-1 ring-black/10 hover:bg-black/3 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Refresh menu availability based on current inventory"
-                    >
-                      <MdRefresh className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    </button>
                   )}
                 </div>
               </div>
@@ -1818,7 +1721,6 @@ export default function MenuPage() {
                       <th className="p-3">Item ID</th>
                       <th className="p-3">Category</th>
                       <th className="p-3">Price</th>
-                      <th className="p-3">Availability</th>
                       <th className="p-3 text-right">Action</th>
                     </tr>
                   </thead>
@@ -1845,9 +1747,6 @@ export default function MenuPage() {
                           </td>
                           <td className="p-3">
                             <div className="h-3 w-16 rounded bg-black/10" />
-                          </td>
-                          <td className="p-3">
-                            <div className="h-7 w-24 rounded-full bg-black/10" />
                           </td>
                           <td className="p-3">
                             <div className="h-3 w-28 rounded bg-black/10" />
@@ -1908,22 +1807,9 @@ export default function MenuPage() {
                           </td>
 
                           <td className="p-3">
-                            <AvailabilityPill value={item.isAvailable} />
-                          </td>
-
-                          <td className="p-3">
                             <div className="flex justify-end gap-2">
                               {selectedMenuType === 'Normal Menu' ? (
                                 <>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRecipeClick(item)}
-                                    className="h-9 w-9 rounded-xl bg-blue-50 grid place-items-center hover:bg-blue-100 transition"
-                                    title="Manage Recipe"
-                                  >
-                                    <MdReceiptLong className="h-4 w-4 text-blue-600" />
-                                  </button>
-
                                   {canEditMenuItems && (
                                     <>
                                       <button
@@ -1973,7 +1859,7 @@ export default function MenuPage() {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={8} className="p-10 text-center text-black/50 text-sm font-bold">
+                        <td colSpan={7} className="p-10 text-center text-black/50 text-sm font-bold">
                           {selectedMenuType === 'Archived Menu'
                             ? 'No archived menu items found.'
                             : 'No menu items found.'}
@@ -1993,7 +1879,6 @@ export default function MenuPage() {
                   type="button"
                   onClick={() => {
                     setQuery('');
-                    setAvailabilityFilter('all');
                     setSortBy('name');
                     setSelectedCatID('all');
                     setSelectedMenuType('Normal Menu');
@@ -2166,10 +2051,6 @@ export default function MenuPage() {
                 </option>
               ))}
             </Select>
-          </Field>
-
-          <Field label="Availability">
-            <span className="text-xs font-bold text-black/50">In Stock / Available</span>
           </Field>
 
           <div className="pt-5 flex justify-end gap-2 border-t border-black/10">
@@ -2395,33 +2276,6 @@ export default function MenuPage() {
           </div>
         </div>
       </RightDrawer>
-
-      {isRecipeOpen && activeRecipeItem && selectedMenuType === 'Normal Menu' && (
-        <RecipeModal
-          menuItem={activeRecipeItem}
-          onClose={() => {
-            setIsRecipeOpen(false);
-            setActiveRecipeItem(null);
-          }}
-          canEdit={canEditMenuItems}
-          currentUserID={currentUserID}
-          onRecipeChange={async () => {
-            await fetch('/api/sync-all', { method: 'POST' });
-            console.log('⏳ [AFTER RECIPE CHANGE] Waiting 1.5 seconds for database replication...');
-            // Wait for Supabase to replicate changes to all nodes
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            console.log('✅ [REPLICATION COMPLETE] Now fetching fresh data...');
-            await fetchAllData();
-            showPopup({
-              type: 'success',
-              title: 'Recipe updated',
-              message: 'Recipe changes were saved and menu availability was synced.',
-              confirmText: 'OK',
-              onConfirm: closePopup,
-            });
-          }}
-        />
-      )}
 
       <ActionChoiceModal
         open={actionChoice.open}

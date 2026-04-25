@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Sidebar } from '../components/Sidebar';
 import { supabase } from '../lib/supabaseClient';
-import { syncMenuAvailability } from '../lib/syncMenuAvailability';
 import {
   MdAdd,
   MdRemove,
@@ -27,7 +26,6 @@ interface MenuItem {
   menuItemID: number;
   name: string;
   price: number;
-  isAvailable: boolean;
   imageUrl: string | null;
   categoryID: number;
   categoryName?: string;
@@ -686,8 +684,6 @@ export default function OrderPage() {
 
   useEffect(() => {
     async function loadStoreData() {
-      await syncMenuAvailability();
-
       try {
         const { data: catData } = await supabase
           .from('Category')
@@ -734,15 +730,9 @@ export default function OrderPage() {
           table: 'MenuItem',
         },
         (payload) => {
-          console.log('🔄 [REALTIME UPDATE] MenuItem availability changed:', payload.new.name);
-          // Update the specific menu item in state
-          setMenuItems((prev) =>
-            prev.map((item) =>
-              item.menuItemID === payload.new.menuItemID
-                ? { ...item, isAvailable: payload.new.isAvailable }
-                : item
-            )
-          );
+          // Availability is no longer used; keep subscription to avoid changing realtime wiring.
+          // We intentionally do not mutate state here.
+          console.log('🔄 [REALTIME UPDATE] MenuItem changed:', payload.new.name);
         }
       )
       .subscribe();
@@ -776,8 +766,6 @@ export default function OrderPage() {
   }, []);
 
   const addToCart = (item: MenuItem) => {
-    if (!item.isAvailable) return;
-
     setCart((prev) => {
       const existing = prev.find((i) => i.menuItemID === item.menuItemID);
 
@@ -1093,11 +1081,10 @@ export default function OrderPage() {
                       <button
                         key={item.menuItemID}
                         onClick={() => addToCart(item)}
-                        disabled={!item.isAvailable}
                         className={[
                           'group relative flex flex-col rounded-2xl bg-white border shadow-sm overflow-hidden text-left transition',
                           'hover:-translate-y-2px hover:shadow-lg',
-                          item.isAvailable ? 'border-gray-100' : 'border-gray-100 opacity-55 grayscale',
+                          'border-gray-100',
                         ].join(' ')}
                       >
                         <div className="h-32 w-full bg-gray-100 overflow-hidden relative">
@@ -1114,19 +1101,6 @@ export default function OrderPage() {
                               </div>
                             </div>
                           )}
-
-                          <div className="absolute top-3 left-3">
-                            <span
-                              className={[
-                                'text-[10px] font-black px-3 py-1 rounded-2xl border',
-                                item.isAvailable
-                                  ? 'bg-white/90 text-gray-800 border-white/60'
-                                  : 'bg-gray-900/80 text-white border-white/10',
-                              ].join(' ')}
-                            >
-                              {item.isAvailable ? 'Available' : 'Unavailable'}
-                            </span>
-                          </div>
 
                           {inCart > 0 && (
                             <div className="absolute top-3 right-3">
@@ -1153,17 +1127,13 @@ export default function OrderPage() {
                               <div
                                 className="h-11 w-11 rounded-2xl grid place-items-center transition-colors"
                                 style={{
-                                  backgroundColor: item.isAvailable
-                                    ? inCart > 0
-                                      ? `${BRAND}12`
-                                      : 'transparent'
-                                    : 'transparent',
+                                  backgroundColor: inCart > 0 ? `${BRAND}12` : 'transparent',
                                 }}
                               >
                                 <MdAdd
                                   className="text-xl transition-colors"
                                   style={{
-                                    color: item.isAvailable ? (inCart > 0 ? BRAND : '#111827') : '#9CA3AF',
+                                    color: inCart > 0 ? BRAND : '#111827',
                                   }}
                                 />
                               </div>

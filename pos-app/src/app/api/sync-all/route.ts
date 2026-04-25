@@ -1,27 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
-import { syncMenuAvailability } from '@/app/lib/syncMenuAvailability';
 
 export async function POST() {
   try {
-    console.log('🔄 [API] Starting manual sync from API endpoint...');
+    console.log('ℹ️ [API] /sync-all called (sync disabled)');
     
-    // Create Supabase client with SERVICE ROLE key (for backend operations)
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!  // Secret key - allows all operations
-    );
-    
-    // Pass the service role client to the sync function
-    await syncMenuAvailability(supabase);
-    console.log('✅ [API] Sync completed successfully');
+    // Keep endpoint stable for callers, but disable syncing since availability/recipe logic was removed.
+    // Still instantiate client to validate env configuration in deployments that rely on this route.
+    createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
     
     return Response.json({ 
       success: true, 
-      message: 'Full menu availability sync completed',
+      message: 'Sync disabled: menu availability is no longer auto-managed',
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ [API] Sync failed:', error);
+    console.error('❌ [API] /sync-all failed:', error);
     return Response.json({ 
       success: false, 
       error: String(error),
