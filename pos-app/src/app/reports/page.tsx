@@ -965,6 +965,8 @@ export default function ReportsPage() {
 
   const [receipts, setReceipts] = useState<OrderRow[]>([]);
   const [receiptsLoading, setReceiptsLoading] = useState(false);
+  const [saleableMenuItems, setSaleableMenuItems] = useState<any[]>([]);
+  const [saleableMenuLoading, setSaleableMenuLoading] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [selectedPurchase, setSelectedPurchase] = useState<any | null>(null);
 
@@ -1036,6 +1038,7 @@ export default function ReportsPage() {
     if (tab === 'Sales Income') {
       fetchReceipts();
       fetchPurchases();
+      fetchSaleableMenuItems();
     }
     if (tab === 'Purchase Expenses') fetchPurchases();
     if (tab === 'Net Profit') {
@@ -1045,6 +1048,7 @@ export default function ReportsPage() {
     if (tab === 'Inventory Audit') {
       fetchReceipts();
       fetchEodAudit();
+      fetchSaleableMenuItems();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
@@ -1088,6 +1092,24 @@ export default function ReportsPage() {
       supabase.removeChannel(channel);
     };
   }, [eodDate]);
+
+  useEffect(() => {
+    const menuChannel = supabase
+      .channel('reports-menu-availability')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'MenuItem' },
+        () => {
+          if (tab === 'Inventory Audit' || tab === 'Sales Income') fetchSaleableMenuItems();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(menuChannel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   const fetchPurchases = async () => {
     setPurchasesLoading(true);
@@ -1188,6 +1210,33 @@ export default function ReportsPage() {
     }
   };
 
+  const fetchSaleableMenuItems = async () => {
+    setSaleableMenuLoading(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('MenuItem')
+        .select('menuItemID, name, price, status, isAvailable, Category(categoryName)')
+        .eq('isAvailable', true)
+        .eq('status', 'Active')
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+
+      const normalized = (data || []).map((item: any) => ({
+        ...item,
+        Category: Array.isArray(item.Category) ? item.Category[0] : item.Category,
+      }));
+
+      setSaleableMenuItems(normalized);
+    } catch (err: any) {
+      console.error('Error fetching saleable menu items:', err);
+      setSaleableMenuItems([]);
+    } finally {
+      setSaleableMenuLoading(false);
+    }
+  };
+
   const handleLogout = async () => {
     await logout();
   };
@@ -1232,6 +1281,33 @@ export default function ReportsPage() {
       .reduce((sum, r) => sum + Number(r.change || 0), 0);
     return { count: receiptsView.length, totalSales, totalChange };
   }, [receiptsView]);
+
+  const paymentSummary = useMemo(() => {
+  const validReceipts = receiptsView.filter((r) => r.status !== 'voided');
+
+  const summary = {
+    cash: { count: 0, amount: 0 },
+    gcash: { count: 0, amount: 0 },
+    bank: { count: 0, amount: 0 },
+  };
+
+  validReceipts.forEach((r) => {
+    const method = (r.paymentmethod || 'cash').toLowerCase();
+
+    if (method === 'gcash') {
+      summary.gcash.count += 1;
+      summary.gcash.amount += Number(r.amount || 0);
+    } else if (method === 'bank') {
+      summary.bank.count += 1;
+      summary.bank.amount += Number(r.amount || 0);
+    } else {
+      summary.cash.count += 1;
+      summary.cash.amount += Number(r.amount || 0);
+    }
+  });
+
+  return summary;
+}, [receiptsView]);
 
   const salesExpensesForSelectedDateRange = useMemo(() => {
     const now = new Date();
@@ -1346,6 +1422,111 @@ export default function ReportsPage() {
       return localDate === eodDate && order.status !== 'voided';
     });
   }, [receipts, eodDate]);
+
+  const salesOrdersForBestsellers = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const daysAgo = (d: number) => new Date(now.getTime() - d * 24 * 60 * 60 * 1000);
+
+    return (receipts || []).filter((order) => {
+      if (order.status === 'voided') return false;
+      const created = new Date(order.createdAt || '');
+
+      return dateFilter === 'all'
+        ? true
+        : dateFilter === 'today'
+        ? created >= startOfToday
+        : dateFilter === '7d'
+        ? created >= daysAgo(7)
+        : created >= daysAgo(30);
+    });
+  }, [receipts, dateFilter]);
+
+  const saleableBestsellersSales = useMemo(() => {
+    if (saleableMenuItems.length === 0) return [];
+
+    const saleableById = new Map<number, any>();
+    const saleableByName = new Map<string, any>();
+    saleableMenuItems.forEach((item: any) => {
+      saleableById.set(Number(item.menuItemID), item);
+      saleableByName.set(String(item.name || '').toLowerCase(), item);
+    });
+
+    const summaryMap = new Map<string, any>();
+
+    salesOrdersForBestsellers.forEach((order) => {
+      (order.items || []).forEach((it: any) => {
+        const qty = Number(it.quantity || 0);
+        if (qty <= 0) return;
+
+        const menuId = Number(it.menuItemID);
+        const byId = Number.isFinite(menuId) ? saleableById.get(menuId) : null;
+        const byName = saleableByName.get(String(it?.MenuItem?.name || '').toLowerCase());
+        const saleable = byId || byName;
+        if (!saleable) return;
+
+        const key = String(saleable.menuItemID || saleable.name);
+        const prev = summaryMap.get(key);
+
+        if (prev) {
+          prev.qty += qty;
+        } else {
+          summaryMap.set(key, {
+            menuItemID: saleable.menuItemID,
+            name: saleable.name,
+            price: Number(saleable.price || 0),
+            categoryName: saleable.Category?.categoryName || 'Uncategorized',
+            qty,
+          });
+        }
+      });
+    });
+
+    return Array.from(summaryMap.values()).sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name));
+  }, [salesOrdersForBestsellers, saleableMenuItems]);
+
+  const saleableBestsellersEod = useMemo(() => {
+    if (saleableMenuItems.length === 0) return [];
+
+    const saleableById = new Map<number, any>();
+    const saleableByName = new Map<string, any>();
+    saleableMenuItems.forEach((item: any) => {
+      saleableById.set(Number(item.menuItemID), item);
+      saleableByName.set(String(item.name || '').toLowerCase(), item);
+    });
+
+    const summaryMap = new Map<string, any>();
+
+    salesEodOrdersForDate.forEach((order) => {
+      (order.items || []).forEach((it: any) => {
+        const qty = Number(it.quantity || 0);
+        if (qty <= 0) return;
+
+        const menuId = Number(it.menuItemID);
+        const byId = Number.isFinite(menuId) ? saleableById.get(menuId) : null;
+        const byName = saleableByName.get(String(it?.MenuItem?.name || '').toLowerCase());
+        const saleable = byId || byName;
+        if (!saleable) return;
+
+        const key = String(saleable.menuItemID || saleable.name);
+        const prev = summaryMap.get(key);
+
+        if (prev) {
+          prev.qty += qty;
+        } else {
+          summaryMap.set(key, {
+            menuItemID: saleable.menuItemID,
+            name: saleable.name,
+            price: Number(saleable.price || 0),
+            categoryName: saleable.Category?.categoryName || 'Uncategorized',
+            qty,
+          });
+        }
+      });
+    });
+
+    return Array.from(summaryMap.values()).sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name));
+  }, [salesEodOrdersForDate, saleableMenuItems]);
 
   const salesEodSummary = useMemo(() => {
     const totalSales = salesEodOrdersForDate.reduce((sum, order) => sum + Number(order.amount || 0), 0);
@@ -1872,6 +2053,8 @@ export default function ReportsPage() {
                 </div>
               </div>
 
+              
+
               {receiptsLoading || purchasesLoading ? (
                 <div className="px-6 py-14 text-center text-[12px] font-bold text-[#6D6D6D]">Loading net profit data...</div>
               ) : netProfitView.length === 0 ? (
@@ -2059,6 +2242,65 @@ export default function ReportsPage() {
                 >
                   Clear
                 </button>
+              </div>
+            </div>
+
+            <div className="bg-[#F7F7F7] px-6 py-4 border-b border-black/5">
+              <div className="grid gap-3 md:grid-cols-3">
+                <SummaryCard
+                  title="Cash Payments"
+                  value={String(paymentSummary.cash.count)}
+                  subtitle={`${fmtMoneyPhp(paymentSummary.cash.amount)} collected`}
+                  icon={<MdPayments className="h-5 w-5" />}
+                />
+                <SummaryCard
+                  title="GCash Payments"
+                  value={String(paymentSummary.gcash.count)}
+                  subtitle={`${fmtMoneyPhp(paymentSummary.gcash.amount)} collected`}
+                  icon={<MdPayments className="h-5 w-5" />}
+                />
+                <SummaryCard
+                  title="Bank Payments"
+                  value={String(paymentSummary.bank.count)}
+                  subtitle={`${fmtMoneyPhp(paymentSummary.bank.amount)} collected`}
+                  icon={<MdPayments className="h-5 w-5" />}
+                />
+              </div>
+            </div>
+
+            <div className="bg-[#F7F7F7] px-6 py-4 border-b border-black/5">
+              <div className="rounded-2xl bg-white p-5 ring-1 ring-black/10 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[13px] font-extrabold text-[#1E1E1E]">Bestsellers</div>
+                    <div className="mt-1 text-[10px] font-bold text-[#6D6D6D]">Available menu items with recorded sales</div>
+                  </div>
+                  <Chip label={`${saleableBestsellersSales.length} item(s)`} tone="cash" />
+                </div>
+
+                {saleableMenuLoading ? (
+                  <div className="mt-3 text-[11px] font-bold text-[#6D6D6D]">Loading saleable bestsellers...</div>
+                ) : saleableBestsellersSales.length === 0 ? (
+                  <div className="mt-3 text-[11px] font-bold text-[#6D6D6D]">No saleable bestsellers found for the selected date filter.</div>
+                ) : (
+                  <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                    {saleableBestsellersSales.slice(0, 9).map((item: any) => (
+                      <div
+                        key={item.menuItemID}
+                        className="rounded-xl bg-[#FAFAFA] px-3 py-2 ring-1 ring-black/5"
+                      >
+                        <div className="truncate text-[11px] font-extrabold text-[#1E1E1E]">{item.name}</div>
+                        <div className="mt-0.5 text-[10px] font-bold text-[#6D6D6D]">
+                          {item.categoryName || 'Uncategorized'}
+                        </div>
+                        <div className="mt-1 flex items-center justify-between text-[11px] font-extrabold">
+                          <span className="text-[#7E0012]">{fmtMoneyPhp(item.price)}</span>
+                          <span className="text-[#1E1E1E]">{item.qty} sold</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -2401,6 +2643,11 @@ export default function ReportsPage() {
                           <span className="text-white">Items Sold</span>
                           <span className="text-[16px]">{salesEodSummary.totalItemsSold}</span>
                         </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-white/90">Saleable Bestsellers</span>
+                          <span>{saleableBestsellersEod.length}</span>
+                        </div>
                       </div>
                     </div>
 
@@ -2449,6 +2696,42 @@ export default function ReportsPage() {
                           </span>
                         </div>
                       </div>
+                    </div>
+
+                    <div className="rounded-2xl bg-[#F7F7F7] p-5 ring-1 ring-black/5">
+                      <div className="text-[12px] font-extrabold text-[#1E1E1E]">Saleable Bestsellers (Selected Date)</div>
+
+                      {saleableMenuLoading ? (
+                        <div className="mt-3 text-[11px] font-bold text-[#6D6D6D]">Loading saleable bestsellers...</div>
+                      ) : saleableBestsellersEod.length === 0 ? (
+                        <div className="mt-3 text-[11px] font-bold text-[#6D6D6D]">No saleable bestsellers found for this date.</div>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          {saleableBestsellersEod.slice(0, 8).map((item: any) => (
+                            <div
+                              key={item.menuItemID}
+                              className="flex items-center justify-between rounded-xl bg-white px-3 py-2 ring-1 ring-black/5"
+                            >
+                              <div className="min-w-0 pr-3">
+                                <div className="truncate text-[11px] font-extrabold text-[#1E1E1E]">{item.name}</div>
+                                <div className="mt-0.5 text-[10px] font-bold text-[#6D6D6D]">
+                                  {item.categoryName || 'Uncategorized'}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-[11px] font-extrabold text-[#7E0012]">{fmtMoneyPhp(item.price)}</div>
+                                <div className="text-[10px] font-extrabold text-[#1E1E1E]">{item.qty} sold</div>
+                              </div>
+                            </div>
+                          ))}
+
+                          {saleableBestsellersEod.length > 8 && (
+                            <div className="pt-1 text-[10px] font-extrabold text-[#6D6D6D]">
+                              +{saleableBestsellersEod.length - 8} more saleable bestseller(s)
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="rounded-2xl bg-[#F7F7F7] p-5 ring-1 ring-black/5">
